@@ -15,6 +15,7 @@ const modules = [
   { label: "Physical Verification", href: "/verification", icon: "bi-clipboard-check" },
   { label: "Controlled Stationery", href: "/controlled-stationery", icon: "bi-journal-check" },
   { label: "Depreciation", href: "/depreciation", icon: "bi-graph-down-arrow" },
+  { label: "Master Data", href: "/master-data", icon: "bi-database-gear" },
   { label: "Reports", href: "/reports", icon: "bi-file-earmark-bar-graph" },
 ];
 
