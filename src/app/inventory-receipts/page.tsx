@@ -1,6 +1,477 @@
-import Link from "next/link";
+"use client";
 
-export default function Page() {
+import Link from "next/link";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
+
+type LookupKey =
+  | "departments"
+  | "stores"
+  | "suppliers"
+  | "funding-sources"
+  | "research-projects"
+  | "items";
+
+type ReceiptStatus = "draft" | "submitted" | "accepted" | "partially_accepted" | "rejected" | "posted" | "cancelled";
+
+type RowData = {
+  id: number;
+  [key: string]: string | number | null | undefined;
+};
+
+type Receipt = {
+  id: number;
+  receipt_no: string;
+  receipt_type: string;
+  status: ReceiptStatus;
+  supplier_id: number | null;
+  po_reference: string | null;
+  invoice_no: string | null;
+  challan_no: string | null;
+  receipt_date: string;
+  store_id: number;
+  department_id: number;
+  funding_source_id: number | null;
+  project_id: number | null;
+  manual_approval_ref: string | null;
+  manual_approval_date: string | null;
+  manual_approved_by: string | null;
+  remarks: string | null;
+  posted_at: string | null;
+  created_at: string;
+};
+
+type ReceiptItem = {
+  id: number;
+  receipt_id: number;
+  item_id: number;
+  description: string | null;
+  quantity_received: number;
+  quantity_accepted: number;
+  quantity_rejected: number;
+  unit_cost: number | null;
+  total_cost: number | null;
+  batch_no: string | null;
+  expiry_date: string | null;
+  inspection_status: string;
+  inspection_remarks: string | null;
+};
+
+type ReceiptItemInput = {
+  item_id: string;
+  description: string;
+  quantity_received: string;
+  quantity_accepted: string;
+  quantity_rejected: string;
+  unit_cost: string;
+  total_cost: string;
+  batch_no: string;
+  expiry_date: string;
+  inspection_status: string;
+  inspection_remarks: string;
+};
+
+type ReceiptForm = {
+  receipt_no: string;
+  receipt_type: string;
+  supplier_id: string;
+  po_reference: string;
+  invoice_no: string;
+  challan_no: string;
+  receipt_date: string;
+  store_id: string;
+  department_id: string;
+  funding_source_id: string;
+  project_id: string;
+  manual_approval_ref: string;
+  manual_approval_date: string;
+  manual_approved_by: string;
+  remarks: string;
+  status: ReceiptStatus;
+  post_now: boolean;
+};
+
+const receiptTypes = [
+  { value: "purchase", label: "Purchase" },
+  { value: "donation", label: "Donation" },
+  { value: "grant", label: "Grant" },
+  { value: "transfer_in", label: "Transfer In" },
+  { value: "opening_balance", label: "Opening Balance" },
+  { value: "other", label: "Other" },
+];
+
+const statusOptions: ReceiptStatus[] = [
+  "draft",
+  "submitted",
+  "accepted",
+  "partially_accepted",
+  "rejected",
+  "posted",
+  "cancelled",
+];
+
+const statusColors: Record<ReceiptStatus, string> = {
+  draft: "text-bg-secondary",
+  submitted: "text-bg-warning",
+  accepted: "text-bg-primary",
+  partially_accepted: "text-bg-info",
+  rejected: "text-bg-danger",
+  posted: "text-bg-success",
+  cancelled: "text-bg-dark",
+};
+
+const emptyItem: ReceiptItemInput = {
+  item_id: "",
+  description: "",
+  quantity_received: "",
+  quantity_accepted: "",
+  quantity_rejected: "",
+  unit_cost: "",
+  total_cost: "",
+  batch_no: "",
+  expiry_date: "",
+  inspection_status: "pending",
+  inspection_remarks: "",
+};
+
+const defaultForm: ReceiptForm = {
+  receipt_no: "",
+  receipt_type: "purchase",
+  supplier_id: "",
+  po_reference: "",
+  invoice_no: "",
+  challan_no: "",
+  receipt_date: new Date().toISOString().slice(0, 10),
+  store_id: "",
+  department_id: "",
+  funding_source_id: "",
+  project_id: "",
+  manual_approval_ref: "",
+  manual_approval_date: "",
+  manual_approved_by: "",
+  remarks: "",
+  status: "draft",
+  post_now: false,
+};
+
+const toPayloadDate = (value: string): string | null => value.trim() ? value : null;
+
+export default function InventoryReceiptsPage() {
+  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [tmpToken, setTmpToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [rows, setRows] = useState<Receipt[]>([]);
+  const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
+    departments: [],
+    stores: [],
+    suppliers: [],
+    "funding-sources": [],
+    "research-projects": [],
+    items: [],
+  });
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [storeFilter, setStoreFilter] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("");
+  const [form, setForm] = useState<ReceiptForm>(defaultForm);
+  const [items, setItems] = useState<ReceiptItemInput[]>([emptyItem]);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedItems, setExpandedItems] = useState<Record<number, ReceiptItem[]>>({});
+  const [expandedLoading, setExpandedLoading] = useState<Record<number, boolean>>({});
+
+  const authHeaders = useMemo(
+    () => ({
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    }),
+    [token],
+  );
+
+  const lookupLabel = (source: LookupKey, value: unknown) => {
+    if (value === null || value === undefined || value === "") {
+      return "-";
+    }
+
+    const rows = lookups[source] ?? [];
+    const match = rows.find((row) => String(row.id) === String(value));
+
+    if (!match) {
+      return String(value);
+    }
+
+    return `${match.code ?? match.project_code ?? match.id} - ${match.name ?? match.title ?? ""}`;
+  };
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const loadRows = async () => {
+      try {
+        const params: Record<string, string> = {};
+
+        if (search.trim()) {
+          params.search = search.trim();
+        }
+
+        if (statusFilter) {
+          params.status = statusFilter;
+        }
+
+        if (storeFilter) {
+          params.store_id = storeFilter;
+        }
+
+        if (departmentFilter) {
+          params.department_id = departmentFilter;
+        }
+
+        const response = await api.get("/inventory-receipts", {
+          ...authHeaders,
+          params,
+        });
+
+        const data = response.data?.data;
+        setRows(Array.isArray(data) ? data : []);
+        setError("");
+      } catch {
+        setRows([]);
+        setError("Unable to load receipts. Verify token and endpoint.");
+      }
+    };
+
+    void loadRows();
+  }, [search, statusFilter, storeFilter, departmentFilter, token, authHeaders]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const requiredLookups: LookupKey[] = [
+      "departments",
+      "stores",
+      "suppliers",
+      "funding-sources",
+      "research-projects",
+      "items",
+    ];
+
+    const loadLookups = async () => {
+      const updates: Promise<void>[] = [];
+      const copy: Record<LookupKey, RowData[]> = {
+        departments: [],
+        stores: [],
+        suppliers: [],
+        "funding-sources": [],
+        "research-projects": [],
+        items: [],
+      };
+
+      for (const key of requiredLookups) {
+        const request = api.get(`/master-data/${key}`, { ...authHeaders }).then((res) => {
+          const payload = res.data?.data;
+          if (Array.isArray(payload)) {
+            copy[key] = payload;
+          }
+        });
+
+        updates.push(request.then(() => undefined));
+      }
+
+      await Promise.all(updates);
+      setLookups(copy);
+    };
+
+    void loadLookups();
+  }, [token, authHeaders]);
+
+  const setFormValue = (key: keyof ReceiptForm, value: string | boolean) => {
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+
+  const setItemValue = (index: number, key: keyof ReceiptItemInput, value: string) => {
+    setItems((current) =>
+      current.map((row, idx) => {
+        if (idx !== index) return row;
+        return { ...row, [key]: value };
+      }),
+    );
+  };
+
+  const addItemRow = () => {
+    setItems((current) => [...current, { ...emptyItem }]);
+  };
+
+  const removeItemRow = (index: number) => {
+    setItems((current) => current.filter((_, idx) => idx !== index));
+  };
+
+  const submitToken = () => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("ims_api_token", tmpToken);
+    setToken(tmpToken);
+    setMessage("Token saved. Reloading records.");
+    setError("");
+  };
+
+  const refreshRows = async () => {
+    if (!token) return;
+    try {
+      const params: Record<string, string> = {};
+
+      if (search.trim()) params.search = search.trim();
+      if (statusFilter) params.status = statusFilter;
+      if (storeFilter) params.store_id = storeFilter;
+      if (departmentFilter) params.department_id = departmentFilter;
+
+      const response = await api.get("/inventory-receipts", {
+        ...authHeaders,
+        params,
+      });
+
+      const data = response.data?.data;
+      setRows(Array.isArray(data) ? data : []);
+      setError("");
+    } catch {
+      setError("Could not refresh receipts.");
+    }
+  };
+
+  const saveReceipt = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!token) {
+      setError("Save token first.");
+      return;
+    }
+
+    const receiptItems = items
+      .map((row): ReceiptItemInput | null => {
+        const itemId = Number(row.item_id);
+
+        if (!itemId) return null;
+
+        return row;
+      })
+      .filter(Boolean) as ReceiptItemInput[];
+
+    if (receiptItems.length === 0) {
+      setError("Please add at least one item.");
+      return;
+    }
+
+    const payload: Record<string, unknown> = {
+      receipt_no: form.receipt_no.trim(),
+      receipt_type: form.receipt_type,
+      supplier_id: form.supplier_id ? Number(form.supplier_id) : null,
+      po_reference: form.po_reference.trim() || null,
+      invoice_no: form.invoice_no.trim() || null,
+      challan_no: form.challan_no.trim() || null,
+      receipt_date: form.receipt_date,
+      store_id: Number(form.store_id),
+      department_id: Number(form.department_id),
+      funding_source_id: form.funding_source_id ? Number(form.funding_source_id) : null,
+      project_id: form.project_id ? Number(form.project_id) : null,
+      manual_approval_ref: form.manual_approval_ref.trim() || null,
+      manual_approval_date: toPayloadDate(form.manual_approval_date),
+      manual_approved_by: form.manual_approved_by.trim() || null,
+      remarks: form.remarks.trim() || null,
+      status: form.status,
+      post_now: form.post_now,
+      items: receiptItems.map((row) => {
+        const quantityAccepted = row.quantity_accepted !== "" ? Number(row.quantity_accepted) : null;
+        const quantityRejected = row.quantity_rejected !== "" ? Number(row.quantity_rejected) : null;
+
+        return {
+          item_id: Number(row.item_id),
+          description: row.description.trim() || null,
+          quantity_received: Number(row.quantity_received || 0),
+          quantity_accepted: Number.isFinite(quantityAccepted ?? 0) ? (quantityAccepted ?? undefined) : undefined,
+          quantity_rejected: Number.isFinite(quantityRejected ?? 0) ? (quantityRejected ?? undefined) : undefined,
+          unit_cost: row.unit_cost !== "" ? Number(row.unit_cost) : null,
+          total_cost: row.total_cost !== "" ? Number(row.total_cost) : null,
+          batch_no: row.batch_no.trim() || null,
+          expiry_date: toPayloadDate(row.expiry_date),
+          inspection_status: row.inspection_status,
+          inspection_remarks: row.inspection_remarks.trim() || null,
+        };
+      }),
+    };
+
+    if (!payload.store_id || !payload.department_id || !payload.receipt_no || !payload.receipt_type) {
+      setError("Receipt No, Receipt Type, Store and Department are required.");
+      return;
+    }
+
+    if (receiptItems.some((row) => Number(row.quantity_received || 0) <= 0)) {
+      setError("All item rows must include quantity received greater than 0.");
+      return;
+    }
+
+    try {
+      await api.post("/inventory-receipts", payload, authHeaders);
+      setMessage("Receipt created successfully.");
+      setError("");
+      setForm({ ...defaultForm, receipt_date: form.receipt_date, receipt_type: form.receipt_type });
+      setItems([{ ...emptyItem }]);
+      await refreshRows();
+    } catch {
+      setError("Could not create receipt. Verify required fields.");
+    }
+  };
+
+  const loadReceiptItems = async (receiptId: number) => {
+    if (expandedItems[receiptId]) {
+      setExpandedId((current) => (current === receiptId ? null : receiptId));
+      return;
+    }
+
+    try {
+      setExpandedLoading((current) => ({ ...current, [receiptId]: true }));
+      const response = await api.get(`/inventory-receipts/${receiptId}`, { ...authHeaders });
+      const itemsData = response.data?.items;
+      const normalized = Array.isArray(itemsData) ? itemsData : [];
+      setExpandedItems((current) => ({ ...current, [receiptId]: normalized }));
+      setExpandedId(receiptId);
+      setExpandedLoading((current) => ({ ...current, [receiptId]: false }));
+    } catch {
+      setExpandedLoading((current) => ({ ...current, [receiptId]: false }));
+      setError("Could not load receipt items.");
+    }
+  };
+
+  const postReceipt = async (receiptId: number) => {
+    if (!token) return;
+
+    try {
+      await api.post(`/inventory-receipts/${receiptId}/post`, {}, { ...authHeaders });
+      setMessage("Receipt posted and stock updated.");
+      await refreshRows();
+    } catch {
+      setError("Could not post receipt.");
+    }
+  };
+
+  const deleteReceipt = async (receiptId: number) => {
+    if (!token) return;
+
+    if (!window.confirm("Delete this receipt?")) return;
+
+    try {
+      await api.delete(`/inventory-receipts/${receiptId}`, { ...authHeaders });
+      setMessage("Receipt deleted.");
+      await refreshRows();
+      setExpandedId((current) => (current === receiptId ? null : current));
+    } catch {
+      setError("Could not delete receipt.");
+    }
+  };
+
   return (
     <main className="min-vh-100 bg-body-tertiary p-4">
       <div className="container-fluid">
@@ -8,15 +479,612 @@ export default function Page() {
           <i className="bi bi-arrow-left me-2" />
           Dashboard
         </Link>
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-4">
-            <h1 className="h3 mb-2">Inventory Receipts</h1>
-            <p className="text-secondary mb-4">Record receipts, inspection, partial acceptance, and stock posting.</p>
-            <div className="alert alert-info mb-0">
-              <i className="bi bi-tools me-2" />
-              Module screen scaffolded. Forms, tables, filters, and API wiring will be added in the next build pass.
+
+        <div className="row g-4">
+          <section className="col-12 col-xl-5">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white">
+                <div className="d-flex justify-content-between align-items-center">
+                  <h2 className="h5 mb-0">Create Receipt</h2>
+                  <span className="badge text-bg-primary">Post optional in same step</span>
+                </div>
+              </div>
+              <div className="card-body p-4">
+                <form className="row g-3" onSubmit={saveReceipt}>
+                  <div className="col-12">
+                    <label className="form-label">Token</label>
+                    <div className="d-flex gap-2">
+                      <input
+                        type="password"
+                        className="form-control"
+                        placeholder="Paste API token"
+                        value={tmpToken}
+                        onChange={(event) => setTmpToken(event.target.value)}
+                      />
+                      <button className="btn btn-outline-primary" type="button" onClick={submitToken}>
+                        Save Token
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Receipt No.</label>
+                    <input
+                      className="form-control"
+                      value={form.receipt_no}
+                      onChange={(event) => setFormValue("receipt_no", event.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Receipt Type</label>
+                    <select
+                      className="form-select"
+                      value={form.receipt_type}
+                      onChange={(event) => setFormValue("receipt_type", event.target.value)}
+                    >
+                      {receiptTypes.map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Receipt Date</label>
+                    <input
+                      className="form-control"
+                      type="date"
+                      value={form.receipt_date}
+                      onChange={(event) => setFormValue("receipt_date", event.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Status</label>
+                    <select
+                      className="form-select"
+                      value={form.status}
+                      onChange={(event) => setFormValue("status", event.target.value as ReceiptStatus)}
+                    >
+                      {statusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {status.replace("_", " ").replace(/\\b\\w/g, (match) => match.toUpperCase())}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label">Store</label>
+                    <select
+                      className="form-select"
+                      value={form.store_id}
+                      onChange={(event) => setFormValue("store_id", event.target.value)}
+                      required
+                    >
+                      <option value="">Select store</option>
+                      {lookups.stores.map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.code ?? row.id} - {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label">Department</label>
+                    <select
+                      className="form-select"
+                      value={form.department_id}
+                      onChange={(event) => setFormValue("department_id", event.target.value)}
+                      required
+                    >
+                      <option value="">Select department</option>
+                      {lookups.departments.map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.code ?? row.id} - {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Supplier</label>
+                    <select
+                      className="form-select"
+                      value={form.supplier_id}
+                      onChange={(event) => setFormValue("supplier_id", event.target.value)}
+                    >
+                      <option value="">Select supplier</option>
+                      {lookups.suppliers.map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Funding Source</label>
+                    <select
+                      className="form-select"
+                      value={form.funding_source_id}
+                      onChange={(event) => setFormValue("funding_source_id", event.target.value)}
+                    >
+                      <option value="">Select funding source</option>
+                      {lookups["funding-sources"].map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Project</label>
+                    <select
+                      className="form-select"
+                      value={form.project_id}
+                      onChange={(event) => setFormValue("project_id", event.target.value)}
+                    >
+                      <option value="">Select project</option>
+                      {lookups["research-projects"].map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.project_code} - {row.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">PO Reference</label>
+                    <input
+                      className="form-control"
+                      value={form.po_reference}
+                      onChange={(event) => setFormValue("po_reference", event.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Invoice No</label>
+                    <input
+                      className="form-control"
+                      value={form.invoice_no}
+                      onChange={(event) => setFormValue("invoice_no", event.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Challan No</label>
+                    <input
+                      className="form-control"
+                      value={form.challan_no}
+                      onChange={(event) => setFormValue("challan_no", event.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label">Manual Approval Reference</label>
+                    <input
+                      className="form-control"
+                      value={form.manual_approval_ref}
+                      onChange={(event) => setFormValue("manual_approval_ref", event.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Approval Date</label>
+                    <input
+                      className="form-control"
+                      type="date"
+                      value={form.manual_approval_date}
+                      onChange={(event) => setFormValue("manual_approval_date", event.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Approved By</label>
+                    <input
+                      className="form-control"
+                      value={form.manual_approved_by}
+                      onChange={(event) => setFormValue("manual_approved_by", event.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label">Remarks</label>
+                    <textarea
+                      className="form-control"
+                      rows={2}
+                      value={form.remarks}
+                      onChange={(event) => setFormValue("remarks", event.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-12">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <h3 className="h6 mb-0">Receipt Items</h3>
+                      <button className="btn btn-sm btn-outline-primary" type="button" onClick={addItemRow}>
+                        <i className="bi bi-plus-lg me-1" />
+                        Add Item
+                      </button>
+                    </div>
+                  </div>
+
+                  {items.map((item, index) => (
+                    <div key={index} className="col-12 border rounded p-3 bg-light">
+                      <div className="row g-3">
+                        <div className="col-12 col-md-6">
+                          <label className="form-label">Item</label>
+                          <select
+                            className="form-select"
+                            value={item.item_id}
+                            onChange={(event) => setItemValue(index, "item_id", event.target.value)}
+                            required
+                          >
+                            <option value="">Select item</option>
+                            {lookups.items.map((row) => (
+                              <option key={row.id} value={row.id}>
+                                {row.item_code} - {row.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="col-12 col-md-6">
+                          <label className="form-label">Description</label>
+                          <input
+                            className="form-control"
+                            value={item.description}
+                            onChange={(event) => setItemValue(index, "description", event.target.value)}
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                          <label className="form-label">Qty Received</label>
+                          <input
+                            className="form-control"
+                            type="number"
+                            value={item.quantity_received}
+                            step="0.001"
+                            min="0"
+                            onChange={(event) => setItemValue(index, "quantity_received", event.target.value)}
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                          <label className="form-label">Qty Accepted</label>
+                          <input
+                            className="form-control"
+                            type="number"
+                            value={item.quantity_accepted}
+                            step="0.001"
+                            min="0"
+                            onChange={(event) => setItemValue(index, "quantity_accepted", event.target.value)}
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                          <label className="form-label">Qty Rejected</label>
+                          <input
+                            className="form-control"
+                            type="number"
+                            value={item.quantity_rejected}
+                            step="0.001"
+                            min="0"
+                            onChange={(event) => setItemValue(index, "quantity_rejected", event.target.value)}
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                          <label className="form-label">Unit Cost</label>
+                          <input
+                            className="form-control"
+                            type="number"
+                            value={item.unit_cost}
+                            step="0.01"
+                            min="0"
+                            onChange={(event) => setItemValue(index, "unit_cost", event.target.value)}
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                          <label className="form-label">Total Cost</label>
+                          <input
+                            className="form-control"
+                            type="number"
+                            value={item.total_cost}
+                            step="0.01"
+                            min="0"
+                            onChange={(event) => setItemValue(index, "total_cost", event.target.value)}
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                          <label className="form-label">Batch No</label>
+                          <input
+                            className="form-control"
+                            value={item.batch_no}
+                            onChange={(event) => setItemValue(index, "batch_no", event.target.value)}
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                          <label className="form-label">Expiry</label>
+                          <input
+                            className="form-control"
+                            type="date"
+                            value={item.expiry_date}
+                            onChange={(event) => setItemValue(index, "expiry_date", event.target.value)}
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                          <label className="form-label">Inspection Status</label>
+                          <select
+                            className="form-select"
+                            value={item.inspection_status}
+                            onChange={(event) => setItemValue(index, "inspection_status", event.target.value)}
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="accepted">Accepted</option>
+                            <option value="partially_accepted">Partially Accepted</option>
+                            <option value="rejected">Rejected</option>
+                          </select>
+                        </div>
+
+                        <div className="col-12">
+                          <label className="form-label">Inspection Remarks</label>
+                          <textarea
+                            className="form-control"
+                            rows={2}
+                            value={item.inspection_remarks}
+                            onChange={(event) => setItemValue(index, "inspection_remarks", event.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-3 text-end">
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          type="button"
+                          onClick={() => removeItemRow(index)}
+                          disabled={items.length === 1}
+                        >
+                          <i className="bi bi-trash3 me-1" />
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="col-12 form-check">
+                    <input
+                      id="post_now"
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={form.post_now}
+                      onChange={(event) => setFormValue("post_now", event.target.checked)}
+                    />
+                    <label className="form-check-label" htmlFor="post_now">
+                      Post receipt after creation
+                    </label>
+                  </div>
+
+                  <div className="col-12">
+                    <button className="btn btn-primary" type="submit">
+                      Save Receipt
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
-          </div>
+          </section>
+
+          <section className="col-12 col-xl-7">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white">
+                <h2 className="h5 mb-0">Receipt List</h2>
+              </div>
+              <div className="card-body p-4">
+                <div className="row g-3 mb-3">
+                  <div className="col-12 col-md-4">
+                    <label className="form-label">Search</label>
+                    <input
+                      className="form-control"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Receipt no / PO / invoice / challan"
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-4">
+                    <label className="form-label">Status</label>
+                    <select
+                      className="form-select"
+                      value={statusFilter}
+                      onChange={(event) => setStatusFilter(event.target.value)}
+                    >
+                      <option value="">All</option>
+                      {statusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {status.replace("_", " ")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-4">
+                    <label className="form-label">Store</label>
+                    <select
+                      className="form-select"
+                      value={storeFilter}
+                      onChange={(event) => setStoreFilter(event.target.value)}
+                    >
+                      <option value="">All stores</option>
+                      {lookups.stores.map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.code ?? row.id} - {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label">Department</label>
+                    <select
+                      className="form-select"
+                      value={departmentFilter}
+                      onChange={(event) => setDepartmentFilter(event.target.value)}
+                    >
+                      <option value="">All departments</option>
+                      {lookups.departments.map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.code ?? row.id} - {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-6 d-flex align-items-end">
+                    <button className="btn btn-outline-secondary" type="button" onClick={refreshRows}>
+                      <i className="bi bi-arrow-repeat me-1" />
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
+                {message && <div className="alert alert-success py-2">{message}</div>}
+                {error && <div className="alert alert-danger py-2">{error}</div>}
+
+                <div className="table-responsive">
+                  <table className="table table-sm align-middle">
+                    <thead>
+                      <tr>
+                        <th>Receipt</th>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Store</th>
+                        <th>Dept</th>
+                        <th>Status</th>
+                        <th className="text-end">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((receipt) => (
+                        <>
+                          <tr key={receipt.id}>
+                            <td>
+                              <div className="fw-medium">{receipt.receipt_no}</div>
+                              <div className="small text-secondary">
+                                PO: {receipt.po_reference ?? "-"} | Invoice: {receipt.invoice_no ?? "-"} | Challan:{" "}
+                                {receipt.challan_no ?? "-"}
+                              </div>
+                            </td>
+                            <td>{String(receipt.receipt_date).split("T")[0]}</td>
+                            <td>{receipt.receipt_type}</td>
+                            <td>{lookupLabel("stores", receipt.store_id)}</td>
+                            <td>{lookupLabel("departments", receipt.department_id)}</td>
+                            <td>
+                              <span className={`badge ${statusColors[receipt.status] ?? "text-bg-secondary"}`}>
+                                {receipt.status}
+                              </span>
+                            </td>
+                            <td className="text-end">
+                              <div className="btn-group btn-group-sm">
+                                <button
+                                  className="btn btn-outline-primary"
+                                  type="button"
+                                  onClick={() => loadReceiptItems(receipt.id)}
+                                >
+                                  {expandedLoading[receipt.id] ? "Loading" : expandedId === receipt.id ? "Hide Items" : "Items"}
+                                </button>
+
+                                {receipt.status !== "posted" && (
+                                  <button
+                                    className="btn btn-outline-success"
+                                    type="button"
+                                    onClick={() => postReceipt(receipt.id)}
+                                  >
+                                    Post
+                                  </button>
+                                )}
+
+                                {(receipt.status === "draft" || receipt.status === "cancelled") && (
+                                  <button
+                                    className="btn btn-outline-danger"
+                                    type="button"
+                                    onClick={() => deleteReceipt(receipt.id)}
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                          {expandedId === receipt.id && expandedItems[receipt.id] && (
+                            <tr>
+                              <td colSpan={7}>
+                                <div className="bg-light rounded p-2 small">
+                                  <strong>Items:</strong>
+                                  <table className="table table-sm mt-2 mb-0">
+                                    <thead>
+                                      <tr>
+                                        <th>Item</th>
+                                        <th>Qty Rec</th>
+                                        <th>Accepted</th>
+                                        <th>Rejected</th>
+                                        <th>Unit Cost</th>
+                                        <th>Total Cost</th>
+                                        <th>Inspection</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {expandedItems[receipt.id].length === 0 ? (
+                                        <tr>
+                                          <td colSpan={7} className="text-secondary">
+                                            No items found.
+                                          </td>
+                                        </tr>
+                                      ) : (
+                                        expandedItems[receipt.id].map((receiptItem) => (
+                                          <tr key={receiptItem.id}>
+                                            <td>{lookupLabel("items", receiptItem.item_id)}</td>
+                                            <td>{receiptItem.quantity_received}</td>
+                                            <td>{receiptItem.quantity_accepted}</td>
+                                            <td>{receiptItem.quantity_rejected}</td>
+                                            <td>{receiptItem.unit_cost ?? "-"}</td>
+                                            <td>{receiptItem.total_cost ?? "-"}</td>
+                                            <td>{receiptItem.inspection_status}</td>
+                                          </tr>
+                                        ))
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      ))}
+
+                      {rows.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="text-secondary">
+                            No receipts found. Use the form to create one.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </main>
