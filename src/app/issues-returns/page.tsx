@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 
 type LookupKey = "departments" | "stores" | "items" | "funding-sources" | "research-projects";
 
-type TransactionType = "issue" | "return" | "transfer" | "consumption";
+type TransactionType = "issue" | "return" | "transfer" | "consumption" | "adjustment";
 
 type TransactionStatus = "draft" | "posted" | "cancelled";
 
@@ -18,7 +18,7 @@ type RowData = {
 type Transaction = {
   id: number;
   transaction_no: string;
-  transaction_type: TransactionType | "adjustment";
+  transaction_type: TransactionType;
   transaction_date: string;
   status: TransactionStatus;
   from_department_id: number | null;
@@ -54,6 +54,7 @@ type TransactionItemInput = {
 type TransactionForm = {
   transaction_no: string;
   transaction_type: TransactionType;
+  adjustment_direction: "increase" | "decrease";
   transaction_date: string;
   from_department_id: string;
   to_department_id: string;
@@ -75,6 +76,7 @@ const typeColors: Record<TransactionType, string> = {
   return: "text-bg-success",
   transfer: "text-bg-primary",
   consumption: "text-bg-secondary",
+  adjustment: "text-bg-info",
 };
 
 const typeOptions: Array<{ value: TransactionType; label: string }> = [
@@ -82,6 +84,7 @@ const typeOptions: Array<{ value: TransactionType; label: string }> = [
   { value: "return", label: "Return" },
   { value: "transfer", label: "Transfer" },
   { value: "consumption", label: "Consumption" },
+  { value: "adjustment", label: "Adjustment" },
 ];
 
 const statusColors: Record<TransactionStatus, string> = {
@@ -101,6 +104,7 @@ const emptyItem: TransactionItemInput = {
 const defaultForm: TransactionForm = {
   transaction_no: "",
   transaction_type: "issue",
+  adjustment_direction: "increase",
   transaction_date: new Date().toISOString().slice(0, 10),
   from_department_id: "",
   to_department_id: "",
@@ -258,12 +262,42 @@ export default function IssuesReturnsPage() {
         if (value === "return") {
           next.from_department_id = "";
           next.from_store_id = "";
+          next.adjustment_direction = "increase";
         }
 
         if (value === "issue" || value === "consumption") {
           next.to_department_id = "";
           next.to_store_id = "";
+          next.adjustment_direction = "decrease";
         }
+
+        if (value === "adjustment") {
+          next.from_department_id = "";
+          next.from_store_id = "";
+          next.to_department_id = "";
+          next.to_store_id = "";
+          next.adjustment_direction = "increase";
+        }
+
+        return next;
+      });
+      return;
+    }
+
+    if (key === "adjustment_direction" && typeof value === "string") {
+      setForm((current) => {
+        if (current.transaction_type !== "adjustment") {
+          return current;
+        }
+
+        const next: TransactionForm = {
+          ...current,
+          [key]: value as TransactionForm["adjustment_direction"],
+          from_department_id: "",
+          from_store_id: "",
+          to_department_id: "",
+          to_store_id: "",
+        };
 
         return next;
       });
@@ -296,9 +330,13 @@ export default function IssuesReturnsPage() {
     setItems([emptyItem]);
   };
 
-  const canSubmitType = (type: TransactionType): string[] => {
+  const canSubmitType = (type: TransactionType, adjustmentDirection: TransactionForm["adjustment_direction"]): string[] => {
     if (type === "issue" || type === "consumption") {
       return ["from_department_id", "from_store_id"];
+    }
+
+    if (type === "adjustment") {
+      return adjustmentDirection === "increase" ? ["to_department_id", "to_store_id"] : ["from_department_id", "from_store_id"];
     }
 
     if (type === "return") {
@@ -316,7 +354,7 @@ export default function IssuesReturnsPage() {
       return;
     }
 
-    const required = canSubmitType(form.transaction_type);
+    const required = canSubmitType(form.transaction_type, form.adjustment_direction);
     for (const field of required) {
       if (!String(form[field as keyof TransactionForm] ?? "").trim()) {
         setError(`Please complete ${field.replaceAll("_", " ")} for ${form.transaction_type}.`);
@@ -444,6 +482,9 @@ export default function IssuesReturnsPage() {
     if (form.transaction_type === "return") {
       return "Return uses destination department/store only.";
     }
+    if (form.transaction_type === "adjustment") {
+      return form.adjustment_direction === "increase" ? "Adjustment increase uses destination department/store only." : "Adjustment decrease uses source department/store only.";
+    }
     return "Transfer uses both source and destination.";
   };
 
@@ -482,9 +523,9 @@ export default function IssuesReturnsPage() {
               <div className="col-12">
                 <div className="card border-0 shadow-sm">
                   <div className="card-body">
-                    <h1 className="h4 mb-3">Issue / Return / Transfer</h1>
+                    <h1 className="h4 mb-3">Issue / Return / Transfer / Adjustment</h1>
                     <p className="text-secondary mb-0">
-                      Create stock movement vouchers and post to update balances for issue, return, transfer, and consumption.
+                      Create stock movement vouchers and post to update balances for issue, return, transfer, adjustment, and consumption.
                     </p>
                   </div>
                 </div>
@@ -543,7 +584,41 @@ export default function IssuesReturnsPage() {
                       />
                     </div>
 
-                    {(form.transaction_type === "issue" || form.transaction_type === "consumption" || form.transaction_type === "transfer") && (
+                    {form.transaction_type === "adjustment" && (
+                      <div className="col-12">
+                        <label className="form-label mb-1 small">Adjustment direction</label>
+                        <div className="btn-group w-100" role="group" aria-label="Adjustment direction">
+                          <input
+                            type="radio"
+                            className="btn-check"
+                            id="adjustment-increase"
+                            name="adjustment_direction"
+                            autoComplete="off"
+                            value="increase"
+                            checked={form.adjustment_direction === "increase"}
+                            onChange={(event) => setFormValue("adjustment_direction", event.target.value)}
+                          />
+                          <label className="btn btn-outline-success" htmlFor="adjustment-increase">
+                            Increase stock
+                          </label>
+                          <input
+                            type="radio"
+                            className="btn-check"
+                            id="adjustment-decrease"
+                            name="adjustment_direction"
+                            autoComplete="off"
+                            value="decrease"
+                            checked={form.adjustment_direction === "decrease"}
+                            onChange={(event) => setFormValue("adjustment_direction", event.target.value)}
+                          />
+                          <label className="btn btn-outline-warning" htmlFor="adjustment-decrease">
+                            Decrease stock
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {(form.transaction_type === "issue" || form.transaction_type === "consumption" || form.transaction_type === "transfer" || (form.transaction_type === "adjustment" && form.adjustment_direction === "decrease")) && (
                       <>
                         <div className="col-12 col-md-6">
                           <label className="form-label">From Department</label>
@@ -578,7 +653,7 @@ export default function IssuesReturnsPage() {
                       </>
                     )}
 
-                    {(form.transaction_type === "return" || form.transaction_type === "transfer") && (
+                    {(form.transaction_type === "return" || form.transaction_type === "transfer" || (form.transaction_type === "adjustment" && form.adjustment_direction === "increase")) && (
                       <>
                         <div className="col-12 col-md-6">
                           <label className="form-label">To Department</label>
