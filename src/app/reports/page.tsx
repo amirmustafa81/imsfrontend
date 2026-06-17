@@ -757,19 +757,6 @@ const emptyFilters: ReportFilters = {
   receipt_type: "",
 };
 
-const escapeHtml = (value: unknown): string => {
-  if (value === null || value === undefined || value === "") {
-    return "-";
-  }
-
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll("\"", "&quot;")
-    .replaceAll("'", "&#039;");
-};
-
 const toDisplayDate = (value: unknown): string => {
   if (!value) return "-";
   const iso = String(value);
@@ -965,9 +952,14 @@ export default function ReportsPage() {
     setMessage("Filters reset.");
   };
 
-  const exportExcel = async () => {
+  const exportReport = async (format: "pdf" | "excel") => {
     if (!token) {
       setError("Please save your token before exporting.");
+      return;
+    }
+
+    if (rows.length === 0 && format === "pdf") {
+      setError("No rows to export. Select a report with data.");
       return;
     }
 
@@ -977,7 +969,7 @@ export default function ReportsPage() {
         "/reports/controlled-stationery/export",
         {
           report: activeReport,
-          format: "excel",
+          format,
           ...payload,
         },
         {
@@ -986,8 +978,11 @@ export default function ReportsPage() {
         },
       );
 
-      const fileName = `ims_${activeReport}_${new Date().toISOString().slice(0, 19).replace(":", "-").replace(":", "-")}.csv`;
-      const blob = new Blob([response.data], { type: "text/csv;charset=utf-8;" });
+      const isPdf = format === "pdf";
+      const extension = isPdf ? "pdf" : "csv";
+      const blobType = isPdf ? "application/pdf" : "text/csv;charset=utf-8;";
+      const fileName = `ims_${activeReport}_${new Date().toISOString().slice(0, 19).replace(":", "-").replace(":", "-")}.${extension}`;
+      const blob = new Blob([response.data], { type: blobType });
       const objectUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = objectUrl;
@@ -1002,85 +997,11 @@ export default function ReportsPage() {
         uploadedBy: "System",
         at: new Date().toLocaleString(),
       });
-      setMessage("CSV export download started.");
+      setMessage(`${format === "excel" ? "Excel" : "PDF"} export download started.`);
       setError("");
     } catch {
-      setError("Excel export failed. Try again or reduce filters.");
+      setError(`${format === "excel" ? "Excel" : "PDF"} export failed. Try again or reduce filters.`);
     }
-  };
-
-  const exportPdf = () => {
-    if (rows.length === 0) {
-      setError("No rows to export. Select a report with data.");
-      return;
-    }
-
-    const headerCells = reportConfig.columns
-      .map((column) => `<th style=\"padding:6px 8px; border:1px solid #cdd1d5; text-align:left;\">${escapeHtml(column.label)}</th>`)
-      .join("");
-    const bodyRows = rows
-      .map((row) => {
-        const rowMarkup = reportConfig.columns
-          .map((column) => {
-            const raw = row[column.key];
-            const value = column.key.includes("at") || column.key.includes("date")
-              ? toDisplayDate(raw)
-              : raw;
-            return `<td style=\"padding:6px 8px; border:1px solid #cdd1d5;\">${escapeHtml(value)}</td>`;
-          })
-          .join("");
-        return `<tr>${rowMarkup}</tr>`;
-      })
-      .join("");
-
-    const html = `
-      <html>
-        <head>
-          <title>${escapeHtml(reportConfig.title)}</title>
-          <style>
-            body { font-family: Arial, Helvetica, sans-serif; margin: 24px; }
-            h1 { font-size: 20px; margin: 0 0 6px; }
-            .muted { color: #6c757d; margin-bottom: 16px; }
-            table { border-collapse: collapse; width: 100%; font-size: 12px; }
-            th { background: #f8f9fa; font-weight: 600; }
-          </style>
-        </head>
-        <body>
-          <h1>${escapeHtml(reportConfig.title)}</h1>
-          <div class=\"muted\">Export generated at ${new Date().toLocaleString()}</div>
-          <table>
-            <thead><tr>${headerCells}</tr></thead>
-            <tbody>${bodyRows}</tbody>
-          </table>
-          <script>
-            window.onload = function () {
-              window.focus();
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `;
-
-    const fileName = `ims_${activeReport}_${new Date().toISOString().slice(0, 19).replace(":", "-").replace(":", "-")}.pdf`;
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      setError("Unable to open print window. Check your browser pop-up settings.");
-      return;
-    }
-
-    addExportArtifact({
-      name: fileName,
-      size: "Generated",
-      uploadedBy: "System",
-      at: new Date().toLocaleString(),
-    });
-
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setMessage("PDF print prepared.");
-    setError("");
   };
 
   const renderBooleanCell = useCallback((value: unknown): string => {
@@ -1196,10 +1117,10 @@ export default function ReportsPage() {
               <ExportButtons
                 name={`report-${activeReport}`}
                 onExportPdf={() => {
-                  exportPdf();
+                  void exportReport("pdf");
                 }}
                 onExportExcel={() => {
-                  void exportExcel();
+                  void exportReport("excel");
                 }}
               />
             </div>
