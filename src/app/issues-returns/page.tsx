@@ -136,8 +136,7 @@ const numberOrNull = (value: string): number | null => {
 };
 
 export default function IssuesReturnsPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tmpToken, setTmpToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [rows, setRows] = useState<Transaction[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
@@ -249,14 +248,6 @@ export default function IssuesReturnsPage() {
 
     void loadLookups();
   }, [token, authHeaders]);
-
-  const submitToken = () => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-    setMessage("Token saved. Reloading transactions.");
-    setError("");
-  };
 
   const setFormValue = (key: keyof TransactionForm, value: string | boolean) => {
     if (key === "transaction_type" && typeof value === "string") {
@@ -388,7 +379,7 @@ export default function IssuesReturnsPage() {
     event.preventDefault();
 
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -618,20 +609,7 @@ export default function IssuesReturnsPage() {
         <PageHeader
           title="Issue / Return / Transfer / Adjustment"
           subtitle="Create stock movement vouchers and post to update balances for issue, return, transfer, adjustment, and consumption."
-          actions={
-            <div className="d-flex gap-2">
-              <input
-                className="form-control form-control-sm"
-                placeholder="Paste API token"
-                type="text"
-                value={tmpToken}
-                onChange={(e) => setTmpToken(e.target.value)}
-              />
-              <button className="btn btn-outline-primary btn-sm" type="button" onClick={submitToken}>
-                Save token
-              </button>
-            </div>
-          }
+          
         />
 
         {(message || error) && (

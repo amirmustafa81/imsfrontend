@@ -169,8 +169,7 @@ const emptyItem: VerificationItemInput = {
 };
 
 export default function VerificationPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tmpToken, setTmpToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [rows, setRows] = useState<Verification[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
@@ -282,14 +281,6 @@ export default function VerificationPage() {
     void loadLookups();
   }, [authHeaders, token]);
 
-  const submitToken = () => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-    setMessage("Token saved. Reloading verification list.");
-    setError("");
-  };
-
   const setFormValue = (key: keyof VerificationForm, value: string) => {
     setForm((current) => ({
       ...current,
@@ -323,7 +314,7 @@ export default function VerificationPage() {
     event.preventDefault();
 
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -539,20 +530,7 @@ export default function VerificationPage() {
         <PageHeader
           title="Physical Verification"
           subtitle="Create verification rounds and record item/asset discrepancies for audit trail."
-          actions={
-            <div className="d-flex gap-2">
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                value={tmpToken}
-                onChange={(event) => setTmpToken(event.target.value)}
-                placeholder="Paste API token"
-              />
-              <button className="btn btn-outline-primary btn-sm" type="button" onClick={submitToken}>
-                Save token
-              </button>
-            </div>
-          }
+          
         />
 
         {(message || error) && (

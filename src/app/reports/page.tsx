@@ -813,8 +813,7 @@ const buildFilterPayload = (config: ReportConfig, filters: ReportFilters): Recor
 const toReportStatus = (status: unknown) => (typeof status === "string" ? status : String(status ?? ""));
 
 export default function ReportsPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tmpToken, setTmpToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [activeReport, setActiveReport] = useState<ReportType>("controlled_stationery_batches");
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>(emptyLookups);
   const [filters, setFilters] = useState<Record<ReportType, ReportFilters>>({
@@ -920,18 +919,6 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadLookups();
   }, [loadLookups]);
-
-  const saveToken = () => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-    setMessage("Token saved. Refreshing report.");
-    setError("");
-    setTimeout(() => {
-      void loadRows();
-      void loadLookups();
-    }, 50);
-  };
 
   const updateFilter = (key: FilterKey, value: string) => {
     setFilters((current) => ({
@@ -1101,19 +1088,6 @@ export default function ReportsPage() {
           subtitle={reportConfig.subtitle}
           actions={
             <div className="d-flex gap-2 align-items-end flex-wrap">
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">API Token</span>
-                <input
-                  className="form-control form-control-sm"
-                  type="text"
-                  value={tmpToken}
-                  onChange={(event) => setTmpToken(event.target.value)}
-                  placeholder="Paste token"
-                />
-              </div>
-              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={saveToken}>
-                Save Token
-              </button>
               <ExportButtons
                 name={`report-${activeReport}`}
                 onExportPdf={() => {

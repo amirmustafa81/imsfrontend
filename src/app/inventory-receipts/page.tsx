@@ -163,8 +163,7 @@ const defaultForm: ReceiptForm = {
 const toPayloadDate = (value: string): string | null => value.trim() ? value : null;
 
 export default function InventoryReceiptsPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tmpToken, setTmpToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [rows, setRows] = useState<Receipt[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
@@ -385,14 +384,6 @@ export default function InventoryReceiptsPage() {
     event.target.value = "";
   };
 
-  const submitToken = () => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-    setMessage("Token saved. Reloading records.");
-    setError("");
-  };
-
   const expandedItemColumns = [
     { key: "item", header: "Item", render: (receiptItem: ReceiptItem) => lookupLabel("items", receiptItem.item_id) },
     { key: "qty", header: "Qty Rec", render: (receiptItem: ReceiptItem) => receiptItem.quantity_received },
@@ -455,7 +446,7 @@ export default function InventoryReceiptsPage() {
     event.preventDefault();
 
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -621,20 +612,7 @@ export default function InventoryReceiptsPage() {
         <PageHeader
           title="Receipts / GRN"
           subtitle="Create and post goods receipts"
-          actions={
-            <div className="d-flex gap-2">
-              <input
-                type="password"
-                className="form-control form-control-sm"
-                placeholder="Paste API token"
-                value={tmpToken}
-                onChange={(event) => setTmpToken(event.target.value)}
-              />
-              <button className="btn btn-sm btn-outline-primary" type="button" onClick={submitToken}>
-                Save Token
-              </button>
-            </div>
-          }
+          
         />
 
         {(message || error) && (

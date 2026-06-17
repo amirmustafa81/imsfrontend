@@ -44,8 +44,7 @@ const emptyForm: SyncLogForm = {
 
 export default function ErpSyncLogsPage() {
   const storedToken = useMemo(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""), []);
-  const [token, setToken] = useState(storedToken);
-  const [tmpToken, setTmpToken] = useState(storedToken);
+  const [token] = useState(storedToken);
   const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
 
   const [rows, setRows] = useState<SyncLog[]>([]);
@@ -78,16 +77,10 @@ export default function ErpSyncLogsPage() {
     void loadRows();
   }, [loadRows]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-  };
-
   const saveLog = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -142,24 +135,7 @@ export default function ErpSyncLogsPage() {
         <PageHeader
           title="ERP Sync Logs"
           subtitle="Track data synchronization jobs and run audit history."
-          actions={
-            <form className="d-flex gap-2" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  value={tmpToken}
-                  placeholder="Bearer token"
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTmpToken(event.target.value)}
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         {error ? <div className="alert alert-danger">{error}</div> : null}

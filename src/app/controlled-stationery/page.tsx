@@ -169,8 +169,7 @@ const lookupLabel = (rows: RowData[], value: unknown, fallback?: string) => {
 };
 
 export default function ControlledStationeryPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tmpToken, setTmpToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
 
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
@@ -305,19 +304,6 @@ export default function ControlledStationeryPage() {
     void loadAll();
   }, [token, loadLookups, loadBatches, loadSerials]);
 
-  const submitToken = () => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-    setMessage("Token saved. Reloading inventory module.");
-    setError("");
-    setTimeout(() => {
-      void loadLookups();
-      void loadBatches();
-      void loadSerials();
-    }, 100);
-  };
-
   const setBatchFormValue = (key: keyof BatchForm, value: string | boolean) => {
     setBatchForm((current) => ({
       ...current,
@@ -368,7 +354,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
     setError("");
 
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -467,7 +453,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
     setMessage("");
 
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -701,26 +687,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
         <PageHeader
           title="Controlled Stationery"
           subtitle="Track controlled stationery by batch and serial number for issue, consume, return, missing, and damage actions."
-          actions={
-            <form onSubmit={(event) => { event.preventDefault(); submitToken(); }} className="d-flex gap-2 align-items-end">
-              <div>
-                <label htmlFor="token" className="form-label small mb-1">
-                  API Token
-                </label>
-                <input
-                  id="token"
-                  value={tmpToken}
-                  onChange={(event) => setTmpToken(event.target.value)}
-                  type="password"
-                  placeholder="Paste API token"
-                  className="form-control form-control-sm"
-                />
-              </div>
-              <button className="btn btn-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         {(message || error) && (

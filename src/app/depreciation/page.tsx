@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -62,8 +62,7 @@ const initialLookups: Record<LookupKey, RowData[]> = {
 };
 
 export default function DepreciationPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tmpToken, setTmpToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [rows, setRows] = useState<DepreciationRow[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>(initialLookups);
 
@@ -84,16 +83,6 @@ export default function DepreciationPage() {
     }),
     [token],
   );
-
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (typeof window === "undefined") return;
-
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-    setError("");
-    setMessage("Token saved. Loading depreciation report.");
-  };
 
   const loadRows = useCallback(async () => {
     if (!token) return;
@@ -257,24 +246,7 @@ export default function DepreciationPage() {
         <PageHeader
           title="Depreciation"
           subtitle="Review straight-line depreciation entries, period totals, and run status by asset."
-          actions={
-            <form onSubmit={submitToken} className="d-flex gap-2 align-items-end">
-              <div>
-                <label className="form-label small mb-1">Bearer token</label>
-                <input
-                  type="text"
-                  className="form-control form-control-sm"
-                  value={tmpToken}
-                  onChange={(event) => setTmpToken(event.target.value)}
-                  placeholder="Paste API token"
-                />
-              </div>
-
-              <button className="btn btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         {(message || error) && (

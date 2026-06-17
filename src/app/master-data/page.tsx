@@ -255,8 +255,7 @@ export default function MasterDataPage() {
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [token, setToken] = useState(storedToken);
-  const [tmpToken, setTmpToken] = useState(storedToken);
+  const [token] = useState(storedToken);
   const [lookups, setLookups] = useState<Record<ResourceKey, RowData[]>>({
     departments: [],
     buildings: [],
@@ -368,16 +367,6 @@ export default function MasterDataPage() {
     return `${matches.code ?? matches.project_code ?? matches.id} - ${matches.name ?? matches.title ?? ""}`;
   };
 
-  const saveToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (typeof window === "undefined") return;
-
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-    setMessage("Token updated. Refreshing data.");
-    setError("");
-  };
-
   const setFieldValue = (key: string, value: string) => {
     setForm((current) => ({
       ...current,
@@ -398,7 +387,7 @@ export default function MasterDataPage() {
     event.preventDefault();
 
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -488,7 +477,7 @@ export default function MasterDataPage() {
 
   const deactivateRecord = async (row: RowData) => {
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -638,32 +627,14 @@ export default function MasterDataPage() {
         <PageHeader
           title="Master Data Console"
           subtitle="Create, edit, and deactivate master records used across IMS modules."
-          actions={
-            <form className="d-flex align-items-center gap-2" onSubmit={saveToken}>
-              <div>
-                <label className="form-label small mb-1">Bearer token</label>
-                <input
-                  type="password"
-                  className="form-control form-control-sm"
-                  placeholder="Paste API token"
-                  value={tmpToken}
-                  onChange={(event) => setTmpToken(event.target.value)}
-                  style={{ minWidth: 240 }}
-                />
-              </div>
-
-              <button className="btn btn-outline-primary btn-sm" type="submit">
-                Save Token
-              </button>
-            </form>
-          }
+          
         />
 
         {(error || message || !token) && (
           <div className="mb-3">
             {error && <div className="alert alert-danger mb-0">{error}</div>}
             {message && <div className="alert alert-success mb-0">{message}</div>}
-            {!token && <div className="alert alert-warning mb-0">Save token before loading records.</div>}
+            {!token && <div className="alert alert-warning mb-0">Authentication token required before loading records.</div>}
           </div>
         )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -28,8 +28,7 @@ const syncTypeOptions = [
 ];
 
 export default function ExportHistoryPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tempToken, setTempToken] = useState(token);
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const authHeaders = useMemo(
     () => ({
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -80,12 +79,6 @@ export default function ExportHistoryPage() {
     }
   }, [authHeaders, fromDate, status, syncType, toDate, token]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tempToken);
-    setToken(tempToken);
-  };
-
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadRows();
@@ -104,24 +97,7 @@ export default function ExportHistoryPage() {
         <PageHeader
           title="Export History"
           subtitle="ERP sync history and export lifecycle audit (backend integration events)."
-          actions={
-            <form className="d-flex gap-2" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  placeholder="Bearer token"
-                  value={tempToken}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTempToken(event.target.value)}
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         <FilterBar onReset={reset}>

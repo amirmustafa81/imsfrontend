@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -43,8 +43,7 @@ const templateTypeOptions = [
 ];
 
 export default function ImportPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tempToken, setTempToken] = useState(token);
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const authHeaders = useMemo(
     () => ({
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -61,12 +60,6 @@ export default function ImportPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tempToken);
-    setToken(tempToken);
-  };
 
   const loadBatches = useCallback(async () => {
     if (!token) {
@@ -123,7 +116,7 @@ export default function ImportPage() {
     event.preventDefault();
 
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -150,7 +143,7 @@ export default function ImportPage() {
 
   const actionValidate = async (batchId: number) => {
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -166,7 +159,7 @@ export default function ImportPage() {
 
   const actionRun = async (batchId: number) => {
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -191,24 +184,7 @@ export default function ImportPage() {
         <PageHeader
           title="ERP Import"
           subtitle="Upload staged CSV templates, validate, run and review import outcomes."
-          actions={
-            <form className="d-flex gap-2" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  placeholder="Bearer token"
-                  value={tempToken}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTempToken(event.target.value)}
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         <div className="row g-4 mb-4">

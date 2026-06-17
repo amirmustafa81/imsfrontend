@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -49,8 +49,7 @@ const emptyForm: UserForm = {
 
 export default function UsersPage() {
   const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token, setToken] = useState(initialToken);
-  const [tmpToken, setTmpToken] = useState(initialToken);
+  const [token] = useState(initialToken);
   const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
 
   const [rows, setRows] = useState<UserRow[]>([]);
@@ -108,12 +107,6 @@ export default function UsersPage() {
     void loadRows();
   }, [loadRows]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-  };
-
   const resetForm = () => {
     setEditingUserId(null);
     setForm(emptyForm);
@@ -154,7 +147,7 @@ export default function UsersPage() {
     event.preventDefault();
 
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -251,28 +244,10 @@ export default function UsersPage() {
           title="Users"
           subtitle="Create users, update access details, and assign roles."
           actions={
-            <>
-              <button className="btn btn-primary" type="button" onClick={openCreateDialog}>
-                <i className="bi bi-plus-lg me-1" />
-                Create User
-              </button>
-              <form className="d-flex gap-2 align-items-end" onSubmit={submitToken}>
-                <div className="input-group input-group-sm">
-                  <span className="input-group-text">
-                    <i className="bi bi-key" />
-                  </span>
-                  <input
-                    className="form-control"
-                    value={tmpToken}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => setTmpToken(event.target.value)}
-                    type="password"
-                  />
-                </div>
-                <button className="btn btn-sm btn-outline-primary" type="submit">
-                  Save token
-                </button>
-              </form>
-            </>
+            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+              <i className="bi bi-plus-lg me-1" />
+              Create User
+            </button>
           }
         />
         {message ? <div className="alert alert-success">{message}</div> : null}

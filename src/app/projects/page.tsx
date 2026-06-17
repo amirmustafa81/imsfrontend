@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -35,8 +35,7 @@ const statusOptions = [
 ];
 
 export default function ProjectsPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tempToken, setTempToken] = useState(token);
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const authHeaders = useMemo(
     () => ({
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -102,12 +101,6 @@ export default function ProjectsPage() {
     void loadRows();
   }, [loadRows]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tempToken);
-    setToken(tempToken);
-  };
-
   const reset = () => {
     setSearch("");
     setProjectId("");
@@ -120,24 +113,7 @@ export default function ProjectsPage() {
         <PageHeader
           title="Research Project Inventory"
           subtitle="Project-linked assets and consumables grouped by project context."
-          actions={
-            <form className="d-flex gap-2" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  placeholder="Bearer token"
-                  value={tempToken}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTempToken(event.target.value)}
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         <FilterBar onReset={reset}>
@@ -207,7 +183,7 @@ export default function ProjectsPage() {
           empty="No project-linked assets found."
         />
 
-        {!token ? <div className="alert alert-info mt-3 mb-0">Save token to load live data.</div> : null}
+        {!token ? <div className="alert alert-info mt-3 mb-0">Authentication token required to load live data.</div> : null}
       </div>
     </main>
   );

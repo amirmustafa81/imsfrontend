@@ -148,13 +148,9 @@ const labelFromAsset = (asset: FixedAsset | RowData): string => {
 };
 
 export default function DisposalsPage() {
-  const [token, setToken] = useState(() =>
+  const [token] = useState(() =>
     typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "",
-  );
-  const [tmpToken, setTmpToken] = useState(() =>
-    typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "",
-  );
-  const [disposals, setDisposals] = useState<Disposal[]>([]);
+  );  const [disposals, setDisposals] = useState<Disposal[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({ fixedAssets: [] });
   const [filter, setFilter] = useState<FilterState>(initialFilters);
   const [form, setForm] = useState<DisposalForm>(initialForm);
@@ -233,14 +229,6 @@ export default function DisposalsPage() {
     })();
   }, [loadLookups]);
 
-  const submitToken = () => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-    setError("");
-    setMessage("Token saved. Loading disposal records.");
-  };
-
   const setFormValue = (key: keyof DisposalForm, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
@@ -272,7 +260,7 @@ export default function DisposalsPage() {
   const saveDisposal = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -342,7 +330,7 @@ export default function DisposalsPage() {
 
   const postDisposal = async (disposal: Disposal) => {
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
     try {
@@ -359,7 +347,7 @@ export default function DisposalsPage() {
     if (disposal.status !== "draft") return;
     if (!confirm("Delete this draft disposal?")) return;
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -455,20 +443,7 @@ export default function DisposalsPage() {
         <PageHeader
           title="Asset Disposals"
           subtitle="Create disposal proposals and post disposal transactions with approval metadata."
-          actions={
-            <div className="d-flex gap-2">
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                value={tmpToken}
-                onChange={(event) => setTmpToken(event.target.value)}
-                placeholder="Paste API token"
-              />
-              <button className="btn btn-outline-primary btn-sm" type="button" onClick={submitToken}>
-                Save token
-              </button>
-            </div>
-          }
+          
         />
 
         {(error || message) && (

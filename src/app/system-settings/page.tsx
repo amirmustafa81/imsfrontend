@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, EmptyState, PageHeader } from "@/components/ims";
 
@@ -15,8 +15,7 @@ type Setting = {
 
 export default function SystemSettingsPage() {
   const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token, setToken] = useState(initialToken);
-  const [tmpToken, setTmpToken] = useState(initialToken);
+  const [token] = useState(initialToken);
   const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
 
   const [rows, setRows] = useState<Setting[]>([]);
@@ -48,15 +47,9 @@ export default function SystemSettingsPage() {
     void loadRows();
   }, [loadRows]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-  };
-
   const updateSetting = async (setting: Setting) => {
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -125,23 +118,7 @@ export default function SystemSettingsPage() {
         <PageHeader
           title="System Settings"
           subtitle="Update threshold keys used by inventory and operations."
-          actions={
-            <form className="d-flex gap-2" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  value={tmpToken}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTmpToken(event.target.value)}
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
         {message ? <div className="alert alert-success">{message}</div> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}

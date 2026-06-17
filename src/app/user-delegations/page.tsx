@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -51,8 +51,7 @@ const emptyForm: FormState = {
 
 export default function UserDelegationsPage() {
   const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token, setToken] = useState(initialToken);
-  const [tmpToken, setTmpToken] = useState(initialToken);
+  const [token] = useState(initialToken);
   const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
 
   const [users, setUsers] = useState<User[]>([]);
@@ -104,16 +103,10 @@ export default function UserDelegationsPage() {
     void loadRows();
   }, [loadRows]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-  };
-
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
     if (!form.delegator_user_id || !form.delegated_to_user_id || !form.department_id || !form.authority_type || !form.start_date || !form.end_date) {
@@ -197,23 +190,7 @@ export default function UserDelegationsPage() {
         <PageHeader
           title="User Delegations"
           subtitle="Create and manage temporary authority delegation records."
-          actions={
-            <form className="d-flex gap-2" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  value={tmpToken}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTmpToken(event.target.value)}
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
         {message ? <div className="alert alert-success">{message}</div> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}

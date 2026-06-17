@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -48,8 +48,7 @@ const reportColumns = [
 ];
 
 export default function StockPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tempToken, setTempToken] = useState(token);
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
 
   const authHeaders = useMemo(
     () => ({
@@ -158,37 +157,13 @@ export default function StockPage() {
     return { availableTotal, onHandTotal, count: rows.length };
   }, [rows]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tempToken);
-    setToken(tempToken);
-    setError("");
-  };
-
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
         <PageHeader
           title="Stock Balances"
           subtitle="Monitor stock balance, low-stock warnings, and report-level filters."
-          actions={
-            <form className="d-flex gap-2" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  placeholder="Bearer token"
-                  value={tempToken}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTempToken(event.target.value)}
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         <div className="row g-2 mb-3">

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -42,8 +42,7 @@ const printFormatOptions = [
 ];
 
 export default function TagPrintLogPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tempToken, setTempToken] = useState(token);
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const authHeaders = useMemo(
     () => ({
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -109,12 +108,6 @@ export default function TagPrintLogPage() {
     void loadRows();
   }, [loadRows]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tempToken);
-    setToken(tempToken);
-  };
-
   const setField = useCallback((field: keyof TagPrintForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
   }, []);
@@ -123,7 +116,7 @@ export default function TagPrintLogPage() {
     event.preventDefault();
 
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -147,7 +140,7 @@ export default function TagPrintLogPage() {
 
   const deleteLog = async (logId: number) => {
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -166,24 +159,7 @@ export default function TagPrintLogPage() {
         <PageHeader
           title="Tag Print Log"
           subtitle="Record tag printing actions per asset and export traceability."
-          actions={
-            <form className="d-flex gap-2" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  value={tempToken}
-                  placeholder="Bearer token"
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTempToken(event.target.value)}
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         <div className="row g-4 mb-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -80,8 +80,7 @@ const toNumericString = (value: string | number | null | undefined): string => {
 };
 
 export default function ItemsPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tempToken, setTempToken] = useState(token);
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [rows, setRows] = useState<ItemRow[]>([]);
   const [lookups, setLookups] = useState<LookupMap>({
     "asset-categories": [],
@@ -177,13 +176,6 @@ export default function ItemsPage() {
     void reloadLookups();
   }, [loadLookups]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tempToken);
-    setToken(tempToken);
-    setMessage("Token saved. Loading item master...");
-  };
-
   const resetFilters = () => {
     setSearch("");
     setTypeFilter("");
@@ -254,25 +246,7 @@ export default function ItemsPage() {
           title="Item Master"
           subtitle="Consumables, fixed assets, controlled items, licenses, and project inventory"
           breadcrumbs={[{ label: "Inventory" }, { label: "Items" }]}
-          actions={
-            <form className="d-flex gap-2 align-items-end" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  placeholder="Bearer token"
-                  value={tempToken}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTempToken(event.target.value)}
-                  type="password"
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         <FilterBar onReset={resetFilters}>
@@ -308,7 +282,7 @@ export default function ItemsPage() {
         </FilterBar>
 
         {error ? <div className="alert alert-danger">{error}</div> : null}
-        {!token ? <div className="alert alert-info">Save token to load live items.</div> : null}
+        {!token ? <div className="alert alert-info">Authentication token required to load live items.</div> : null}
         {message ? <div className="alert alert-light border-0">{message}</div> : null}
 
         <div className="d-flex justify-content-between align-items-center mb-2">

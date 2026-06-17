@@ -98,8 +98,7 @@ const numberOrNull = (value: string): number | null => {
 };
 
 export default function TransfersPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tmpToken, setTmpToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [rows, setRows] = useState<Transfer[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
@@ -212,14 +211,6 @@ export default function TransfersPage() {
     void loadLookups();
   }, [token, authHeaders]);
 
-  const submitToken = () => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-    setMessage("Token saved. Reloading transfers.");
-    setError("");
-  };
-
   const setFormValue = (key: keyof TransferForm, value: string | boolean) => {
     setForm((current) => ({
       ...current,
@@ -251,7 +242,7 @@ export default function TransfersPage() {
     event.preventDefault();
 
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
 
@@ -464,20 +455,7 @@ export default function TransfersPage() {
         <PageHeader
           title="Asset Transfers"
           subtitle="Create internal transfer transactions and post to move stock between departments and stores."
-          actions={
-            <div className="d-flex gap-2">
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                value={tmpToken}
-                onChange={(e) => setTmpToken(e.target.value)}
-                placeholder="Paste API token"
-              />
-              <button className="btn btn-outline-primary btn-sm" type="button" onClick={submitToken}>
-                Save token
-              </button>
-            </div>
-          }
+          
         />
 
         {(message || error) && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -95,8 +95,7 @@ const toMoney = (value: number | null): string => {
 };
 
 export default function AssetsPage() {
-  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const [tmpToken, setTmpToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [rows, setRows] = useState<AssetRow[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>(initialLookups);
 
@@ -131,16 +130,6 @@ export default function AssetsPage() {
 
     if (!match) return String(value);
     return `${match.code ?? match.project_code ?? match.id} - ${match.name ?? match.title ?? ""}`;
-  };
-
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (typeof window === "undefined") return;
-
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-    setError("");
-    setMessage("Token saved. Loading fixed assets.");
   };
 
   const loadRows = useCallback(async () => {
@@ -323,24 +312,7 @@ export default function AssetsPage() {
         <PageHeader
           title="Fixed Asset Register"
           subtitle="View capitalized assets, tags, custody, locations, and status."
-          actions={
-            <form onSubmit={submitToken} className="d-flex gap-2 align-items-end">
-              <div>
-                <label className="form-label small mb-1">Bearer token</label>
-                <input
-                  type="text"
-                  className="form-control form-control-sm"
-                  value={tmpToken}
-                  onChange={(event) => setTmpToken(event.target.value)}
-                  placeholder="Paste API token"
-                />
-              </div>
-
-              <button className="btn btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         {(message || error) && (

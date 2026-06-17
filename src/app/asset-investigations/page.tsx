@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -46,8 +46,7 @@ const emptyForm: FormState = {
 
 export default function AssetInvestigationsPage() {
   const getToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token, setToken] = useState(getToken);
-  const [tmpToken, setTmpToken] = useState(getToken);
+  const [token] = useState(getToken);
   const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
 
   const [assets, setAssets] = useState<AssetSummary[]>([]);
@@ -94,16 +93,10 @@ export default function AssetInvestigationsPage() {
     void loadRows();
   }, [loadRows]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    localStorage.setItem("ims_api_token", tmpToken);
-    setToken(tmpToken);
-  };
-
   const saveRecord = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) {
-      setError("Save token first.");
+      setError("Authentication token required.");
       return;
     }
     if (!form.asset_id || !form.case_no) {
@@ -180,23 +173,7 @@ export default function AssetInvestigationsPage() {
         <PageHeader
           title="Asset Investigations"
           subtitle="Manage missing/under investigation and recovery workflow."
-          actions={
-            <form className="d-flex gap-2" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  value={tmpToken}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTmpToken(event.target.value)}
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
-              </button>
-            </form>
-          }
+          
         />
 
         {message ? <div className="alert alert-success">{message}</div> : null}

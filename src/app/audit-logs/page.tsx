@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, Timeline } from "@/components/ims";
 
@@ -63,13 +63,9 @@ const tableColumns = [
 ] as const;
 
 export default function AuditLogsPage() {
-  const [token, setToken] = useState(() =>
+  const [token] = useState(() =>
     typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "",
-  );
-  const [tempToken, setTempToken] = useState(() =>
-    typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "",
-  );
-  const [logs, setLogs] = useState<AuditLog[]>([]);
+  );  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [filter, setFilter] = useState<FilterState>(initialFilter);
   const [message, setMessage] = useState("Load audit logs to continue.");
   const [error, setError] = useState("");
@@ -152,15 +148,6 @@ export default function AuditLogsPage() {
     })();
   }, [loadRows]);
 
-  const saveToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (typeof window === "undefined") return;
-    localStorage.setItem("ims_api_token", tempToken);
-    setToken(tempToken);
-    setError("");
-    setMessage("Token saved. Loading audit logs.");
-  };
-
   const setValue = (key: keyof FilterState, value: string) => {
     setFilter((current) => ({ ...current, [key]: value }));
   };
@@ -178,22 +165,7 @@ export default function AuditLogsPage() {
         <PageHeader
           title="Audit Logs"
           subtitle="Track all auditable inventory actions with filters."
-          actions={
-            <form onSubmit={saveToken} className="d-flex gap-2 align-items-end">
-              <div>
-                <label className="form-label small mb-1">Bearer Token</label>
-                <input
-                  className="form-control form-control-sm"
-                  value={tempToken}
-                  onChange={(event) => setTempToken(event.target.value)}
-                  placeholder="Paste API token"
-                />
-              </div>
-              <button className="btn btn-primary" type="submit">
-                Save Token
-              </button>
-            </form>
-          }
+          
         />
 
         <FilterBar onReset={clearFilters}>
