@@ -110,13 +110,13 @@ const serialActionLabels: Array<{ value: SerialAction; label: string }> = [
   { value: "cancel", label: "Cancel" },
 ];
 
-const serialActionClass: Record<SerialAction, string> = {
-  issue: "text-bg-primary",
-  consume: "text-bg-secondary",
-  return: "text-bg-success",
-  mark_missing: "text-bg-warning",
-  mark_damaged: "text-bg-dark",
-  cancel: "text-bg-danger",
+const serialActionTone: Record<SerialAction, string> = {
+  issue: "primary",
+  consume: "secondary",
+  return: "success",
+  mark_missing: "warning",
+  mark_damaged: "dark",
+  cancel: "danger",
 };
 
 const batchStatusOptions: BatchStatus[] = ["active", "closed", "cancelled"];
@@ -527,7 +527,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
       header: "Quantity",
       render: (batch: ControlledBatch) => (
         <>
-          <span className="badge text-bg-light text-dark">Total: {batch.total_quantity}</span>
+          <span className="badge bg-secondary">Total: {batch.total_quantity}</span>
           {batch.serials_count ? <span className="ms-2">Serial rows: {batch.serials_count}</span> : null}
         </>
       ),
@@ -628,7 +628,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                 ))}
               </select>
               <button
-                className={`btn btn-sm btn-outline-${serialActionClass[actionDraft.action].replace("text-bg-", "")}`}
+                className={`btn btn-sm btn-outline-${serialActionTone[actionDraft.action]}`}
                 type="button"
                 onClick={() => {
                   void applySerialAction(serial);

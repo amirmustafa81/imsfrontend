@@ -333,7 +333,8 @@ export function ApprovalReferenceFields({
 }
 
 export function FileAttachmentList({ files = [] }: { files?: { name: string; size: string; uploadedBy: string; at: string }[] }) {
-  const [items, setItems] = useState(files);
+  const [addedItems, setAddedItems] = useState<{ name: string; size: string; uploadedBy: string; at: string }[]>([]);
+  const items = [...files, ...addedItems];
 
   return (
     <div>
@@ -352,7 +353,7 @@ export function FileAttachmentList({ files = [] }: { files?: { name: string; siz
                 return;
               }
 
-              setItems((current) => [
+              setAddedItems((current) => [
                 ...current,
                 {
                   name: file.name,

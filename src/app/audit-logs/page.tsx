@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { DataTable, FilterBar, PageHeader } from "@/components/ims";
+import { DataTable, FilterBar, PageHeader, Timeline } from "@/components/ims";
 
 type AuditLog = {
   id: number;
@@ -73,6 +73,21 @@ export default function AuditLogsPage() {
   const [filter, setFilter] = useState<FilterState>(initialFilter);
   const [message, setMessage] = useState("Load audit logs to continue.");
   const [error, setError] = useState("");
+
+  const timelineEvents = useMemo(
+    () =>
+      logs
+        .slice(0, 12)
+        .map((log) => ({
+          at: log.created_at ? log.created_at.slice(0, 16).replace("T", " ") : "-",
+          actor: log.user?.name ?? (log.user_id ? `User ${log.user_id}` : "System"),
+          action: log.action,
+          detail: log.entity_type
+            ? `${log.entity_type}${log.entity_id ? ` #${log.entity_id}` : ""}${log.remarks ? ` - ${log.remarks}` : ""}`
+            : log.remarks ?? "",
+        })),
+    [logs],
+  );
 
   const authHeaders = useMemo(
     () => ({
@@ -254,7 +269,7 @@ export default function AuditLogsPage() {
           </div>
         </FilterBar>
 
-        <div className="card border-0 shadow-sm">
+        <div className="card border-0 shadow-sm mb-3">
           <div className="card-body">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h2 className="h5 mb-0">Entries</h2>
@@ -264,6 +279,13 @@ export default function AuditLogsPage() {
             {error ? <div className="alert alert-danger">{error}</div> : null}
 
             <DataTable columns={tableColumns as never} rows={logs as never} />
+          </div>
+        </div>
+
+        <div className="card border-0 shadow-sm">
+          <div className="card-body">
+            <h2 className="h5 mb-3">Timeline</h2>
+            {timelineEvents.length > 0 ? <Timeline events={timelineEvents} /> : <div className="text-secondary small">No timeline events yet.</div>}
           </div>
         </div>
       </div>
