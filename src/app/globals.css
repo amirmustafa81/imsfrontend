@@ -409,6 +409,56 @@ a {
   text-decoration: underline;
 }
 
+.ims-dashboard-metric-card {
+  border-radius: 8px;
+}
+
+.ims-dashboard-metric-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 1.4rem;
+}
+
+.ims-dashboard-panel {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ims-dashboard-panel .card-header {
+  padding-block: 0.8rem;
+}
+
+.ims-dashboard-table thead th {
+  background: #ffffff;
+  border-bottom: 1px solid #cfd5de;
+  color: #111827;
+  font-size: 0.94rem;
+  font-weight: 800;
+}
+
+.ims-dashboard-table tbody td {
+  border-color: var(--ims-table-border);
+  vertical-align: middle;
+}
+
+.ims-dashboard-progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #e9edf3;
+  overflow: hidden;
+}
+
+.ims-dashboard-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: #3b6eea;
+}
+
 @media (max-width: 992px) {
   .ims-sidebar {
     width: 72px;
