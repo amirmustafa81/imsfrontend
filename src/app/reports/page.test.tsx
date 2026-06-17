@@ -227,7 +227,7 @@ describe("ReportsPage export and filter flow", () => {
     await user.clear(searchInput);
     await user.type(searchInput, "Lab");
 
-    await user.click(getButtonByName(/export excel/i));
+    await user.click(getButtonByName(/excel/i));
 
     expect(mockedApi.post).toHaveBeenCalledTimes(1);
     const [payload, requestBody, requestConfig] = mockedApi.post.mock.calls[0];
@@ -261,7 +261,7 @@ describe("ReportsPage export and filter flow", () => {
       expect(screen.getByText("Load a report to begin.")).toBeInTheDocument();
     });
 
-    await user.click(getButtonByName(/export excel/i));
+    await user.click(getButtonByName(/excel/i));
 
     await waitFor(() => {
       expect(screen.getByText("Please save your token before exporting.")).toBeInTheDocument();
@@ -305,7 +305,7 @@ describe("ReportsPage export and filter flow", () => {
     await user.clear(searchInput);
     await user.type(searchInput, "Lab");
 
-    await user.click(getButtonByName(/export excel/i));
+    await user.click(getButtonByName(/excel/i));
 
     await waitFor(() => {
       expect(screen.getByText("Excel export failed. Try again or reduce filters.")).toBeInTheDocument();
@@ -329,7 +329,7 @@ test("does not allow PDF export when no rows are loaded", async () => {
   });
 
   const user = userEvent.setup();
-  await user.click(screen.getByRole("button", { name: /export pdf/i }));
+  await user.click(screen.getByRole("button", { name: /pdf/i }));
 
   await waitFor(() => {
     expect(screen.getByText("No rows to export. Select a report with data.")).toBeInTheDocument();
