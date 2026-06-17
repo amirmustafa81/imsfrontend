@@ -31,6 +31,7 @@ vi.mock("next/link", () => ({
 const lookupPayloads = {
   departments: [{ id: 2, code: "CSE", name: "Computer Science" }],
   stores: [{ id: 11, code: "STORE-A", name: "Main Store" }],
+  "storage-bins": [{ id: 99, code: "BIN-01", name: "Front Rack", store_id: 11 }],
   items: [{ id: 21, item_code: "ITM-001", name: "Test Item" }],
   "funding-sources": [{ id: 31, code: "FS-01", name: "Gov Fund" }],
   "research-projects": [{ id: 41, project_code: "PRJ-01", title: "AI Lab" }],
@@ -59,6 +60,9 @@ const buildGetResponse = (url: string): LookupResponse => {
   }
   if (url.startsWith("/master-data/stores")) {
     return { data: { data: lookupPayloads.stores } };
+  }
+  if (url.startsWith("/master-data/storage-bins")) {
+    return { data: { data: lookupPayloads["storage-bins"] } };
   }
   if (url.startsWith("/master-data/items")) {
     return { data: { data: lookupPayloads.items } };
@@ -222,6 +226,7 @@ describe("IssuesReturnsPage adjustment flow", () => {
     await fillRequiredCommonFields(user);
     await user.selectOptions(getSelectValue(/to department/i), "2");
     await user.selectOptions(getSelectValue(/to store/i), "11");
+    await user.selectOptions(getSelectValue(/to storage bin/i), "99");
 
     await user.click(screen.getByText(/decrease stock/i));
     await user.click(screen.getByRole("button", { name: /save transaction/i }));
@@ -354,6 +359,28 @@ describe("IssuesReturnsPage adjustment flow", () => {
     });
   });
 
+  test("includes destination storage bin in payload for adjustment increase", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+    await user.selectOptions(getSelectValue(/to store/i), "11");
+    await user.selectOptions(getSelectValue(/to storage bin/i), "99");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/transaction saved with id/i)).toBeInTheDocument();
+    });
+
+    const [, payload] = mockedApi.post.mock.calls[0];
+    expect(payload).toMatchObject({
+      to_storage_bin_id: 99,
+      from_storage_bin_id: null,
+    });
+  });
+
   test("submits adjustment decrease with source scope and item row payload", async () => {
     const { user } = await renderPage();
 
@@ -378,6 +405,29 @@ describe("IssuesReturnsPage adjustment flow", () => {
       from_department_id: 2,
       from_store_id: 11,
       items: [expect.objectContaining({ item_id: 21, quantity: 2 })],
+    });
+  });
+
+  test("includes source storage bin in payload for adjustment decrease", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await user.click(screen.getByText(/decrease stock/i));
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getSelectValue(/from department/i), "2");
+    await user.selectOptions(getSelectValue(/from store/i), "11");
+    await user.selectOptions(getSelectValue(/from storage bin/i), "99");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/transaction saved with id/i)).toBeInTheDocument();
+    });
+
+    const [, payload] = mockedApi.post.mock.calls[0];
+    expect(payload).toMatchObject({
+      from_storage_bin_id: 99,
+      to_storage_bin_id: null,
     });
   });
 
@@ -409,6 +459,8 @@ describe("IssuesReturnsPage adjustment flow", () => {
       to_store_id: 11,
       from_department_id: null,
       from_store_id: null,
+      from_storage_bin_id: null,
+      to_storage_bin_id: null,
     });
   });
 

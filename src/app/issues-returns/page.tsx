@@ -4,7 +4,13 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 
-type LookupKey = "departments" | "stores" | "items" | "funding-sources" | "research-projects";
+type LookupKey =
+  | "departments"
+  | "stores"
+  | "items"
+  | "funding-sources"
+  | "research-projects"
+  | "storage-bins";
 
 type TransactionType = "issue" | "return" | "transfer" | "consumption" | "adjustment";
 
@@ -60,6 +66,8 @@ type TransactionForm = {
   to_department_id: string;
   from_store_id: string;
   to_store_id: string;
+  from_storage_bin_id: string;
+  to_storage_bin_id: string;
   funding_source_id: string;
   project_id: string;
   manual_approval_ref: string;
@@ -110,6 +118,8 @@ const defaultForm: TransactionForm = {
   to_department_id: "",
   from_store_id: "",
   to_store_id: "",
+  from_storage_bin_id: "",
+  to_storage_bin_id: "",
   funding_source_id: "",
   project_id: "",
   manual_approval_ref: "",
@@ -140,6 +150,7 @@ export default function IssuesReturnsPage() {
     items: [],
     "funding-sources": [],
     "research-projects": [],
+    "storage-bins": [],
   });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -210,6 +221,7 @@ export default function IssuesReturnsPage() {
       "items",
       "funding-sources",
       "research-projects",
+      "storage-bins",
     ];
 
     const loadLookups = async () => {
@@ -224,6 +236,7 @@ export default function IssuesReturnsPage() {
           items: [],
           "funding-sources": [],
           "research-projects": [],
+          "storage-bins": [],
         },
       );
 
@@ -262,20 +275,24 @@ export default function IssuesReturnsPage() {
         if (value === "return") {
           next.from_department_id = "";
           next.from_store_id = "";
+          next.from_storage_bin_id = "";
           next.adjustment_direction = "increase";
         }
 
         if (value === "issue" || value === "consumption") {
           next.to_department_id = "";
           next.to_store_id = "";
+          next.to_storage_bin_id = "";
           next.adjustment_direction = "decrease";
         }
 
         if (value === "adjustment") {
           next.from_department_id = "";
           next.from_store_id = "";
+          next.from_storage_bin_id = "";
           next.to_department_id = "";
           next.to_store_id = "";
+          next.to_storage_bin_id = "";
           next.adjustment_direction = "increase";
         }
 
@@ -295,12 +312,32 @@ export default function IssuesReturnsPage() {
           [key]: value as TransactionForm["adjustment_direction"],
           from_department_id: "",
           from_store_id: "",
+          from_storage_bin_id: "",
           to_department_id: "",
           to_store_id: "",
+          to_storage_bin_id: "",
         };
 
         return next;
       });
+      return;
+    }
+
+    if (key === "from_store_id" && typeof value === "string") {
+      setForm((current) => ({
+        ...current,
+        [key]: value,
+        from_storage_bin_id: "",
+      }));
+      return;
+    }
+
+    if (key === "to_store_id" && typeof value === "string") {
+      setForm((current) => ({
+        ...current,
+        [key]: value,
+        to_storage_bin_id: "",
+      }));
       return;
     }
 
@@ -346,6 +383,12 @@ export default function IssuesReturnsPage() {
     return ["from_department_id", "from_store_id", "to_department_id", "to_store_id"];
   };
 
+  const binsForStore = (storeId: string): RowData[] => {
+    if (!storeId) return [];
+
+    return lookups["storage-bins"].filter((bin) => String(bin.store_id ?? "") === String(storeId));
+  };
+
   const saveTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -384,6 +427,8 @@ export default function IssuesReturnsPage() {
       to_department_id: numberOrNull(form.to_department_id),
       from_store_id: numberOrNull(form.from_store_id),
       to_store_id: numberOrNull(form.to_store_id),
+      from_storage_bin_id: numberOrNull(form.from_storage_bin_id),
+      to_storage_bin_id: numberOrNull(form.to_storage_bin_id),
       funding_source_id: numberOrNull(form.funding_source_id),
       project_id: numberOrNull(form.project_id),
       manual_approval_ref: form.manual_approval_ref.trim() || null,
@@ -623,10 +668,10 @@ export default function IssuesReturnsPage() {
                       </div>
                     )}
 
-                    {(form.transaction_type === "issue" || form.transaction_type === "consumption" || form.transaction_type === "transfer" || (form.transaction_type === "adjustment" && form.adjustment_direction === "decrease")) && (
-                      <>
-                        <div className="col-12 col-md-6">
-                          <label className="form-label">From Department</label>
+                        {(form.transaction_type === "issue" || form.transaction_type === "consumption" || form.transaction_type === "transfer" || (form.transaction_type === "adjustment" && form.adjustment_direction === "decrease")) && (
+                          <>
+                            <div className="col-12 col-md-6">
+                              <label className="form-label">From Department</label>
                           <select
                             className="form-select"
                             value={form.from_department_id}
@@ -640,26 +685,41 @@ export default function IssuesReturnsPage() {
                             ))}
                           </select>
                         </div>
-                        <div className="col-12 col-md-6">
-                          <label className="form-label">From Store</label>
-                          <select
-                            className="form-select"
+                            <div className="col-12 col-md-6">
+                              <label className="form-label">From Store</label>
+                              <select
+                                className="form-select"
                             value={form.from_store_id}
                             onChange={(e) => setFormValue("from_store_id", e.target.value)}
                           >
                             <option value="">Select</option>
-                            {lookups.stores.map((store) => (
-                              <option key={store.id} value={store.id}>
-                                {store.code} - {store.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </>
-                    )}
+                                {lookups.stores.map((store) => (
+                                  <option key={store.id} value={store.id}>
+                                    {store.code} - {store.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="col-12 col-md-6">
+                              <label className="form-label">From Storage Bin (optional)</label>
+                              <select
+                                className="form-select"
+                                value={form.from_storage_bin_id}
+                                onChange={(e) => setFormValue("from_storage_bin_id", e.target.value)}
+                              >
+                                <option value="">Optional</option>
+                                {binsForStore(form.from_store_id).map((bin) => (
+                                  <option key={bin.id} value={bin.id}>
+                                    {bin.code} - {bin.name ?? ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </>
+                        )}
 
                     {(form.transaction_type === "return" || form.transaction_type === "transfer" || (form.transaction_type === "adjustment" && form.adjustment_direction === "increase")) && (
-                      <>
+                          <>
                         <div className="col-12 col-md-6">
                           <label className="form-label">To Department</label>
                           <select
@@ -675,23 +735,38 @@ export default function IssuesReturnsPage() {
                             ))}
                           </select>
                         </div>
-                        <div className="col-12 col-md-6">
-                          <label className="form-label">To Store</label>
-                          <select
-                            className="form-select"
+                            <div className="col-12 col-md-6">
+                              <label className="form-label">To Store</label>
+                              <select
+                                className="form-select"
                             value={form.to_store_id}
                             onChange={(e) => setFormValue("to_store_id", e.target.value)}
                           >
                             <option value="">Select</option>
-                            {lookups.stores.map((store) => (
-                              <option key={store.id} value={store.id}>
-                                {store.code} - {store.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </>
-                    )}
+                                {lookups.stores.map((store) => (
+                                  <option key={store.id} value={store.id}>
+                                    {store.code} - {store.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="col-12 col-md-6">
+                              <label className="form-label">To Storage Bin (optional)</label>
+                              <select
+                                className="form-select"
+                                value={form.to_storage_bin_id}
+                                onChange={(e) => setFormValue("to_storage_bin_id", e.target.value)}
+                              >
+                                <option value="">Optional</option>
+                                {binsForStore(form.to_store_id).map((bin) => (
+                                  <option key={bin.id} value={bin.id}>
+                                    {bin.code} - {bin.name ?? ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </>
+                        )}
 
                     <div className="col-12 col-md-6">
                       <label className="form-label">Funding Source</label>
