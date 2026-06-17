@@ -214,7 +214,7 @@ export default function Home() {
       },
     };
 
-    void Promise.all([
+    void Promise.allSettled([
       api.get<{ data: AssetRow[] }>("/assets", requestConfig),
       api.get<{ data: StockRow[] }>("/reports/stock-balance", requestConfig),
       api.get<{ data: StockRow[] }>("/reports/low-stock", requestConfig),
@@ -227,35 +227,40 @@ export default function Home() {
       api.get<{ data: MaintenanceRow[] }>("/maintenance-records", requestConfig),
       api.get<{ data: ControlledStationeryBatchRow[] }>("/controlled-stationery/batches", requestConfig),
     ])
-      .then(
-        ([
-          assetsResponse,
-          stockResponse,
-          lowStockResponse,
-          verificationResponse,
-          missingDamagedResponse,
-          receiptsResponse,
-          transactionResponse,
-          issueReturnResponse,
-          transferResponse,
-          maintenanceResponse,
-          controlledStationeryResponse,
-        ]) => {
+      .then((results) => {
           if (!active) {
             return;
           }
 
-          const assets = asArray<AssetRow>(assetsResponse.data?.data);
-          const stockBalances = asArray<StockRow>(stockResponse.data?.data);
-          const lowStock = asArray<StockRow>(lowStockResponse.data?.data);
-          const verifications = asArray<VerificationRow>(verificationResponse.data?.data);
-          const missingDamaged = asArray<MissingDamagedRow>(missingDamagedResponse.data?.data);
-          const receiptReport = asArray<ReceiptReportRow>(receiptsResponse.data?.data);
-          const inventoryTransactions = asArray<InventoryTransactionRow>(transactionResponse.data?.data);
-          const issueReturn = asArray<IssueReturnRow>(issueReturnResponse.data?.data);
-          const assetTransfers = asArray<AssetTransferRow>(transferResponse.data?.data);
-          const maintenanceRecords = asArray<MaintenanceRow>(maintenanceResponse.data?.data);
-          const stationeryBatches = asArray<ControlledStationeryBatchRow>(controlledStationeryResponse.data?.data);
+          const getRows = <T,>(index: number): T[] => {
+            const result = results[index];
+
+            if (result?.status !== "fulfilled") {
+              return [];
+            }
+
+            const payload = result.value.data as { data?: unknown };
+            return asArray<T>(payload.data);
+          };
+
+          const failedRequests = results.filter((result) => result.status === "rejected").length;
+          setDashboardError(
+            failedRequests > 0
+              ? `${failedRequests} dashboard data source${failedRequests > 1 ? "s" : ""} could not be loaded. Showing available data.`
+              : "",
+          );
+
+          const assets = getRows<AssetRow>(0);
+          const stockBalances = getRows<StockRow>(1);
+          const lowStock = getRows<StockRow>(2);
+          const verifications = getRows<VerificationRow>(3);
+          const missingDamaged = getRows<MissingDamagedRow>(4);
+          const receiptReport = getRows<ReceiptReportRow>(5);
+          const inventoryTransactions = getRows<InventoryTransactionRow>(6);
+          const issueReturn = getRows<IssueReturnRow>(7);
+          const assetTransfers = getRows<AssetTransferRow>(8);
+          const maintenanceRecords = getRows<MaintenanceRow>(9);
+          const stationeryBatches = getRows<ControlledStationeryBatchRow>(10);
 
           const inUseCount = assets.filter((asset) => {
             const status = (asset.status ?? "").toLowerCase();
@@ -439,8 +444,7 @@ export default function Home() {
           setLowStockRows(lowStockTable);
           setRecentReceiptRows(sortedRecentReceipts);
           setRecentMovementRows(recentMovements);
-        },
-      )
+        })
       .catch(() => {
         if (!active) {
           return;
