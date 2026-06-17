@@ -1,96 +1,111 @@
 # IMS UI Audit
 
-Scope: `src/app` pages in `/Users/amirmustafa/Documents/inventory/imsfrontend` compared against `DESIGN_SYSTEM.md` and `COMPONENT_INVENTORY.md`.
+Source: `/Users/amirmustafa/Documents/inventory/imsfrontend`
 
-## 1) Current inconsistent screens
+Scope: all production IMS pages under `src/app` excluding `layout.tsx` and test files.
 
-The following pages still bypass shared IMS UI components and do not fully match the documented system:
+## 1) Current compliance status
 
-- `src/app/issues-returns/page.tsx`
-- `src/app/transfers/page.tsx`
-- `src/app/verification/page.tsx`
-- `src/app/disposals/page.tsx`
+### Core IA coverage
+- Dashboard: `src/app/page.tsx`
+- Item Master: `src/app/items/page.tsx`
+- Receipts / GRN: `src/app/inventory-receipts/page.tsx`
+- Stock Balances: `src/app/stock/page.tsx`
+- Issue / Return / Transfer: `src/app/issues-returns/page.tsx`, `src/app/transfers/page.tsx`
+- Fixed Asset Register: `src/app/assets/page.tsx`
+- Tag Print Log: `src/app/tag-print-log/page.tsx`
+- Project Inventory: `src/app/projects/page.tsx`
+- Laboratory Inventory: `src/app/lab/page.tsx`
+- IT Assets: `src/app/it-assets/page.tsx`
+- Controlled Stationery: `src/app/controlled-stationery/page.tsx`
+- Physical Verification: `src/app/verification/page.tsx`
+- Disposal / Write-Off: `src/app/disposals/page.tsx`
+- Audit Log: `src/app/audit-logs/page.tsx`
+- Reports: `src/app/reports/page.tsx`
+- Masters / Admin Settings: `src/app/master-data/page.tsx`
+- Planned placeholder routes: `import`, `export-history`
 
-`src/app/inventory-receipts/page.tsx` has already been refactored and is excluded from the pending gap list.
+### Result at a glance
+- **Most operational screens are now aligned** with the Loveable IMS system.
+- Remaining variances are intentionally low-impact and scoped to helper-level details.
 
 ## 2) Inconsistent layouts
 
-- Missing `PageHeader` at the page top.
-- Manual dashboard backlink cards (`<Link href="/" ...>Dashboard</Link>`) still in content body.
-- Token controls are implemented in local cards instead of a shared header action area.
+- ✅ Active pages use shared shell layout and `PageHeader` consistently.
+- ✅ Main layout pattern is `main.min-vh-100.bg-body-tertiary` with `container-fluid` and shared card structure.
+- ❗ Dashboard `src/app/page.tsx` uses `container-fluid p-4` with a shell-consistent main class; the `p-4` is applied on the container, not `<main>`, which is acceptable but slightly different from the default style.
 
 ## 3) Inconsistent sidebar/topbar usage
 
-- Route-local navigation hints remain in page content.
-- No shared `PageHeader`/actions pattern used consistently with shell conventions.
+- ✅ No local route-nav back-links were found in page bodies.
+- ✅ Page entry points use shell navigation context (no duplicate topbar/sidebar construction).
 
 ## 4) Inconsistent tables
 
-- Primary list tables are custom `<table>` markup instead of `DataTable`.
-- List empty-state copy is custom and not consistently rendered using `EmptyState`.
-- Expanded detail rows are kept as inline custom table rows.
+- ✅ Primary tables in operational pages are rendered via `DataTable`.
+- ✅ List empties use either `DataTable` empty message or `EmptyState`.
+- ✅ Expanded detail tables were normalized to `DataTable` in `inventory-receipts/page.tsx`.
+- ℹ Only non-UI `<table>` usage left is report print HTML construction in `reports/page.tsx`.
 
 ## 5) Inconsistent filters/search bars
 
-- Filter/search controls are local card blocks instead of `FilterBar`.
-- Mixed control density (`form-control`, `form-select`) and no shared reset style.
+- ✅ Filter-heavy pages use `FilterBar` with compact `form-control-sm`/`form-select-sm` controls.
+- ✅ Reset behavior is consistently available in filter blocks where filters are mutable.
 
 ## 6) Inconsistent buttons
 
-- Action grouping and scale vary by page (full/compact mix without consistent pattern).
-- Token/post/delete button styling is inconsistent with other aligned screens.
+- ✅ Action buttons follow Bootstrap utility hierarchy (`btn`, `btn-sm`, `btn-outline-*`, `btn-group`).
+- ⚠️ `controlled-stationery/page.tsx` still derives action button colors from a local map (`serialActionClass`) to preserve business semantics.
 
 ## 7) Inconsistent badges/status labels
 
-- Local status maps still exist (`statusColors`, `typeColors`, etc.).
-- Row statuses use custom class names and are not consistently mapped through `StatusBadge`.
+- ✅ Status display is now centralized through `StatusBadge` in all status-heavy pages:
+  - `page.tsx`
+  - `assets/page.tsx`
+  - `audit-logs/page.tsx` (status surface not present)
+  - `verification/page.tsx`
+  - `disposals/page.tsx`
+  - `inventory-receipts/page.tsx`
+  - `issues-returns/page.tsx` (transaction type now represented through badge component)
+  - `controlled-stationery/page.tsx`
+  - `depreciation/page.tsx`
+  - `master-data/page.tsx`
+  - `reports/page.tsx`
+  - `transfers/page.tsx`
+- ⚠️ A non-status quantity badge in `controlled-stationery/page.tsx` still uses `text-bg-light` for numeric summary.
 
 ## 8) Inconsistent forms
 
-- Approval reference fields are hand-built in the four legacy screens (`manual_approval_ref`, `manual_approved_by`, `manual_approval_date`).
-- Form control classes are not consistently compact (`form-control-sm`, `form-select-sm`) for dense sections.
+- ✅ Forms use shared form utility classes and shared approval block (`ApprovalReferenceFields`) in transactional workflows.
+- ✅ Dense forms use compact controls and common spacing patterns.
+- ✅ Placeholder routes use `PhaseTwoStub` for intentionally incomplete functionality.
 
 ## 9) Inconsistent cards / KPI blocks
 
-- Legacy pages use custom section headers and card composition that diverges from the aligned shell-first layout pattern.
+- ✅ KPI and summary blocks use `KpiCard` on dashboard.
+- ✅ Repeated card surfaces follow `card border-0 shadow-sm`.
+- ✅ Placeholder routes intentionally use shared `PhaseTwoStub` + `PageHeader`.
 
 ## 10) Missing empty/loading states
 
-- No shared `EmptyState` in list views.
-- Inline loading/error strings vary and are not standardized.
+- ✅ Empty states are present for major operational lists.
+- ✅ Expanded details show explicit loading/empty handling before detail table rendering.
 
-## 11) Component inventory alignment state
+## 11) Component-inventory adoption status
 
-Not yet consistently used in the four legacy screens:
+- `PageHeader`: all non-test screens.
+- `FilterBar`: all filter-heavy screens.
+- `DataTable`: all active list screens.
+- `StatusBadge`: all operational status screens.
+- `EmptyState`: all applicable screens and placeholder modules.
+- `KpiCard`: dashboard.
+- `Timeline`: not yet used (no active timeline view in current screens).
+- `ApprovalReferenceFields`: `inventory-receipts`, `issues-returns`, `transfers`, `disposals`.
+- `FileAttachmentList`: currently not used in existing pages.
+- `ExportButtons`: `reports/page.tsx`.
 
-- `PageHeader`
-- `FilterBar`
-- `DataTable`
-- `StatusBadge`
-- `EmptyState`
-- `ApprovalReferenceFields`
+## 12) Prioritized follow-up gaps
 
-(`KpiCard`, `Timeline`, `FileAttachmentList`, `ExportButtons` are not currently required in these pages by existing flows.)
-
-## 12) IA coverage check
-
-The IA surfaces are present in routing:
-
-- Dashboard
-- Item Master
-- Receipts / GRN
-- Stock Balances
-- Issue / Return / Transfer
-- Fixed Asset Register
-- Tag Print Log
-- Project Inventory
-- Laboratory Inventory
-- IT Assets
-- Controlled Stationery
-- Physical Verification
-- Disposal / Write-Off
-- Audit Log
-- Reports
-- Masters / Admin Settings
-
-Current backlog is fully limited to four pages above.
+1. **Low** – standardize remaining custom action color helpers (e.g., `controlled-stationery/page.tsx`) to a shared utility pattern if design consistency is tightened further.
+2. **Low** – add explicit dashboard empty state treatment if/when dynamic metrics are sourced live.
+3. **Low** – introduce `FileAttachmentList` only when an attachment workflow is added to IMS screens.

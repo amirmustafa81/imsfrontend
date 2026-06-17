@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { DataTable, KpiCard, PageHeader } from "@/components/ims";
+import { DataTable, KpiCard, PageHeader, StatusBadge } from "@/components/ims";
 
 type NextStep = [string, string, string];
 
@@ -31,8 +31,6 @@ const nextSteps: NextStep[] = [
   ["Inventory Core", "Queued", "Receipts, stock ledger, asset registration"],
 ];
 
-const statusClass = (status: string) => (status === "Queued" ? "text-bg-secondary" : "text-bg-warning");
-
 export default function Home() {
   const tableRows = nextSteps.map(([area, status, step], index): ApiMetric & { id: number } => ({
     id: index,
@@ -43,11 +41,11 @@ export default function Home() {
 
   const tableColumns = [
     { key: "area", header: "Area" },
-    {
-      key: "status",
-      header: "Status",
-      render: (row: ApiMetric) => <span className={`badge ${statusClass(row.status)}`}>{row.status}</span>,
-    },
+      {
+        key: "status",
+        header: "Status",
+        render: (row: ApiMetric) => <StatusBadge status={row.status} />,
+      },
     { key: "nextStep", header: "Next Build Step" },
   ];
 

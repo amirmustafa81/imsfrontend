@@ -332,6 +332,25 @@ export default function InventoryReceiptsPage() {
     setError("");
   };
 
+  const expandedItemColumns = [
+    { key: "item", header: "Item", render: (receiptItem: ReceiptItem) => lookupLabel("items", receiptItem.item_id) },
+    { key: "qty", header: "Qty Rec", render: (receiptItem: ReceiptItem) => receiptItem.quantity_received },
+    { key: "accepted", header: "Accepted", render: (receiptItem: ReceiptItem) => receiptItem.quantity_accepted },
+    { key: "rejected", header: "Rejected", render: (receiptItem: ReceiptItem) => receiptItem.quantity_rejected },
+    { key: "unitCost", header: "Unit Cost", render: (receiptItem: ReceiptItem) => receiptItem.unit_cost ?? "-" },
+    { key: "totalCost", header: "Total Cost", render: (receiptItem: ReceiptItem) => receiptItem.total_cost ?? "-" },
+    {
+      key: "inspection",
+      header: "Inspection",
+      render: (receiptItem: ReceiptItem) => (
+        <span className="d-flex align-items-center gap-2">
+          <StatusBadge status={receiptItem.inspection_status || "-"} />
+          <span className="text-secondary small">{receiptItem.inspection_remarks ?? ""}</span>
+        </span>
+      ),
+    },
+  ];
+
   const refreshRows = async () => {
     if (!token) return;
     try {
@@ -1030,36 +1049,7 @@ export default function InventoryReceiptsPage() {
                             message="Receipt details are not available yet."
                           />
                         ) : (
-                          <div className="card border-0 shadow-sm">
-                            <div className="table-responsive">
-                              <table className="table table-sm table-hover mb-0 align-middle">
-                                <thead className="table-light">
-                                  <tr>
-                                    <th>Item</th>
-                                    <th>Qty Rec</th>
-                                    <th>Accepted</th>
-                                    <th>Rejected</th>
-                                    <th>Unit Cost</th>
-                                    <th>Total Cost</th>
-                                    <th>Inspection</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {expandedItems[expandedId].map((receiptItem) => (
-                                    <tr key={receiptItem.id}>
-                                      <td>{lookupLabel("items", receiptItem.item_id)}</td>
-                                      <td>{receiptItem.quantity_received}</td>
-                                      <td>{receiptItem.quantity_accepted}</td>
-                                      <td>{receiptItem.quantity_rejected}</td>
-                                      <td>{receiptItem.unit_cost ?? "-"}</td>
-                                      <td>{receiptItem.total_cost ?? "-"}</td>
-                                      <td>{receiptItem.inspection_status}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
+                          <DataTable columns={expandedItemColumns} rows={expandedItems[expandedId]} empty="No item rows returned by backend." />
                         )}
                       </div>
                     ) : null}

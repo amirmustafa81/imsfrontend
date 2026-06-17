@@ -79,14 +79,6 @@ type TransactionForm = {
   post_now: boolean;
 };
 
-const typeColors: Record<TransactionType, string> = {
-  issue: "text-bg-danger",
-  return: "text-bg-success",
-  transfer: "text-bg-primary",
-  consumption: "text-bg-secondary",
-  adjustment: "text-bg-info",
-};
-
 const typeOptions: Array<{ value: TransactionType; label: string }> = [
   { value: "issue", label: "Issue" },
   { value: "return", label: "Return" },
@@ -94,6 +86,15 @@ const typeOptions: Array<{ value: TransactionType; label: string }> = [
   { value: "consumption", label: "Consumption" },
   { value: "adjustment", label: "Adjustment" },
 ];
+
+const toTransactionTypeLabel = (type: TransactionType) => {
+  if (type === "issue") return "Issue";
+  if (type === "return") return "Return";
+  if (type === "transfer") return "Transfer";
+  if (type === "consumption") return "Consumption";
+  if (type === "adjustment") return "Adjustment";
+  return type;
+};
 
 const emptyItem: TransactionItemInput = {
   item_id: "",
@@ -557,11 +558,7 @@ export default function IssuesReturnsPage() {
     {
       key: "type",
       header: "Type",
-      render: (row: Transaction) => (
-        <span className={`badge ${typeColors[row.transaction_type] ?? "text-bg-secondary"}`}>
-          {row.transaction_type}
-        </span>
-      ),
+      render: (row: Transaction) => <StatusBadge status={toTransactionTypeLabel(row.transaction_type)} />,
     },
     { key: "transaction_date", header: "Date", render: (row: Transaction) => row.transaction_date },
     {

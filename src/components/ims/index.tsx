@@ -95,6 +95,13 @@ const STATUS_TONES: Record<string, string> = {
   MissingUnderInvestigation: "bg-danger",
   Inactive: "bg-secondary",
   Cancelled: "bg-dark",
+  Queued: "bg-secondary",
+  "In Progress": "bg-warning text-dark",
+  Issue: "bg-danger",
+  Return: "bg-success",
+  Transfer: "bg-primary",
+  Consumption: "bg-secondary",
+  Adjustment: "bg-info",
   "Missing Under Investigation": "bg-danger",
 };
 
@@ -120,6 +127,13 @@ const STATUS_DISPLAY: Record<string, string> = {
   damaged: "Damaged",
   found: "Found",
   missing: "Missing",
+  queued: "Queued",
+  in_progress: "In Progress",
+  issue: "Issue",
+  return: "Return",
+  transfer: "Transfer",
+  consumption: "Consumption",
+  adjustment: "Adjustment",
   under_repair: "Under Repair",
 };
 
