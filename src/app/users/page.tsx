@@ -12,13 +12,40 @@ type UserRow = {
   name: string;
   email: string;
   employee_code: string | null;
-  access_scope: string;
+  phone?: string | null;
+  designation?: string | null;
+  access_scope: "department" | "university";
   status: "active" | "inactive" | "suspended";
   department_id: number | null;
   roles: Role[];
 };
 
 type RowFilter = { search: string; status: string; accessScope: string; department: string };
+type UserForm = {
+  name: string;
+  email: string;
+  password: string;
+  employee_code: string;
+  phone: string;
+  designation: string;
+  department_id: string;
+  access_scope: "department" | "university";
+  status: "active" | "inactive" | "suspended";
+  role_ids: string[];
+};
+
+const emptyForm: UserForm = {
+  name: "",
+  email: "",
+  password: "",
+  employee_code: "",
+  phone: "",
+  designation: "",
+  department_id: "",
+  access_scope: "department",
+  status: "active",
+  role_ids: [],
+};
 
 export default function UsersPage() {
   const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
@@ -30,8 +57,9 @@ export default function UsersPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [filters, setFilters] = useState<RowFilter>({ search: "", status: "", accessScope: "", department: "" });
+  const [form, setForm] = useState<UserForm>(emptyForm);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
-  const [selectedRoleIds, setSelectedRoleIds] = useState<Record<number, string[]>>({});
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -61,13 +89,7 @@ export default function UsersPage() {
 
     try {
       const response = await api.get<{ data: UserRow[] }>("/users", { ...headers, params });
-      const users = response.data?.data ?? [];
-      setRows(users);
-      const nextSelections: Record<number, string[]> = {};
-      users.forEach((user) => {
-        nextSelections[user.id] = (user.roles ?? []).map((role) => String(role.id));
-      });
-      setSelectedRoleIds(nextSelections);
+      setRows(response.data?.data ?? []);
       setError("");
     } catch {
       setRows([]);
@@ -79,6 +101,7 @@ export default function UsersPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadLookups();
   }, [loadLookups]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadRows();
@@ -90,24 +113,80 @@ export default function UsersPage() {
     setToken(tmpToken);
   };
 
-  const saveRoles = async (userId: number) => {
+  const resetForm = () => {
+    setEditingUserId(null);
+    setForm(emptyForm);
+  };
+
+  const startEdit = (user: UserRow) => {
+    setEditingUserId(user.id);
+    setForm({
+      name: user.name,
+      email: user.email,
+      password: "",
+      employee_code: user.employee_code ?? "",
+      phone: user.phone ?? "",
+      designation: user.designation ?? "",
+      department_id: user.department_id ? String(user.department_id) : "",
+      access_scope: user.access_scope,
+      status: user.status,
+      role_ids: (user.roles ?? []).map((role) => String(role.id)),
+    });
+    setError("");
+    setMessage("");
+  };
+
+  const saveUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
     if (!token) {
       setError("Save token first.");
       return;
     }
-    const roleIds = selectedRoleIds[userId] ?? [];
+
+    if (!form.name.trim() || !form.email.trim()) {
+      setError("Name and email are required.");
+      return;
+    }
+
+    if (editingUserId === null && !form.password.trim()) {
+      setError("Password is required for new users.");
+      return;
+    }
+
+    const payload = {
+      name: form.name.trim(),
+      email: form.email.trim(),
+      password: form.password.trim() || undefined,
+      employee_code: form.employee_code.trim() || null,
+      phone: form.phone.trim() || null,
+      designation: form.designation.trim() || null,
+      department_id: form.department_id ? Number(form.department_id) : null,
+      access_scope: form.access_scope,
+      status: form.status,
+      role_ids: form.role_ids.map((value) => Number(value)).filter((id) => Number.isFinite(id)),
+    };
+
     try {
-      await api.post(
-        `/users/${userId}/roles`,
-        { role_ids: roleIds.map((value) => Number(value)).filter((id) => Number.isFinite(id)) },
-        headers,
-      );
-      setMessage("Roles updated.");
+      setSaving(true);
+      if (editingUserId === null) {
+        await api.post("/users", payload, headers);
+        setMessage("User created successfully.");
+      } else {
+        await api.put(`/users/${editingUserId}`, payload, headers);
+        setMessage("User updated successfully.");
+      }
       setError("");
-      setEditingUserId(null);
+      resetForm();
       await loadRows();
-    } catch {
-      setError("Unable to update roles.");
+    } catch (saveError: unknown) {
+      const apiMessage =
+        typeof saveError === "object" && saveError !== null && "response" in saveError
+          ? (saveError as { response?: { data?: { message?: unknown } } }).response?.data?.message
+          : null;
+      setError(typeof apiMessage === "string" && apiMessage ? apiMessage : "Unable to save user.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -115,15 +194,20 @@ export default function UsersPage() {
     { key: "name", header: "User" },
     { key: "email", header: "Email" },
     { key: "employee_code", header: "Employee Code" },
+    { key: "designation", header: "Designation" },
     {
       key: "department_id",
       header: "Department",
       render: (row: UserRow) => {
-        const dept = departments.find((d) => d.id === row.department_id);
-        return dept ? `${dept.name} (${dept.code})` : String(row.department_id ?? "-");
+        const dept = departments.find((department) => department.id === row.department_id);
+        return dept ? `${dept.name} (${dept.code})` : "-";
       },
     },
-    { key: "access_scope", header: "Scope" },
+    {
+      key: "access_scope",
+      header: "Scope",
+      render: (row: UserRow) => row.access_scope === "university" ? "University-wide" : "Department",
+    },
     {
       key: "status",
       header: "Status",
@@ -137,22 +221,12 @@ export default function UsersPage() {
     {
       key: "action",
       header: "Action",
-      render: (row: UserRow) =>
-        editingUserId === row.id ? (
-          <div className="d-flex gap-2">
-            <button className="btn btn-sm btn-primary" onClick={() => saveRoles(row.id)}>
-              Save roles
-            </button>
-            <button className="btn btn-sm btn-outline-secondary" onClick={() => setEditingUserId(null)}>
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button className="btn btn-sm btn-outline-primary" onClick={() => setEditingUserId(row.id)}>
-            <i className="bi bi-gear me-1" />
-            Roles
-          </button>
-        ),
+      render: (row: UserRow) => (
+        <button className="btn btn-sm btn-outline-primary" type="button" onClick={() => startEdit(row)}>
+          <i className="bi bi-pencil-square me-1" />
+          Edit user
+        </button>
+      ),
     },
   ];
 
@@ -161,7 +235,7 @@ export default function UsersPage() {
       <div className="container-fluid p-4">
         <PageHeader
           title="Users"
-          subtitle="View users and manage role assignments."
+          subtitle="Create users, update access details, and assign roles."
           actions={
             <form className="d-flex gap-2" onSubmit={submitToken}>
               <div className="input-group input-group-sm">
@@ -183,56 +257,80 @@ export default function UsersPage() {
         {message ? <div className="alert alert-success">{message}</div> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}
 
-        <FilterBar onReset={() => setFilters({ search: "", status: "", accessScope: "", department: "" })}>
-          <div className="col-12 col-md-4">
-            <label className="form-label small mb-1">Search</label>
-            <input className="form-control form-control-sm" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} />
-          </div>
-          <div className="col-12 col-md-3">
-            <label className="form-label small mb-1">Status</label>
-            <select className="form-select form-select-sm" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
-              <option value="">All</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="suspended">Suspended</option>
-            </select>
-          </div>
-          <div className="col-12 col-md-3">
-            <label className="form-label small mb-1">Access Scope</label>
-            <input className="form-control form-control-sm" value={filters.accessScope} onChange={(event) => setFilters((current) => ({ ...current, accessScope: event.target.value }))} />
-          </div>
-          <div className="col-12 col-md-2">
-            <label className="form-label small mb-1">Department</label>
-            <select className="form-select form-select-sm" value={filters.department} onChange={(event) => setFilters((current) => ({ ...current, department: event.target.value }))}>
-              <option value="">All</option>
-              {departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </FilterBar>
-
-        {rows.length === 0 ? (
-          <EmptyState title="No users found" message="No users match the selected filters." />
-        ) : (
-          <>
-            <DataTable columns={columns} rows={rows} />
-            {editingUserId !== null ? (
-              <div className="card border-0 shadow-sm mt-3">
-                <div className="card-header bg-white fw-semibold">Assign Roles for User #{editingUserId}</div>
-                <div className="card-body">
-                  <label className="form-label small mb-1">Roles</label>
+        <div className="row g-4 mb-4">
+          <div className="col-12 col-xl-4">
+            <form className="card border-0 shadow-sm" onSubmit={saveUser}>
+              <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span>{editingUserId === null ? "Create User" : `Edit User #${editingUserId}`}</span>
+                {editingUserId !== null ? (
+                  <button className="btn btn-sm btn-outline-secondary" type="button" onClick={resetForm}>
+                    Cancel edit
+                  </button>
+                ) : null}
+              </div>
+              <div className="card-body row g-3">
+                <div className="col-12">
+                  <label className="form-label small" htmlFor="user-name">Name</label>
+                  <input id="user-name" className="form-control form-control-sm" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
+                </div>
+                <div className="col-12">
+                  <label className="form-label small" htmlFor="user-email">Email</label>
+                  <input id="user-email" className="form-control form-control-sm" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
+                </div>
+                <div className="col-12">
+                  <label className="form-label small" htmlFor="user-password">{editingUserId === null ? "Password" : "Reset Password"}</label>
+                  <input id="user-password" className="form-control form-control-sm" type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder={editingUserId === null ? "Minimum 8 characters" : "Leave blank to keep current password"} />
+                </div>
+                <div className="col-12 col-md-6">
+                  <label className="form-label small" htmlFor="user-employee-code">Employee Code</label>
+                  <input id="user-employee-code" className="form-control form-control-sm" value={form.employee_code} onChange={(event) => setForm((current) => ({ ...current, employee_code: event.target.value }))} />
+                </div>
+                <div className="col-12 col-md-6">
+                  <label className="form-label small" htmlFor="user-phone">Phone</label>
+                  <input id="user-phone" className="form-control form-control-sm" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
+                </div>
+                <div className="col-12">
+                  <label className="form-label small" htmlFor="user-designation">Designation</label>
+                  <input id="user-designation" className="form-control form-control-sm" value={form.designation} onChange={(event) => setForm((current) => ({ ...current, designation: event.target.value }))} />
+                </div>
+                <div className="col-12 col-md-6">
+                  <label className="form-label small" htmlFor="user-department">Department</label>
+                  <select id="user-department" className="form-select form-select-sm" value={form.department_id} onChange={(event) => setForm((current) => ({ ...current, department_id: event.target.value }))}>
+                    <option value="">Select department</option>
+                    {departments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-12 col-md-6">
+                  <label className="form-label small" htmlFor="user-access-scope">Access Scope</label>
+                  <select id="user-access-scope" className="form-select form-select-sm" value={form.access_scope} onChange={(event) => setForm((current) => ({ ...current, access_scope: event.target.value as UserForm["access_scope"] }))}>
+                    <option value="department">Department</option>
+                    <option value="university">University-wide</option>
+                  </select>
+                </div>
+                <div className="col-12 col-md-6">
+                  <label className="form-label small" htmlFor="user-status">Status</label>
+                  <select id="user-status" className="form-select form-select-sm" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as UserForm["status"] }))}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
+                <div className="col-12">
+                  <label className="form-label small" htmlFor="user-roles">Roles</label>
                   <select
+                    id="user-roles"
                     multiple
                     className="form-select"
                     size={6}
-                    value={selectedRoleIds[editingUserId] ?? []}
+                    value={form.role_ids}
                     onChange={(event) =>
-                      setSelectedRoleIds((current) => ({
+                      setForm((current) => ({
                         ...current,
-                        [editingUserId]: Array.from(event.target.selectedOptions).map((option) => option.value),
+                        role_ids: Array.from(event.target.selectedOptions).map((option) => option.value),
                       }))
                     }
                   >
@@ -242,11 +340,64 @@ export default function UsersPage() {
                       </option>
                     ))}
                   </select>
+                  <div className="form-text">Hold Command/Ctrl to select multiple roles.</div>
+                </div>
+                <div className="col-12 d-flex gap-2">
+                  <button className="btn btn-sm btn-primary" type="submit" disabled={saving}>
+                    <i className={`bi ${editingUserId === null ? "bi-person-plus" : "bi-save"} me-1`} />
+                    {saving ? "Saving..." : editingUserId === null ? "Create user" : "Save changes"}
+                  </button>
+                  <button className="btn btn-sm btn-outline-secondary" type="button" onClick={resetForm}>
+                    Reset
+                  </button>
                 </div>
               </div>
-            ) : null}
-          </>
-        )}
+            </form>
+          </div>
+
+          <div className="col-12 col-xl-8">
+            <FilterBar onReset={() => setFilters({ search: "", status: "", accessScope: "", department: "" })}>
+              <div className="col-12 col-md-4">
+                <label className="form-label small mb-1">Search</label>
+                <input className="form-control form-control-sm" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} />
+              </div>
+              <div className="col-12 col-md-3">
+                <label className="form-label small mb-1">Status</label>
+                <select className="form-select form-select-sm" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
+                  <option value="">All</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="suspended">Suspended</option>
+                </select>
+              </div>
+              <div className="col-12 col-md-3">
+                <label className="form-label small mb-1">Access Scope</label>
+                <select className="form-select form-select-sm" value={filters.accessScope} onChange={(event) => setFilters((current) => ({ ...current, accessScope: event.target.value }))}>
+                  <option value="">All</option>
+                  <option value="department">Department</option>
+                  <option value="university">University-wide</option>
+                </select>
+              </div>
+              <div className="col-12 col-md-2">
+                <label className="form-label small mb-1">Department</label>
+                <select className="form-select form-select-sm" value={filters.department} onChange={(event) => setFilters((current) => ({ ...current, department: event.target.value }))}>
+                  <option value="">All</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </FilterBar>
+
+            {rows.length === 0 ? (
+              <EmptyState title="No users found" message="Create the first user or adjust the selected filters." />
+            ) : (
+              <DataTable columns={columns} rows={rows} />
+            )}
+          </div>
+        </div>
       </div>
     </main>
   );
