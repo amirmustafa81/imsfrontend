@@ -412,8 +412,13 @@ export default function IssuesReturnsPage() {
 
       resetForm();
       await loadRows();
-    } catch {
-      setError("Failed to save transaction. Check unique voucher number and fields.");
+    } catch (error: unknown) {
+      const apiErrorMessage =
+        typeof error === "object" && error !== null && "response" in error
+          ? (error as { response?: { data?: { message?: unknown } } }).response?.data?.message
+          : undefined;
+
+      setError(typeof apiErrorMessage === "string" ? apiErrorMessage : "Failed to save transaction. Check unique voucher number and fields.");
     }
   };
 

@@ -471,6 +471,27 @@ describe("IssuesReturnsPage adjustment flow", () => {
     expect(mockedApi.post).toHaveBeenCalledTimes(1);
   });
 
+  test("shows backend scope validation message on save failure", async () => {
+    const { user } = await renderPage();
+
+    mockedApi.post.mockRejectedValue({
+      response: { data: { message: "Transaction department scope validation failed." } },
+    });
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+    await user.selectOptions(getSelectValue(/to store/i), "11");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/transaction department scope validation failed/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledTimes(1);
+  });
+
   test("blocks save when API token is missing", async () => {
     setToken(null);
 
