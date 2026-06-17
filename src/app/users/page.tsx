@@ -327,28 +327,32 @@ export default function UsersPage() {
       {dialogOpen ? (
         <>
           <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
-            <div className="modal-dialog modal-lg modal-dialog-scrollable">
-              <form className="modal-content border-0 shadow" onSubmit={saveUser}>
-                <div className="modal-header">
+            <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+              <form className="modal-content border-0 shadow-lg" onSubmit={saveUser}>
+                <div className="modal-header px-4 py-3">
                   <div>
                     <h5 className="modal-title mb-1">{editingUserId === null ? "Create User" : `Edit User #${editingUserId}`}</h5>
                     <div className="small text-secondary">Manage identity, department scope, and assigned roles.</div>
                   </div>
                   <button className="btn-close" type="button" aria-label="Close" onClick={closeDialog} />
                 </div>
-                <div className="modal-body">
-                  <div className="row g-3">
-                    <div className="col-12">
+                <div className="modal-body px-4 py-4">
+                  <div className="row g-4">
+                    <div className="col-12 col-md-6">
                       <label className="form-label small" htmlFor="user-name">Name</label>
                       <input id="user-name" className="form-control" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
                     </div>
-                    <div className="col-12">
+                    <div className="col-12 col-md-6">
                       <label className="form-label small" htmlFor="user-email">Email</label>
                       <input id="user-email" className="form-control" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
                     </div>
-                    <div className="col-12">
+                    <div className="col-12 col-md-6">
                       <label className="form-label small" htmlFor="user-password">{editingUserId === null ? "Password" : "Reset Password"}</label>
                       <input id="user-password" className="form-control" type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder={editingUserId === null ? "Minimum 8 characters" : "Leave blank to keep current password"} />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <label className="form-label small" htmlFor="user-designation">Designation</label>
+                      <input id="user-designation" className="form-control" value={form.designation} onChange={(event) => setForm((current) => ({ ...current, designation: event.target.value }))} />
                     </div>
                     <div className="col-12 col-md-6">
                       <label className="form-label small" htmlFor="user-employee-code">Employee Code</label>
@@ -358,11 +362,7 @@ export default function UsersPage() {
                       <label className="form-label small" htmlFor="user-phone">Phone</label>
                       <input id="user-phone" className="form-control" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
                     </div>
-                    <div className="col-12">
-                      <label className="form-label small" htmlFor="user-designation">Designation</label>
-                      <input id="user-designation" className="form-control" value={form.designation} onChange={(event) => setForm((current) => ({ ...current, designation: event.target.value }))} />
-                    </div>
-                    <div className="col-12 col-md-6">
+                    <div className="col-12 col-md-4">
                       <label className="form-label small" htmlFor="user-department">Department</label>
                       <select id="user-department" className="form-select" value={form.department_id} onChange={(event) => setForm((current) => ({ ...current, department_id: event.target.value }))}>
                         <option value="">Select department</option>
@@ -373,14 +373,14 @@ export default function UsersPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="col-12 col-md-6">
+                    <div className="col-12 col-md-4">
                       <label className="form-label small" htmlFor="user-access-scope">Access Scope</label>
                       <select id="user-access-scope" className="form-select" value={form.access_scope} onChange={(event) => setForm((current) => ({ ...current, access_scope: event.target.value as UserForm["access_scope"] }))}>
                         <option value="department">Department</option>
                         <option value="university">University-wide</option>
                       </select>
                     </div>
-                    <div className="col-12 col-md-6">
+                    <div className="col-12 col-md-4">
                       <label className="form-label small" htmlFor="user-status">Status</label>
                       <select id="user-status" className="form-select" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as UserForm["status"] }))}>
                         <option value="active">Active</option>
@@ -388,13 +388,13 @@ export default function UsersPage() {
                         <option value="suspended">Suspended</option>
                       </select>
                     </div>
-                    <div className="col-12">
+                    <div className="col-12 col-lg-8">
                       <label className="form-label small" htmlFor="user-roles">Roles</label>
                       <select
                         id="user-roles"
                         multiple
                         className="form-select"
-                        size={6}
+                        size={5}
                         value={form.role_ids}
                         onChange={(event) =>
                           setForm((current) => ({
@@ -411,9 +411,17 @@ export default function UsersPage() {
                       </select>
                       <div className="form-text">Hold Command/Ctrl to select multiple roles.</div>
                     </div>
+                    <div className="col-12 col-lg-4">
+                      <div className="h-100 rounded-3 border bg-body-tertiary p-3">
+                        <div className="small fw-semibold text-uppercase text-secondary mb-2">Access Notes</div>
+                        <div className="small text-secondary">
+                          Department scope limits the user to assigned departments. University-wide scope allows cross-department visibility where policy permits.
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="modal-footer">
+                <div className="modal-footer px-4 py-3">
                   <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
                     Cancel
                   </button>
