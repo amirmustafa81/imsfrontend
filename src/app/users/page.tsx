@@ -143,6 +143,14 @@ export default function UsersPage() {
     setMessage("");
   };
 
+  const toggleRole = (roleId: number, checked: boolean) => {
+    const roleIdString = String(roleId);
+    setForm((current) => ({
+      ...current,
+      role_ids: checked ? [...current.role_ids, roleIdString] : current.role_ids.filter((id) => id !== roleIdString),
+    }));
+  };
+
   const saveUser = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -367,27 +375,34 @@ export default function UsersPage() {
                       </select>
                     </div>
                     <div className="col-12 col-lg-8">
-                      <label className="form-label small" htmlFor="user-roles">Roles</label>
-                      <select
-                        id="user-roles"
-                        multiple
-                        className="form-select"
-                        size={5}
-                        value={form.role_ids}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            role_ids: Array.from(event.target.selectedOptions).map((option) => option.value),
-                          }))
-                        }
-                      >
-                        {roles.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="form-text">Hold Command/Ctrl to select multiple roles.</div>
+                      <label className="form-label small">Roles</label>
+                      {roles.length === 0 ? (
+                        <div className="border rounded px-3 py-2 text-secondary">No roles available.</div>
+                      ) : (
+                        <div className="border rounded p-3" style={{ maxHeight: 260, overflowY: "auto" }}>
+                          <div className="row g-2">
+                            {roles.map((role) => {
+                              const roleId = String(role.id);
+                              return (
+                                <div className="col-12 col-lg-6" key={role.id}>
+                                  <div className="form-check">
+                                    <input
+                                      id={`user-role-${role.id}`}
+                                      className="form-check-input"
+                                      type="checkbox"
+                                      checked={form.role_ids.includes(roleId)}
+                                      onChange={(event) => toggleRole(role.id, event.target.checked)}
+                                    />
+                                    <label htmlFor={`user-role-${role.id}`} className="form-check-label">
+                                      {role.name}
+                                    </label>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="col-12 col-lg-4">
                       <div className="h-100 rounded-3 border bg-body-tertiary p-3">
