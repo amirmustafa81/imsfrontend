@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { DataTable, ExportButtons, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type ReportType =
   | "controlled_stationery_batches"
@@ -816,6 +816,8 @@ const buildFilterPayload = (config: ReportConfig, filters: ReportFilters): Recor
   return payload;
 };
 
+const toReportStatus = (status: unknown) => (typeof status === "string" ? status : String(status ?? ""));
+
 export default function ReportsPage() {
   const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [tmpToken, setTmpToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
@@ -1056,11 +1058,11 @@ export default function ReportsPage() {
     setError("");
   };
 
-  const renderBooleanCell = (value: unknown): string => {
+  const renderBooleanCell = useCallback((value: unknown): string => {
     return value === undefined || value === null ? "-" : boolText(value);
-  };
+  }, []);
 
-  const renderCellValue = (columnKey: string, value: unknown): string => {
+  const renderCellValue = useCallback((columnKey: string, value: unknown): string => {
     if (value === null || value === undefined || value === "") {
       return "-";
     }
@@ -1078,7 +1080,7 @@ export default function ReportsPage() {
     }
 
     return String(value);
-  };
+  }, [renderBooleanCell]);
 
   const renderFilterInput = (label: string, key: keyof ReportFilters, type: "text" | "number" = "text", min?: number) => (
     <div className="col-6 col-lg-2">
@@ -1129,194 +1131,152 @@ export default function ReportsPage() {
     </div>
   );
 
+  const tableColumns = useMemo(
+    () =>
+      reportConfig.columns.map((column) => ({
+        key: column.key,
+        header: column.label,
+        render: (row: RowData) => {
+          const raw = row[column.key];
+          if (column.key === "status") {
+            return <StatusBadge status={toReportStatus(raw)} />;
+          }
+          return renderCellValue(column.key, raw);
+        },
+      })),
+    [reportConfig.columns, renderCellValue],
+  );
+
   return (
     <main className="min-vh-100 bg-body-tertiary p-4">
       <div className="container-fluid">
-        <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-3">
-          <Link href="/" className="btn btn-link px-0">
-            <i className="bi bi-arrow-left me-2" />
-            Dashboard
-          </Link>
-          <div className="d-flex gap-2">
-            <button className="btn btn-outline-success" type="button" onClick={exportExcel}>
-              <i className="bi bi-file-earmark-excel me-2" />
-              Export Excel
+        <PageHeader
+          title="Reports"
+          subtitle={reportConfig.subtitle}
+          actions={
+            <div className="d-flex gap-2 align-items-end flex-wrap">
+              <div className="input-group input-group-sm">
+                <span className="input-group-text">API Token</span>
+                <input
+                  className="form-control form-control-sm"
+                  type="text"
+                  value={tmpToken}
+                  onChange={(event) => setTmpToken(event.target.value)}
+                  placeholder="Paste token"
+                />
+              </div>
+              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={saveToken}>
+                Save Token
+              </button>
+              <ExportButtons
+                name={`report-${activeReport}`}
+                onExportPdf={() => {
+                  exportPdf();
+                }}
+                onExportExcel={() => {
+                  void exportExcel();
+                }}
+              />
+            </div>
+          }
+        />
+
+        <div className="d-flex flex-wrap gap-2 mb-3">
+          {(Object.keys(reportConfigs) as ReportType[]).map((reportKey) => (
+            <button
+              className={`btn ${activeReport === reportKey ? "btn-primary" : "btn-outline-primary"}`
+                + (reportKey === "depreciation" ? " d-none d-xl-inline-block" : "")}
+              key={reportKey}
+              type="button"
+              onClick={() => {
+                setActiveReport(reportKey);
+                setError("");
+              }}
+            >
+              <i className="bi bi-bar-chart-line me-1" />
+              {reportConfigs[reportKey].title}
             </button>
-            <button className="btn btn-outline-primary" type="button" onClick={exportPdf}>
-              <i className="bi bi-file-earmark-pdf me-2" />
-              Export PDF
-            </button>
-          </div>
+          ))}
         </div>
 
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-3">
-            <div className="d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-lg-end mb-3">
-              <div>
-                <h1 className="h3 mb-1">Reports</h1>
-                <p className="text-secondary mb-0">{reportConfig.subtitle}</p>
-              </div>
-
-              <div className="d-flex flex-wrap gap-2 align-items-start">
-                <div className="input-group">
-                  <span className="input-group-text">API Token</span>
-                  <input
-                    className="form-control"
-                    type="text"
-                    value={tmpToken}
-                    onChange={(event) => setTmpToken(event.target.value)}
-                    placeholder="Paste token"
-                  />
-                </div>
-                <button className="btn btn-outline-secondary" type="button" onClick={saveToken}>
-                  Save Token
-                </button>
-              </div>
-            </div>
-
-            <div className="mb-3">
-              <div className="btn-group flex-wrap" role="group" aria-label="Report type">
-                {(Object.keys(reportConfigs) as ReportType[]).map((reportKey) => (
-                  <button
-                    className={`btn ${activeReport === reportKey ? "btn-primary" : "btn-outline-primary"}`
-                      + (reportKey === "depreciation" ? " d-none d-xl-inline-block" : "")}
-                    key={reportKey}
-                    type="button"
-                    onClick={() => {
-                      setActiveReport(reportKey);
-                      setError("");
-                    }}
-                  >
-                    <i className="bi bi-bar-chart-line me-1" />
-                    {reportConfigs[reportKey].title}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="alert alert-light border">
-              <i className="bi bi-graph-up me-2" />
-              {reportConfig.title}
-            </div>
-
-            <div className="row g-2 align-items-end">
-              {reportConfig.filters.includeSearch && (
-                <div className="col-12 col-lg-3">
-                  <label className="form-label">Search</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={currentFilters.search}
-                    onChange={(event) => updateFilter("search", event.target.value)}
-                    placeholder="Type to search"
-                  />
-                </div>
-              )}
-              {reportConfig.filters.includeDates && (
-                <>
-                  <div className="col-6 col-lg-2">
-                    <label className="form-label">Date From</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={currentFilters.date_from}
-                      onChange={(event) => updateFilter("date_from", event.target.value)}
-                    />
-                  </div>
-                  <div className="col-6 col-lg-2">
-                    <label className="form-label">Date To</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={currentFilters.date_to}
-                      onChange={(event) => updateFilter("date_to", event.target.value)}
-                    />
-                  </div>
-                </>
-              )}
-
-              {reportConfig.filters.includeDepartment &&
-                renderLookupSelect("Department", "department_id", lookups.departments, "All Departments")}
-              {reportConfig.filters.includeItem &&
-                renderLookupSelect("Item", "item_id", lookups.items, "All Items", false)}
-              {reportConfig.filters.includeCategory &&
-                renderLookupSelect("Category", "category_id", lookups["asset-categories"], "All Categories", false)}
-              {reportConfig.filters.includeStore &&
-                renderLookupSelect("Store", "store_id", lookups.stores, "All Stores", false)}
-              {reportConfig.filters.includeProject &&
-                renderLookupSelect("Project", "project_id", lookups["research-projects"], "All Projects", false)}
-              {reportConfig.filters.includeBuilding &&
-                renderLookupSelect("Building", "building_id", lookups.buildings, "All Buildings", false)}
-              {reportConfig.filters.includeRoom &&
-                renderLookupSelect("Room", "room_id", lookups.rooms, "All Rooms", false)}
-              {reportConfig.filters.includeFundingSource &&
-                renderLookupSelect("Funding Source", "funding_source_id", lookups["funding-sources"], "All Funding Sources", false)}
-              {reportConfig.filters.includeSupplier &&
-                renderLookupSelect("Supplier", "supplier_id", lookups.suppliers, "All Suppliers", false)}
-              {reportConfig.filters.includeCustodian &&
-                renderFilterInput("Custodian ID", "custodian_id", "number", 1)}
-              {reportConfig.filters.includeBatch &&
-                renderFilterInput("Batch ID", "batch_id", "number", 1)}
-              {reportConfig.filters.includeSerial &&
-                renderFilterInput("Serial ID", "serial_id", "number", 1)}
-              {reportConfig.filters.statusFilter &&
-                renderStatusSelect("Status", reportConfig.filters.statusFilter.options, reportConfig.filters.statusFilter.field)}
-              {reportConfig.filters.movementTypeFilter &&
-                renderStatusSelect("Movement Type", reportConfig.filters.movementTypeFilter.options, reportConfig.filters.movementTypeFilter.field)}
-              {reportConfig.filters.verificationTypeFilter &&
-                renderStatusSelect("Verification Type", reportConfig.filters.verificationTypeFilter.options, reportConfig.filters.verificationTypeFilter.field)}
-              {reportConfig.filters.receiptTypeFilter &&
-                renderStatusSelect("Receipt Type", reportConfig.filters.receiptTypeFilter.options, reportConfig.filters.receiptTypeFilter.field)}
-
-              <div className="col-12 d-flex gap-2 justify-content-end mt-2">
-                <button className="btn btn-outline-secondary" type="button" onClick={resetFilters}>
-                  Reset Filters
-                </button>
-              </div>
-            </div>
+        <div className="mb-3">
+          <div className="alert alert-light border">
+            <i className="bi bi-graph-up me-2" />
+            {reportConfig.title}
           </div>
+          {(message || error) && <small className={error ? "text-danger" : "text-success"}>{error || message}</small>}
         </div>
 
-        <div className="card border-0 shadow-sm mt-4">
-          <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-            <span>
-              Results
-              <span className="text-secondary fw-normal ms-2">({rows.length} rows)</span>
-            </span>
-            {(message || error) && (
-              <span className={error ? "text-danger" : "text-success"}>{error || message}</span>
-            )}
-          </div>
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
-              <thead>
-                <tr>
-                  {reportConfig.columns.map((column) => (
-                    <th key={column.key}>{column.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.id}>
-                        {reportConfig.columns.map((column) => {
-                          const raw = row[column.key];
-                          const value = renderCellValue(column.key, raw);
-                          return <td key={`${row.id}-${column.key}`}>{value}</td>;
-                        })}
-                      </tr>
-                    ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td className="text-center text-secondary py-4" colSpan={reportConfig.columns.length}>
-                      No rows found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <FilterBar onReset={resetFilters}>
+          {reportConfig.filters.includeSearch && (
+            <div className="col-12 col-lg-3">
+              <label className="form-label small">Search</label>
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                value={currentFilters.search}
+                onChange={(event) => updateFilter("search", event.target.value)}
+                placeholder="Type to search"
+              />
+            </div>
+          )}
+          {reportConfig.filters.includeDates && (
+            <>
+              <div className="col-6 col-lg-2">
+                <label className="form-label small">Date From</label>
+                <input
+                  type="date"
+                  className="form-control form-control-sm"
+                  value={currentFilters.date_from}
+                  onChange={(event) => updateFilter("date_from", event.target.value)}
+                />
+              </div>
+              <div className="col-6 col-lg-2">
+                <label className="form-label small">Date To</label>
+                <input
+                  type="date"
+                  className="form-control form-control-sm"
+                  value={currentFilters.date_to}
+                  onChange={(event) => updateFilter("date_to", event.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+          {reportConfig.filters.includeDepartment &&
+            renderLookupSelect("Department", "department_id", lookups.departments, "All Departments")}
+          {reportConfig.filters.includeItem && renderLookupSelect("Item", "item_id", lookups.items, "All Items", false)}
+          {reportConfig.filters.includeCategory &&
+            renderLookupSelect("Category", "category_id", lookups["asset-categories"], "All Categories", false)}
+          {reportConfig.filters.includeStore &&
+            renderLookupSelect("Store", "store_id", lookups.stores, "All Stores", false)}
+          {reportConfig.filters.includeProject &&
+            renderLookupSelect("Project", "project_id", lookups["research-projects"], "All Projects", false)}
+          {reportConfig.filters.includeBuilding &&
+            renderLookupSelect("Building", "building_id", lookups.buildings, "All Buildings", false)}
+          {reportConfig.filters.includeRoom &&
+            renderLookupSelect("Room", "room_id", lookups.rooms, "All Rooms", false)}
+          {reportConfig.filters.includeFundingSource &&
+            renderLookupSelect("Funding Source", "funding_source_id", lookups["funding-sources"], "All Funding Sources", false)}
+          {reportConfig.filters.includeSupplier &&
+            renderLookupSelect("Supplier", "supplier_id", lookups.suppliers, "All Suppliers", false)}
+          {reportConfig.filters.includeCustodian &&
+            renderFilterInput("Custodian ID", "custodian_id", "number", 1)}
+          {reportConfig.filters.includeBatch &&
+            renderFilterInput("Batch ID", "batch_id", "number", 1)}
+          {reportConfig.filters.includeSerial &&
+            renderFilterInput("Serial ID", "serial_id", "number", 1)}
+          {reportConfig.filters.statusFilter &&
+            renderStatusSelect("Status", reportConfig.filters.statusFilter.options, reportConfig.filters.statusFilter.field)}
+          {reportConfig.filters.movementTypeFilter &&
+            renderStatusSelect("Movement Type", reportConfig.filters.movementTypeFilter.options, reportConfig.filters.movementTypeFilter.field)}
+          {reportConfig.filters.verificationTypeFilter &&
+            renderStatusSelect("Verification Type", reportConfig.filters.verificationTypeFilter.options, reportConfig.filters.verificationTypeFilter.field)}
+          {reportConfig.filters.receiptTypeFilter &&
+            renderStatusSelect("Receipt Type", reportConfig.filters.receiptTypeFilter.options, reportConfig.filters.receiptTypeFilter.field)}
+        </FilterBar>
+
+        <DataTable columns={tableColumns} rows={rows} empty="No rows found." />
       </div>
     </main>
   );

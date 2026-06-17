@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { DataTable, FilterBar, PageHeader } from "@/components/ims";
 
 type ResourceKey =
   | "departments"
@@ -568,172 +568,163 @@ export default function MasterDataPage() {
     );
   };
 
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("");
+  };
+
+  const tableColumns = [
+    ...configColumns.map((column) => ({
+      key: column,
+      header: column.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase()),
+      render: (row: RowData) => {
+        const isRelational =
+          [
+            "department_id",
+            "building_id",
+            "room_id",
+            "funding_source_id",
+            "parent_department_id",
+            "parent_category_id",
+            "department_type",
+          ].includes(column);
+
+        if (isRelational) {
+          const source: ResourceKey =
+            column === "department_id" || column === "parent_department_id"
+              ? "departments"
+              : column === "building_id"
+                ? "buildings"
+                : column === "room_id"
+                  ? "rooms"
+                  : column === "funding_source_id"
+                    ? "funding-sources"
+                    : "asset-categories";
+
+          return <>{getLookupLabel(source, row[column])}</>;
+        }
+
+        return <>{displayValue(row[column])}</>;
+      },
+    })),
+    {
+      key: "actions",
+      header: "Actions",
+      className: "text-end",
+      render: (row: RowData) => (
+        <div className="d-flex gap-2 justify-content-end">
+          <button
+            className="btn btn-sm btn-outline-primary"
+            type="button"
+            onClick={() => startEditing(row)}
+          >
+            Edit
+          </button>
+          <button
+            className="btn btn-sm btn-outline-danger"
+            type="button"
+            onClick={() => deactivateRecord(row)}
+          >
+            Deactivate
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <main className="min-vh-100 bg-body-tertiary p-4">
       <div className="container-fluid">
-        <Link href="/" className="btn btn-link px-0 mb-3">
-          <i className="bi bi-arrow-left me-2" />
-          Dashboard
-        </Link>
-
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div>
-              <h1 className="h4 mb-1">Master Data Console</h1>
-              <p className="text-secondary mb-0">Create, edit, and deactivate master records used across IMS modules.</p>
-            </div>
-
+        <PageHeader
+          title="Master Data Console"
+          subtitle="Create, edit, and deactivate master records used across IMS modules."
+          actions={
             <form className="d-flex align-items-center gap-2" onSubmit={saveToken}>
-              <input
-                type="password"
-                className="form-control form-control-sm"
-                placeholder="Paste API token"
-                value={tmpToken}
-                onChange={(event) => setTmpToken(event.target.value)}
-                style={{ minWidth: 240 }}
-              />
+              <div>
+                <label className="form-label small mb-1">Bearer token</label>
+                <input
+                  type="password"
+                  className="form-control form-control-sm"
+                  placeholder="Paste API token"
+                  value={tmpToken}
+                  onChange={(event) => setTmpToken(event.target.value)}
+                  style={{ minWidth: 240 }}
+                />
+              </div>
+
               <button className="btn btn-outline-primary btn-sm" type="submit">
                 Save Token
               </button>
             </form>
+          }
+        />
+
+        {(error || message || !token) && (
+          <div className="mb-3">
+            {error && <div className="alert alert-danger mb-0">{error}</div>}
+            {message && <div className="alert alert-success mb-0">{message}</div>}
+            {!token && <div className="alert alert-warning mb-0">Save token before loading records.</div>}
+          </div>
+        )}
+
+        <div className="mb-4">
+          <div className="mb-3">
+            <label className="form-label">Resource</label>
+            <div className="d-flex flex-wrap gap-2">
+              {resourceEntries.map(([key, item]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`btn btn-sm ${activeResource === key ? "btn-primary" : "btn-outline-primary"}`}
+                  onClick={() => {
+                    setActiveResource(key);
+                    setEditingId(null);
+                    setForm(initialFormFor(resources[key].fields));
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="card-body p-4">
-            <div className="row g-3 mb-4 align-items-end">
-              <div className="col-12">
-                <label className="form-label">Resource</label>
-                <div className="d-flex flex-wrap gap-2">
-                  {resourceEntries.map(([key, item]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`btn btn-sm ${activeResource === key ? "btn-primary" : "btn-outline-primary"}`}
-                      onClick={() => {
-                        setActiveResource(key);
-                        setEditingId(null);
-                        setForm(initialFormFor(resources[key].fields));
-                      }}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="col-12 col-lg-5">
-                <label className="form-label">Status</label>
-                <select
-                  className="form-select"
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                >
-                  <option value="">All</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-
-              <div className="col-12 col-lg-7">
-                <label className="form-label">Search</label>
-                <div className="input-group">
-                  <input
-                    className="form-control"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search common fields"
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    onClick={() => setSearch("")}
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
+          <FilterBar onReset={clearFilters}>
+            <div className="col-12 col-md-3">
+              <label className="form-label small">Status</label>
+              <select
+                className="form-select form-select-sm"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option value="">All</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
             </div>
 
-            {error && <div className="alert alert-danger">{error}</div>}
-            {message && <div className="alert alert-success">{message}</div>}
+            <div className="col-12 col-md-4">
+              <label className="form-label small">Search</label>
+              <input
+                className="form-control form-control-sm"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search common fields"
+              />
+            </div>
+          </FilterBar>
+        </div>
 
-            {!token && <div className="alert alert-warning">Save token before loading records.</div>}
+        <div className="row g-4">
+          <div className="col-12 col-xl-7">
+            <DataTable columns={tableColumns as never} rows={(token ? rows : []) as never} empty="No records found." />
+          </div>
 
-            <div className="row g-4">
-              <div className="col-12 col-xl-7">
-                <div className="table-responsive">
-                  <table className="table table-sm table-hover align-middle">
-                    <thead>
-                      <tr>
-                        {configColumns.map((column) => (
-                          <th key={column}>{column}</th>
-                        ))}
-                        <th className="text-end">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {token && rows.length === 0 && (
-                        <tr>
-                          <td colSpan={configColumns.length + 1}>No records found.</td>
-                        </tr>
-                      )}
-
-                      {token &&
-                        rows.map((row) => (
-                          <tr key={row.id}>
-                            {configColumns.map((column) => {
-                              const isRelational = [
-                                "department_id",
-                                "building_id",
-                                "room_id",
-                                "funding_source_id",
-                                "parent_department_id",
-                                "parent_category_id",
-                              ].includes(column);
-
-                              return (
-                                <td key={`${row.id}-${column}`}>
-                                  {isRelational
-                                    ? getLookupLabel(
-                                        column === "department_id" || column === "parent_department_id"
-                                          ? "departments"
-                                          : column === "building_id"
-                                            ? "buildings"
-                                            : column === "room_id"
-                                              ? "rooms"
-                                              : "funding-sources",
-                                        row[column],
-                                      )
-                                    : displayValue(row[column])}
-                                </td>
-                              );
-                            })}
-                            <td className="text-end">
-                              <button
-                                className="btn btn-sm btn-outline-primary me-2"
-                                type="button"
-                                onClick={() => startEditing(row)}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                className="btn btn-sm btn-outline-danger"
-                                type="button"
-                                onClick={() => deactivateRecord(row)}
-                              >
-                                Deactivate
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="col-12 col-xl-5">
+          <div className="col-12 col-xl-5">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body">
                 <h2 className="h5">{editingId ? "Edit" : "Add New"} {definition.label}</h2>
-                <form className="card card-body" onSubmit={submitRecord}>
+                <form onSubmit={submitRecord}>
                   <div className="row g-3">
                     {definition.fields.map((field) => (
                       <div

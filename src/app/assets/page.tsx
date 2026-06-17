@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey =
   | "departments"
@@ -82,15 +82,6 @@ const initialLookups: Record<LookupKey, RowData[]> = {
   rooms: [],
   "research-projects": [],
   "funding-sources": [],
-};
-
-const statusClass: Record<string, string> = {
-  active: "text-bg-success",
-  in_use: "text-bg-primary",
-  disposed: "text-bg-danger",
-  missing_under_investigation: "text-bg-warning",
-  damaged: "text-bg-dark",
-  pending_disposal: "text-bg-info",
 };
 
 const toDateDisplay = (value: string | null | undefined): string => {
@@ -251,266 +242,248 @@ export default function AssetsPage() {
     void reloadLookups();
   }, [loadLookups]);
 
-  const badgeClass = (status?: string | null) =>
-    statusClass[String(status ?? "")] ?? "text-bg-light text-dark";
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("");
+    setDepartmentFilter("");
+    setItemFilter("");
+    setCategoryFilter("");
+    setStoreFilter("");
+    setBuildingFilter("");
+    setRoomFilter("");
+    setProjectFilter("");
+    setFundingSourceFilter("");
+    setCustodianFilter("");
+    setDateFromFilter("");
+    setDateToFilter("");
+
+    setTimeout(() => {
+      void loadRows();
+    }, 0);
+  };
+
+  const tableColumns = [
+    { key: "asset_id", header: "Asset ID", render: (row: AssetRow) => <>{row.asset_id ?? "-"}</> },
+    { key: "printable_tag_id", header: "Printable Tag", render: (row: AssetRow) => <>{row.printable_tag_id ?? "-"}</> },
+    {
+      key: "serial",
+      header: "Serial / Employee",
+      render: (row: AssetRow) => <>{row.serial_number ?? row.employee_code ?? "-"}</>,
+    },
+    {
+      key: "item",
+      header: "Item",
+      render: (row: AssetRow) => (
+        <>
+          <div>{row.item_code}</div>
+          <small className="text-secondary">{row.item_name}</small>
+        </>
+      ),
+    },
+    {
+      key: "category",
+      header: "Category",
+      render: (row: AssetRow) => (
+        <>
+          <div>{row.category_name}</div>
+          <small className="text-secondary">{row.subcategory_code ?? "-"}</small>
+        </>
+      ),
+    },
+    { key: "custodian_name", header: "Custodian", render: (row: AssetRow) => <>{row.custodian_name ?? "-"}</> },
+    {
+      key: "department",
+      header: "Department",
+      render: (row: AssetRow) => <>{lookupLabel("departments", row.department_id, "-")}</>,
+    },
+    {
+      key: "location",
+      header: "Location",
+      render: (row: AssetRow) => (
+        <>
+          <div>{row.building_name ?? "-"}</div>
+          <small className="text-secondary">{row.room_name ?? "-"}</small>
+        </>
+      ),
+    },
+    { key: "status", header: "Status", render: (row: AssetRow) => <StatusBadge status={row.status} /> },
+    {
+      key: "purchase_cost",
+      header: "Purchase Cost",
+      render: (row: AssetRow) => toMoney(row.purchase_cost),
+    },
+    { key: "condition_status", header: "Condition", render: (row: AssetRow) => <>{row.condition_status ?? "-"}</> },
+    { key: "created_at", header: "Created", render: (row: AssetRow) => <small>{toDateDisplay(row.created_at)}</small> },
+    { key: "model", header: "Model", render: (row: AssetRow) => <>{row.model ?? "-"}</> },
+  ];
 
   return (
     <main className="min-vh-100 bg-body-tertiary p-4">
       <div className="container-fluid">
-        <Link href="/" className="btn btn-link px-0 mb-3">
-          <i className="bi bi-arrow-left me-2" />
-          Dashboard
-        </Link>
-
-        <div className="row g-3 mb-4">
-          <div className="col-12 col-xl-4">
-            <form onSubmit={submitToken} className="card border-0 shadow-sm">
-              <div className="card-body">
-                <h2 className="h5 mb-3">API Token</h2>
-                <label className="form-label small">Bearer token</label>
-                <div className="input-group">
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={tmpToken}
-                    onChange={(event) => setTmpToken(event.target.value)}
-                    placeholder="Paste API token"
-                  />
-                  <button type="submit" className="btn btn-outline-primary">
-                    Save token
-                  </button>
-                </div>
+        <PageHeader
+          title="Fixed Asset Register"
+          subtitle="View capitalized assets, tags, custody, locations, and status."
+          actions={
+            <form onSubmit={submitToken} className="d-flex gap-2 align-items-end">
+              <div>
+                <label className="form-label small mb-1">Bearer token</label>
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  value={tmpToken}
+                  onChange={(event) => setTmpToken(event.target.value)}
+                  placeholder="Paste API token"
+                />
               </div>
+
+              <button className="btn btn-outline-primary" type="submit">
+                Save token
+              </button>
             </form>
-          </div>
+          }
+        />
 
-          <div className="col-12 col-xl-8">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body">
-                <h1 className="h3 mb-2">Fixed Asset Register</h1>
-                <p className="text-secondary mb-0">
-                  View capitalized assets, tags, custody, locations, and status.
-                </p>
-              </div>
-            </div>
+        {(message || error) && (
+          <div className="mb-3">
+            {message && <div className="alert alert-success mb-0">{message}</div>}
+            {error && <div className="alert alert-danger mb-0">{error}</div>}
           </div>
+        )}
 
-          {(message || error) && (
-            <div className="col-12">
-              {message && <div className="alert alert-success mb-0">{message}</div>}
-              {error && <div className="alert alert-danger mb-0">{error}</div>}
-            </div>
-          )}
-        </div>
+        <FilterBar onReset={clearFilters}>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Search</label>
+            <input className="form-control form-control-sm" value={search} onChange={(event) => setSearch(event.target.value)} />
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Status</label>
+            <select className="form-select form-select-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              {fixedAssetStatusOptions.map((status) => (
+                <option key={status.value || "all"} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Department</label>
+            <select className="form-select form-select-sm" value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups.departments.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.code} - {department.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Item</label>
+            <select className="form-select form-select-sm" value={itemFilter} onChange={(event) => setItemFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups.items.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.item_code ? `${item.item_code} - ${item.name}` : `${item.name}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Category</label>
+            <select className="form-select form-select-sm" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups["asset-categories"].map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.code} - {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Store</label>
+            <select className="form-select form-select-sm" value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups.stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.code} - {store.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Building</label>
+            <select className="form-select form-select-sm" value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups.buildings.map((building) => (
+                <option key={building.id} value={building.id}>
+                  {building.code} - {building.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Room</label>
+            <select className="form-select form-select-sm" value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups.rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.code} - {room.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Project</label>
+            <select className="form-select form-select-sm" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups["research-projects"].map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.project_code} - {project.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Funding Source</label>
+            <select className="form-select form-select-sm" value={fundingSourceFilter} onChange={(event) => setFundingSourceFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups["funding-sources"].map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.code} - {source.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Custodian ID</label>
+            <input
+              type="number"
+              min="0"
+              className="form-control form-control-sm"
+              value={custodianFilter}
+              onChange={(event) => setCustodianFilter(event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Date from</label>
+            <input
+              type="date"
+              className="form-control form-control-sm"
+              value={dateFromFilter}
+              onChange={(event) => setDateFromFilter(event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Date to</label>
+            <input
+              type="date"
+              className="form-control form-control-sm"
+              value={dateToFilter}
+              onChange={(event) => setDateToFilter(event.target.value)}
+            />
+          </div>
+        </FilterBar>
 
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-body">
-            <h2 className="h5 mb-3">Filters</h2>
-            <div className="row g-2">
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Search</label>
-                <input className="form-control" value={search} onChange={(event) => setSearch(event.target.value)} />
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Status</label>
-                <select className="form-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                  {fixedAssetStatusOptions.map((status) => (
-                    <option key={status.value || "all"} value={status.value}>
-                      {status.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Department</label>
-                <select className="form-select" value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}>
-                  <option value="">All</option>
-                  {lookups.departments.map((department) => (
-                    <option key={department.id} value={department.id}>
-                      {department.code} - {department.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Item</label>
-                <select className="form-select" value={itemFilter} onChange={(event) => setItemFilter(event.target.value)}>
-                  <option value="">All</option>
-                  {lookups.items.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.item_code ? `${item.item_code} - ${item.name}` : `${item.name}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Category</label>
-                <select className="form-select" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-                  <option value="">All</option>
-                  {lookups["asset-categories"].map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.code} - {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Store</label>
-                <select className="form-select" value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)}>
-                  <option value="">All</option>
-                  {lookups.stores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.code} - {store.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Building</label>
-                <select className="form-select" value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}>
-                  <option value="">All</option>
-                  {lookups.buildings.map((building) => (
-                    <option key={building.id} value={building.id}>
-                      {building.code} - {building.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Room</label>
-                <select className="form-select" value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)}>
-                  <option value="">All</option>
-                  {lookups.rooms.map((room) => (
-                    <option key={room.id} value={room.id}>
-                      {room.code} - {room.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Project</label>
-                <select className="form-select" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-                  <option value="">All</option>
-                  {lookups["research-projects"].map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.project_code} - {project.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Funding Source</label>
-                <select
-                  className="form-select"
-                  value={fundingSourceFilter}
-                  onChange={(event) => setFundingSourceFilter(event.target.value)}
-                >
-                  <option value="">All</option>
-                  {lookups["funding-sources"].map((source) => (
-                    <option key={source.id} value={source.id}>
-                      {source.code} - {source.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Custodian ID</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="form-control"
-                  value={custodianFilter}
-                  onChange={(event) => setCustodianFilter(event.target.value)}
-                />
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Date from</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={dateFromFilter}
-                  onChange={(event) => setDateFromFilter(event.target.value)}
-                />
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Date to</label>
-                <input type="date" className="form-control" value={dateToFilter} onChange={(event) => setDateToFilter(event.target.value)} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center">
-            <h2 className="h5 mb-0">Asset Register</h2>
-            <span className="text-secondary">{rows.length} rows</span>
-          </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table table-sm table-hover align-middle mb-0">
-                <thead>
-                  <tr>
-                    <th>Asset ID</th>
-                    <th>Printable Tag</th>
-                    <th>Serial / Employee</th>
-                    <th>Item</th>
-                    <th>Category</th>
-                    <th>Custodian</th>
-                    <th>Department</th>
-                    <th>Location</th>
-                    <th>Status</th>
-                    <th>Purchase Cost</th>
-                    <th>Condition</th>
-                    <th>Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={12} className="text-center text-secondary">
-                        No fixed asset records found.
-                      </td>
-                    </tr>
-                  ) : (
-                    rows.map((asset) => (
-                      <tr key={asset.id}>
-                        <td>
-                          <div className="fw-semibold">{asset.asset_id ?? "-"}</div>
-                          {asset.old_tag_reference ? <small className="text-secondary">Old: {asset.old_tag_reference}</small> : null}
-                        </td>
-                        <td>{asset.printable_tag_id ?? "-"}</td>
-                        <td>{asset.serial_number ?? asset.employee_code ?? "-"}</td>
-                        <td>
-                          <div>{asset.item_code}</div>
-                          <small className="text-secondary">{asset.item_name}</small>
-                        </td>
-                        <td>
-                          <div>{asset.category_name}</div>
-                          <small className="text-secondary">{asset.subcategory_code ?? "-"}</small>
-                        </td>
-                        <td>{asset.custodian_name ?? "-"}</td>
-                        <td>{lookupLabel("departments", asset.department_id, "-")}</td>
-                        <td>
-                          <div>{asset.building_name ?? "-"}</div>
-                          <small className="text-secondary">{asset.room_name ?? "-"}</small>
-                        </td>
-                        <td>
-                          <span className={`badge ${badgeClass(asset.status)}`}>{asset.status}</span>
-                        </td>
-                        <td>{toMoney(asset.purchase_cost)}</td>
-                        <td>{asset.condition_status ?? "-"}</td>
-                        <td>
-                          <small>{toDateDisplay(asset.created_at)}</small>
-                        </td>
-                        <td>{asset.model ?? "-"}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <DataTable columns={tableColumns} rows={rows} empty="No fixed asset records found." />
       </div>
     </main>
   );

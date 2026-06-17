@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "items" | "research-projects";
 
@@ -59,12 +59,6 @@ const initialLookups: Record<LookupKey, RowData[]> = {
   departments: [],
   items: [],
   "research-projects": [],
-};
-
-const statusClass: Record<string, string> = {
-  draft: "text-bg-secondary",
-  posted: "text-bg-primary",
-  closed: "text-bg-success",
 };
 
 export default function DepreciationPage() {
@@ -183,204 +177,182 @@ export default function DepreciationPage() {
     void reloadLookups();
   }, [loadLookups]);
 
-  const badgeClass = (status: string | undefined) => statusClass[String(status ?? "")] ?? "text-bg-light text-dark";
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("");
+    setDepartmentFilter("");
+    setItemFilter("");
+    setProjectFilter("");
+    setDateFromFilter("");
+    setDateToFilter("");
+
+    setTimeout(() => {
+      void loadRows();
+    }, 0);
+  };
+
+  const tableColumns = [
+    {
+      key: "run_no",
+      header: "Run No",
+      render: (row: DepreciationRow) => (
+        <>
+          <div className="fw-semibold">{row.run_no}</div>
+          <small className="text-secondary">{row.run_type}</small>
+        </>
+      ),
+    },
+    {
+      key: "period",
+      header: "Period",
+      render: (row: DepreciationRow) => (
+        <>
+          <div>{toDate(row.period_start)}</div>
+          <small className="text-secondary">to {toDate(row.period_end)}</small>
+        </>
+      ),
+    },
+    {
+      key: "asset",
+      header: "Asset",
+      render: (row: DepreciationRow) => (
+        <>
+          <div>{row.asset_tag}</div>
+          <small className="text-secondary">{row.printable_tag_id ?? "-"}</small>
+        </>
+      ),
+    },
+    {
+      key: "item",
+      header: "Item",
+      render: (row: DepreciationRow) => (
+        <>
+          <div>{row.item_code}</div>
+          <small className="text-secondary">{row.item_name}</small>
+        </>
+      ),
+    },
+    { key: "department_name", header: "Department", render: (row: DepreciationRow) => <>{row.department_name}</> },
+    { key: "run_status", header: "Status", render: (row: DepreciationRow) => <StatusBadge status={row.run_status} /> },
+    { key: "opening_book_value", header: "Opening", render: (row: DepreciationRow) => toMoney(row.opening_book_value) },
+    { key: "depreciation_amount", header: "Depreciation", render: (row: DepreciationRow) => toMoney(row.depreciation_amount) },
+    {
+      key: "accumulated_depreciation_after",
+      header: "Accumulated After",
+      render: (row: DepreciationRow) => toMoney(row.accumulated_depreciation_after),
+    },
+    { key: "closing_book_value", header: "Closing", render: (row: DepreciationRow) => toMoney(row.closing_book_value) },
+    { key: "method", header: "Method", render: (row: DepreciationRow) => <>{row.method}</> },
+    {
+      key: "useful_life_years",
+      header: "Useful Life",
+      render: (row: DepreciationRow) => <>{row.useful_life_years ?? "-"}</>,
+    },
+    { key: "calculated_at", header: "Calculated At", render: (row: DepreciationRow) => <>{toDate(row.calculated_at)}</> },
+  ];
 
   return (
     <main className="min-vh-100 bg-body-tertiary p-4">
       <div className="container-fluid">
-        <Link href="/" className="btn btn-link px-0 mb-3">
-          <i className="bi bi-arrow-left me-2" />
-          Dashboard
-        </Link>
-
-        <div className="row g-3 mb-4">
-          <div className="col-12 col-xl-4">
-            <form onSubmit={submitToken} className="card border-0 shadow-sm">
-              <div className="card-body">
-                <h2 className="h5 mb-3">API Token</h2>
-                <label className="form-label small">Bearer token</label>
-                <div className="input-group">
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={tmpToken}
-                    onChange={(event) => setTmpToken(event.target.value)}
-                    placeholder="Paste API token"
-                  />
-                  <button type="submit" className="btn btn-outline-primary">
-                    Save token
-                  </button>
-                </div>
+        <PageHeader
+          title="Depreciation"
+          subtitle="Review straight-line depreciation entries, period totals, and run status by asset."
+          actions={
+            <form onSubmit={submitToken} className="d-flex gap-2 align-items-end">
+              <div>
+                <label className="form-label small mb-1">Bearer token</label>
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  value={tmpToken}
+                  onChange={(event) => setTmpToken(event.target.value)}
+                  placeholder="Paste API token"
+                />
               </div>
+
+              <button className="btn btn-outline-primary" type="submit">
+                Save token
+              </button>
             </form>
-          </div>
+          }
+        />
 
-          <div className="col-12 col-xl-8">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body">
-                <h1 className="h3 mb-2">Depreciation</h1>
-                <p className="text-secondary mb-0">
-                  Review straight-line depreciation entries, period totals, and run status by asset.
-                </p>
-              </div>
-            </div>
+        {(message || error) && (
+          <div className="mb-3">
+            {message && <div className="alert alert-success mb-0">{message}</div>}
+            {error && <div className="alert alert-danger mb-0">{error}</div>}
           </div>
+        )}
 
-          {(message || error) && (
-            <div className="col-12">
-              {message && <div className="alert alert-success mb-0">{message}</div>}
-              {error && <div className="alert alert-danger mb-0">{error}</div>}
-            </div>
-          )}
-        </div>
+        <FilterBar onReset={clearFilters}>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Search</label>
+            <input className="form-control form-control-sm" value={search} onChange={(event) => setSearch(event.target.value)} />
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Status</label>
+            <select className="form-select form-select-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              {runStatusOptions.map((status) => (
+                <option key={status.value || "all"} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Department</label>
+            <select className="form-select form-select-sm" value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups.departments.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.code} - {department.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Item</label>
+            <select className="form-select form-select-sm" value={itemFilter} onChange={(event) => setItemFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups.items.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.item_code ? `${item.item_code} - ${item.name}` : `${item.name}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Project</label>
+            <select className="form-select form-select-sm" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+              <option value="">All</option>
+              {lookups["research-projects"].map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.project_code} - {project.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Date from</label>
+            <input
+              type="date"
+              className="form-control form-control-sm"
+              value={dateFromFilter}
+              onChange={(event) => setDateFromFilter(event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-3 col-lg-2">
+            <label className="form-label small">Date to</label>
+            <input
+              type="date"
+              className="form-control form-control-sm"
+              value={dateToFilter}
+              onChange={(event) => setDateToFilter(event.target.value)}
+            />
+          </div>
+        </FilterBar>
 
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-body">
-            <h2 className="h5 mb-3">Filters</h2>
-            <div className="row g-2">
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Search</label>
-                <input
-                  className="form-control"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Status</label>
-                <select className="form-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                  {runStatusOptions.map((status) => (
-                    <option key={status.value || "all"} value={status.value}>
-                      {status.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Department</label>
-                <select className="form-select" value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}>
-                  <option value="">All</option>
-                  {lookups.departments.map((department) => (
-                    <option key={department.id} value={department.id}>
-                      {department.code} - {department.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Item</label>
-                <select className="form-select" value={itemFilter} onChange={(event) => setItemFilter(event.target.value)}>
-                  <option value="">All</option>
-                  {lookups.items.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.item_code ? `${item.item_code} - ${item.name}` : `${item.name}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Project</label>
-                <select className="form-select" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-                  <option value="">All</option>
-                  {lookups["research-projects"].map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.project_code} - {project.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Date from</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={dateFromFilter}
-                  onChange={(event) => setDateFromFilter(event.target.value)}
-                />
-              </div>
-              <div className="col-md-3 col-lg-2">
-                <label className="form-label">Date to</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={dateToFilter}
-                  onChange={(event) => setDateToFilter(event.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center">
-            <h2 className="h5 mb-0">Depreciation Entries</h2>
-            <span className="text-secondary">{rows.length} rows</span>
-          </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table table-sm table-hover align-middle mb-0">
-                <thead>
-                  <tr>
-                    <th>Run No</th>
-                    <th>Period</th>
-                    <th>Asset</th>
-                    <th>Item</th>
-                    <th>Department</th>
-                    <th>Status</th>
-                    <th>Opening</th>
-                    <th>Depreciation</th>
-                    <th>Accumulated After</th>
-                    <th>Closing</th>
-                    <th>Method</th>
-                    <th>Useful Life</th>
-                    <th>Calculated At</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={13} className="text-center text-secondary">
-                        No depreciation entries found.
-                      </td>
-                    </tr>
-                  ) : (
-                    rows.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          <div className="fw-semibold">{row.run_no}</div>
-                          <small className="text-secondary">{row.run_type}</small>
-                        </td>
-                        <td>
-                          <div>{toDate(row.period_start)}</div>
-                          <small className="text-secondary">to {toDate(row.period_end)}</small>
-                        </td>
-                        <td>
-                          <div>{row.asset_tag}</div>
-                          <small className="text-secondary">{row.printable_tag_id ?? "-"}</small>
-                        </td>
-                        <td>
-                          <div>{row.item_code}</div>
-                          <small className="text-secondary">{row.item_name}</small>
-                        </td>
-                        <td>{row.department_name}</td>
-                        <td>
-                          <span className={`badge ${badgeClass(row.run_status)}`}>{row.run_status}</span>
-                        </td>
-                        <td>{toMoney(row.opening_book_value)}</td>
-                        <td>{toMoney(row.depreciation_amount)}</td>
-                        <td>{toMoney(row.accumulated_depreciation_after)}</td>
-                        <td>{toMoney(row.closing_book_value)}</td>
-                        <td>{row.method}</td>
-                        <td>{row.useful_life_years ?? "-"}</td>
-                        <td>{toDate(row.calculated_at)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <DataTable columns={tableColumns} rows={rows} empty="No depreciation entries found." />
       </div>
     </main>
   );

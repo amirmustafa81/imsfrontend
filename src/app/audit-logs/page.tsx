@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { DataTable, FilterBar, PageHeader } from "@/components/ims";
 
 type AuditLog = {
   id: number;
@@ -37,6 +37,31 @@ const initialFilter: FilterState = {
   date_from: "",
   date_to: "",
 };
+
+const tableColumns = [
+  { key: "id", header: "ID" },
+  { key: "action", header: "Action" },
+  {
+    key: "entity",
+    header: "Entity",
+    render: (row: AuditLog) => {
+      if (!row.entity_type) return "-";
+      return row.entity_id ? `${row.entity_type} #${row.entity_id}` : row.entity_type;
+    },
+  },
+  {
+    key: "user",
+    header: "User",
+    render: (row: AuditLog) => (row.user ? row.user.name : row.user_id ?? "-"),
+  },
+  { key: "remarks", header: "Remarks", className: "text-break" },
+  {
+    key: "created_at",
+    header: "Created At",
+    render: (row: AuditLog) => (row.created_at ? row.created_at.slice(0, 10) : "-"),
+  },
+] as const;
+
 export default function AuditLogsPage() {
   const [token, setToken] = useState(() =>
     typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "",
@@ -135,121 +160,99 @@ export default function AuditLogsPage() {
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
-        <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-          <div>
-            <h1 className="h3 mb-1">Audit Logs</h1>
-            <p className="text-secondary mb-0">Track all auditable inventory actions with filters.</p>
-          </div>
-          <Link className="btn btn-outline-secondary" href="/">
-            <i className="bi bi-arrow-left me-2" />
-            Back to Dashboard
-          </Link>
-        </div>
-
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-body">
-            <form className="row g-2" onSubmit={saveToken}>
-              <div className="col-12 col-md-8">
-                <label className="form-label">Bearer Token</label>
+        <PageHeader
+          title="Audit Logs"
+          subtitle="Track all auditable inventory actions with filters."
+          actions={
+            <form onSubmit={saveToken} className="d-flex gap-2 align-items-end">
+              <div>
+                <label className="form-label small mb-1">Bearer Token</label>
                 <input
-                  className="form-control"
+                  className="form-control form-control-sm"
                   value={tempToken}
                   onChange={(event) => setTempToken(event.target.value)}
                   placeholder="Paste API token"
                 />
               </div>
-              <div className="col-12 col-md-4 d-flex align-items-end">
-                <button className="btn btn-primary" type="submit">
-                  Save Token
-                </button>
-              </div>
+              <button className="btn btn-primary" type="submit">
+                Save Token
+              </button>
             </form>
+          }
+        />
+
+        <FilterBar onReset={clearFilters}>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Search</label>
+            <input
+              className="form-control form-control-sm"
+              value={filter.search}
+              onChange={(event) => setValue("search", event.target.value)}
+              placeholder="Search action/entity/remarks"
+            />
           </div>
-        </div>
-
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-body">
-            <div className="row g-2 mb-3">
-              <div className="col-12 col-md-4">
-                <label className="form-label">Search</label>
-                <input
-                  className="form-control"
-                  value={filter.search}
-                  onChange={(event) => setValue("search", event.target.value)}
-                  placeholder="Search action/entity/remarks"
-                />
-              </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label">Action</label>
-                <input
-                  className="form-control"
-                  value={filter.action}
-                  onChange={(event) => setValue("action", event.target.value)}
-                  placeholder="e.g. inventory_posted"
-                />
-              </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label">Entity Type</label>
-                <input
-                  className="form-control"
-                  value={filter.entity_type}
-                  onChange={(event) => setValue("entity_type", event.target.value)}
-                  placeholder="e.g. inventory_transaction"
-                />
-              </div>
-            </div>
-
-            <div className="row g-2 mb-3">
-              <div className="col-12 col-md-3">
-                <label className="form-label">Entity ID</label>
-                <input
-                  className="form-control"
-                  value={filter.entity_id}
-                  onChange={(event) => setValue("entity_id", event.target.value)}
-                  placeholder="numeric entity id"
-                  inputMode="numeric"
-                />
-              </div>
-              <div className="col-12 col-md-3">
-                <label className="form-label">User ID</label>
-                <input
-                  className="form-control"
-                  value={filter.user_id}
-                  onChange={(event) => setValue("user_id", event.target.value)}
-                  placeholder="numeric user id"
-                  inputMode="numeric"
-                />
-              </div>
-              <div className="col-12 col-md-3">
-                <label className="form-label">Date From</label>
-                <input
-                  className="form-control"
-                  type="date"
-                  value={filter.date_from}
-                  onChange={(event) => setValue("date_from", event.target.value)}
-                />
-              </div>
-              <div className="col-12 col-md-3">
-                <label className="form-label">Date To</label>
-                <input
-                  className="form-control"
-                  type="date"
-                  value={filter.date_to}
-                  onChange={(event) => setValue("date_to", event.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="d-flex flex-wrap gap-2">
-              <button className="btn btn-primary" type="button" onClick={() => void loadRows()}>
-                Apply
-              </button>
-              <button className="btn btn-outline-secondary" type="button" onClick={clearFilters}>
-                Clear
-              </button>
-            </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Action</label>
+            <input
+              className="form-control form-control-sm"
+              value={filter.action}
+              onChange={(event) => setValue("action", event.target.value)}
+              placeholder="e.g. inventory_posted"
+            />
           </div>
-        </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Entity Type</label>
+            <input
+              className="form-control form-control-sm"
+              value={filter.entity_type}
+              onChange={(event) => setValue("entity_type", event.target.value)}
+              placeholder="e.g. inventory_transaction"
+            />
+          </div>
+          <div className="col-12 col-md-3">
+            <label className="form-label small">Entity ID</label>
+            <input
+              className="form-control form-control-sm"
+              value={filter.entity_id}
+              onChange={(event) => setValue("entity_id", event.target.value)}
+              placeholder="numeric entity id"
+              inputMode="numeric"
+            />
+          </div>
+          <div className="col-12 col-md-3">
+            <label className="form-label small">User ID</label>
+            <input
+              className="form-control form-control-sm"
+              value={filter.user_id}
+              onChange={(event) => setValue("user_id", event.target.value)}
+              placeholder="numeric user id"
+              inputMode="numeric"
+            />
+          </div>
+          <div className="col-12 col-md-3">
+            <label className="form-label small">Date From</label>
+            <input
+              className="form-control form-control-sm"
+              type="date"
+              value={filter.date_from}
+              onChange={(event) => setValue("date_from", event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-3">
+            <label className="form-label small">Date To</label>
+            <input
+              className="form-control form-control-sm"
+              type="date"
+              value={filter.date_to}
+              onChange={(event) => setValue("date_to", event.target.value)}
+            />
+          </div>
+          <div className="col-auto">
+            <button className="btn btn-sm btn-primary" type="button" onClick={() => void loadRows()}>
+              Apply
+            </button>
+          </div>
+        </FilterBar>
 
         <div className="card border-0 shadow-sm">
           <div className="card-body">
@@ -260,43 +263,7 @@ export default function AuditLogsPage() {
 
             {error ? <div className="alert alert-danger">{error}</div> : null}
 
-            <div className="table-responsive">
-              <table className="table table-sm align-middle">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Action</th>
-                    <th>Entity</th>
-                    <th>User</th>
-                    <th>Remarks</th>
-                    <th>Created At</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="text-center text-secondary py-4">
-                        No audit logs found.
-                      </td>
-                    </tr>
-                  ) : (
-                    logs.map((log) => (
-                      <tr key={log.id}>
-                        <td>{log.id}</td>
-                        <td>{log.action}</td>
-                        <td>
-                          {log.entity_type ?? "-"}
-                          {log.entity_id !== null ? ` #${log.entity_id}` : ""}
-                        </td>
-                        <td>{log.user ? log.user.name : log.user_id ?? "-"}</td>
-                        <td className="text-break">{log.remarks ?? "-"}</td>
-                        <td>{log.created_at ? log.created_at.slice(0, 10) : "-"}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <DataTable columns={tableColumns as never} rows={logs as never} />
           </div>
         </div>
       </div>

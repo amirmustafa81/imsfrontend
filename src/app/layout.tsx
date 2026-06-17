@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import "./globals.css";
+import { ImsShell } from "@/components/ims/shell";
 
 export const metadata: Metadata = {
   title: "UOH Inventory Management System",
@@ -15,7 +16,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ImsShell>{children}</ImsShell>
+      </body>
     </html>
   );
 }
