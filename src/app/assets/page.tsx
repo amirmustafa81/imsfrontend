@@ -236,11 +236,19 @@ export default function AssetsPage() {
   }, [token, authHeaders]);
 
   useEffect(() => {
-    void loadRows();
+    const reload = async () => {
+      await loadRows();
+    };
+
+    void reload();
   }, [loadRows]);
 
   useEffect(() => {
-    void loadLookups();
+    const reloadLookups = async () => {
+      await loadLookups();
+    };
+
+    void reloadLookups();
   }, [loadLookups]);
 
   const badgeClass = (status?: string | null) =>

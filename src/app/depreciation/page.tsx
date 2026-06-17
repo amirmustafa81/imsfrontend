@@ -168,11 +168,19 @@ export default function DepreciationPage() {
   }, [token, authHeaders]);
 
   useEffect(() => {
-    void loadRows();
+    const reload = async () => {
+      await loadRows();
+    };
+
+    void reload();
   }, [loadRows]);
 
   useEffect(() => {
-    void loadLookups();
+    const reloadLookups = async () => {
+      await loadLookups();
+    };
+
+    void reloadLookups();
   }, [loadLookups]);
 
   const badgeClass = (status: string | undefined) => statusClass[String(status ?? "")] ?? "text-bg-light text-dark";

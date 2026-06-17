@@ -228,16 +228,6 @@ const displayValue = (value: unknown) => {
   return String(value);
 };
 
-const resourceListColumns = (rows: RowData[], resourceKey: ResourceKey) => {
-  const definition = resources[resourceKey];
-  const tableColumns = definition.tableColumns;
-  if (rows.length === 0 || tableColumns.length > 0) return tableColumns;
-
-  const first = rows[0] as Record<string, unknown>;
-  const keys = Object.keys(first);
-  return keys.slice(0, Math.min(6, keys.length));
-};
-
 const toDateInput = (value: unknown): string => {
   if (value === null || value === undefined || value === "") {
     return "";
@@ -255,6 +245,8 @@ const toDateInput = (value: unknown): string => {
 };
 
 export default function MasterDataPage() {
+  const storedToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
+
   const [activeResource, setActiveResource] = useState<ResourceKey>("departments");
   const [rows, setRows] = useState<RowData[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -263,8 +255,8 @@ export default function MasterDataPage() {
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [token, setToken] = useState("");
-  const [tmpToken, setTmpToken] = useState("");
+  const [token, setToken] = useState(storedToken);
+  const [tmpToken, setTmpToken] = useState(storedToken);
   const [lookups, setLookups] = useState<Record<ResourceKey, RowData[]>>({
     departments: [],
     buildings: [],
@@ -288,23 +280,12 @@ export default function MasterDataPage() {
   );
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("ims_api_token") ?? "";
-    setToken(stored);
-    setTmpToken(stored);
-  }, []);
-
-  useEffect(() => {
-    const active = resources[activeResource];
-    setForm(initialFormFor(active.fields));
-    setEditingId(null);
-
-    if (!token) {
-      setRows([]);
-      return;
-    }
-
     const loadRows = async () => {
+      if (!token) {
+        setRows([]);
+        return;
+      }
+
       try {
         const query: Record<string, string> = {};
 
@@ -324,13 +305,17 @@ export default function MasterDataPage() {
         const data = response.data?.data;
         setRows(Array.isArray(data) ? data : []);
         setError("");
-      } catch (err) {
+      } catch {
         setRows([]);
         setError("Unable to load records. Verify token and route availability.");
       }
     };
 
-    void loadRows();
+    const reload = async () => {
+      await loadRows();
+    };
+
+    void reload();
   }, [activeResource, authHeaders, search, statusFilter, token]);
 
   useEffect(() => {
@@ -465,7 +450,7 @@ export default function MasterDataPage() {
       setError("");
       setEditingId(null);
       setForm(initialFormFor(definition.fields));
-    } catch (err) {
+    } catch {
       setError("Could not save record. Check required fields and values.");
     }
   };
@@ -511,7 +496,7 @@ export default function MasterDataPage() {
       await api.delete(`/master-data/${definition.endpoint}/${row.id}`, authHeaders);
       setMessage("Record deactivated");
       setRows((current) => current.filter((item) => item.id !== row.id));
-    } catch (err) {
+    } catch {
       setError("Could not deactivate this record.");
     }
   };
@@ -623,7 +608,11 @@ export default function MasterDataPage() {
                       key={key}
                       type="button"
                       className={`btn btn-sm ${activeResource === key ? "btn-primary" : "btn-outline-primary"}`}
-                      onClick={() => setActiveResource(key)}
+                      onClick={() => {
+                        setActiveResource(key);
+                        setEditingId(null);
+                        setForm(initialFormFor(resources[key].fields));
+                      }}
                     >
                       {item.label}
                     </button>
