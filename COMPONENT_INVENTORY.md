@@ -1,7 +1,8 @@
 # IMS Component Inventory (Reusable `src/components/ims` Library)
 
 Source: `/Users/amirmustafa/Documents/inventory/imsfrontend/src/components/ims/index.tsx`  
-This is the canonical component surface to use for new IMS screens.
+Import path in screens: `import { ... } from "@/components/ims"`  
+This is the canonical component surface to use for new IMS screens unless an explicit reason requires a new component.
 
 Use this inventory as default for future screens unless an explicit reason requires a new component.
 

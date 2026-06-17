@@ -3,6 +3,10 @@
 This document captures the current UI system used across the IMS frontend at
 `/Users/amirmustafa/Documents/inventory/imsfrontend`.
 
+Note: the file names you listed from the attachment (`styles.css`, `.lovable/plan.md`, and
+`project.json`) are not present in this repository copy. Their source-of-truth equivalents in this
+checkout are documented below and used by the live app.
+
 - Source styling entry points used:
   - `/Users/amirmustafa/Documents/inventory/imsfrontend/src/app/globals.css`
   - `/Users/amirmustafa/Documents/inventory/imsfrontend/src/app/layout.tsx`
