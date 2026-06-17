@@ -152,6 +152,26 @@ export default function RolesPage() {
     },
   ];
 
+  const permissionGroups = useMemo(() => {
+    const groups: Record<string, Permission[]> = {};
+    for (const permission of permissions) {
+      const moduleName = permission.module || "General";
+      if (!groups[moduleName]) {
+        groups[moduleName] = [];
+      }
+      groups[moduleName].push(permission);
+    }
+    return groups;
+  }, [permissions]);
+
+  const togglePermission = (permissionId: number, checked: boolean) => {
+    setForm((current) => {
+      const permissionIdString = String(permissionId);
+      const nextIds = checked ? [...current.permission_ids, permissionIdString] : current.permission_ids.filter((id) => id !== permissionIdString);
+      return { ...current, permission_ids: nextIds };
+    });
+  };
+
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
@@ -239,27 +259,39 @@ export default function RolesPage() {
                       />
                     </div>
                     <div className="col-12 col-lg-8">
-                      <label className="form-label small" htmlFor="role-permissions">Permissions</label>
-                      <select
-                        id="role-permissions"
-                        multiple
-                        className="form-select"
-                        size={8}
-                        value={form.permission_ids}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            permission_ids: Array.from(event.target.selectedOptions).map((option) => option.value),
-                          }))
-                        }
-                      >
-                        {permissions.map((permission) => (
-                          <option key={permission.id} value={permission.id}>
-                            {permission.module}: {permission.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="form-text">Hold Command/Ctrl to select multiple permissions.</div>
+                      <label className="form-label small">Permissions</label>
+                      {Object.entries(permissionGroups).length === 0 ? (
+                        <div className="border rounded px-3 py-2 text-secondary">No permissions available.</div>
+                      ) : (
+                        <div className="border rounded p-3" style={{ maxHeight: 360, overflowY: "auto" }}>
+                          {Object.entries(permissionGroups).map(([moduleName, permissionItems]) => (
+                            <fieldset className="mb-3" key={moduleName}>
+                              <legend className="small fw-semibold text-secondary px-2">{moduleName}</legend>
+                              <div className="row g-2">
+                                {permissionItems.map((permission) => {
+                                  const permissionId = String(permission.id);
+                                  return (
+                                    <div className="col-12 col-lg-6" key={permission.id}>
+                                      <div className="form-check">
+                                        <input
+                                          id={`permission-${permission.id}`}
+                                          className="form-check-input"
+                                          type="checkbox"
+                                          checked={form.permission_ids.includes(permissionId)}
+                                          onChange={(event) => togglePermission(permission.id, event.target.checked)}
+                                        />
+                                        <label htmlFor={`permission-${permission.id}`} className="form-check-label">
+                                          {permission.name}
+                                        </label>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </fieldset>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="col-12 col-lg-4">
                       <div className="h-100 rounded-3 border bg-body-tertiary p-3">
