@@ -1,95 +1,111 @@
 # IMS UI Audit
 
-## Scope
-This audit reviews IMS pages under `src/app/*/page.tsx` against:
+Scope: `src/app` pages in `/Users/amirmustafa/Documents/inventory/imsfrontend` compared against:
 - `/Users/amirmustafa/Documents/inventory/imsfrontend/DESIGN_SYSTEM.md`
 - `/Users/amirmustafa/Documents/inventory/imsfrontend/COMPONENT_INVENTORY.md`
 
+This audit intentionally captures current code state before final legacy refactor.
+
 ## 1) Inconsistent layouts
 
-### Fully-compliant pages
-- `src/app/page.tsx`
-- `src/app/assets/page.tsx`
-- `src/app/audit-logs/page.tsx`
-- `src/app/master-data/page.tsx`
-- `src/app/reports/page.tsx`
-- `src/app/depreciation/page.tsx`
-- `src/app/export-history/page.tsx`
-- `src/app/import/page.tsx`
-- `src/app/it-assets/page.tsx`
-- `src/app/items/page.tsx`
-- `src/app/lab/page.tsx`
-- `src/app/projects/page.tsx`
-- `src/app/stock/page.tsx`
-- `src/app/tag-print-log/page.tsx`
+Pages not using canonical shell page header pattern:
 
-### Legacy-pattern screens needing refactor
-- `src/app/controlled-stationery/page.tsx`
 - `src/app/inventory-receipts/page.tsx`
+  - Uses local page composition (`<Link href=\"/\"></Link>` backlink, custom token card, custom top title card)
 - `src/app/issues-returns/page.tsx`
+  - Uses local page composition + custom token and title cards
 - `src/app/transfers/page.tsx`
+  - Uses local page composition + custom token and title cards
 - `src/app/verification/page.tsx`
+  - Uses local page composition + custom token and title cards
 - `src/app/disposals/page.tsx`
+  - Uses local page control surface without canonical `PageHeader` and places token form in filter row
 
-These files currently build page composition outside the shared `PageHeader` / `FilterBar` / `DataTable` pattern and are visually inconsistent with Loveable-generated screens.
+Compliant routes currently using canonical header pattern:
+- `assets`, `audit-logs`, `controlled-stationery`, `depreciation`, `export-history`, `import`, `it-assets`, `items`, `lab`, `master-data`, `projects`, `reports`, `stock`, `tag-print-log`
 
 ## 2) Inconsistent sidebar/topbar usage
 
-Legacy screens render local “Dashboard” links and manual header cards instead of the shared shell top-level composition (`PageHeader` with global token/actions context):
-- `controlled-stationery`
+Manual dashboard backlink behavior remains in:
 - `inventory-receipts`
 - `issues-returns`
 - `transfers`
 - `verification`
-- `disposals`
+
+These are local navigation hints inside page content and should be removed in favor of shell topbar and `PageHeader` actions.
 
 ## 3) Inconsistent tables
 
-Custom table wrappers are used in list views and nested expansion sections:
-- `controlled-stationery`: batch table + serial table
-- `inventory-receipts`: receipt list + receipt item inline detail table
-- `issues-returns`: transaction list + item detail table
-- `transfers`: transfer list + transfer item detail table
-- `verification`: verification list + verification-item detail table
-- `disposals`: disposal list + disposal-item expansion table
-
-## 4) Inconsistent filter/search bars
-
-Filters are implemented with raw grid/card blocks and local reset/refresh controls instead of `FilterBar` in:
-- `controlled-stationery`
+These screens still use custom table shells for list and expansion rows:
 - `inventory-receipts`
 - `issues-returns`
 - `transfers`
 - `verification`
 - `disposals`
+
+Their list shells currently use raw `<table>` with locally defined rows and custom empty messages.
+
+## 4) Inconsistent filters/search bars
+
+Filter/search UX is still local card-based in:
+- `inventory-receipts`
+- `issues-returns`
+- `transfers`
+- `verification`
+- `disposals`
+
+Controls are inconsistent (mixed full-size controls, varying reset behavior, local spacing).
 
 ## 5) Inconsistent buttons
 
-Button placement and density is inconsistent with shared list/form patterns:
-- Token save controls are inside ad-hoc cards (`controlled-stationery`, `inventory-receipts`, `issues-returns`, `transfers`, `verification`, `disposals`).
-- Action groups inside tables mix raw buttons and icon-only controls instead of consistently structured utility groups.
-- Adjustment radio/inline controls in `issues-returns` are unique and not aligned with global button patterns.
+Button hierarchy and spacing is mixed in all five screens:
+- Save token actions are in separate cards/forms.
+- Action button groups use mixed variants and spacing patterns compared with page standards.
 
 ## 6) Inconsistent badges/status labels
 
-Local status color maps are defined on several screens instead of `StatusBadge`:
-- `controlled-stationery`
+Local badge maps/classes remain in:
+- `inventory-receipts` (`statusColors` map)
+- `issues-returns` (`typeColors`, `statusColors`)
+- `transfers` (inline ternary)
+- `verification` (`verificationStatuses` + custom status cell)
+- `disposals` (`statusClass` + custom item status tags)
+
+## 7) Inconsistent forms
+
+- All five pages still use local approval/reference field groups instead of `ApprovalReferenceFields`.
+- Form density is inconsistent with system defaults (`form-control`/`form-select` over `form-control-sm` and `form-select-sm` in many places).
+- API token save pattern differs from shared header action pattern.
+
+## 8) Inconsistent cards/KPI blocks
+
+- Shared `PageHeader` and `FilterBar` are not consistently applied in these five operational screens.
+- KPI blocks are not the primary issue here, but these pages do not use the canonical shared action/header card composition used by other pages.
+
+## 9) Missing empty/loading states
+
+- Empty list states exist, but are not using shared `DataTable` empty style consistently.
+- Expansion-loading/error text is custom and not standardized.
+
+## 10) Missing design-system component usage
+
+The following component patterns are currently absent in the five remaining screens:
+- `FilterBar`
+- `DataTable`
+- `ApprovalReferenceFields`
+- `StatusBadge` (for row status fields)
+- `PageHeader`
+- `EmptyState` for full section empties
+
+`Timeline`, `FileAttachmentList`, and `ExportButtons` are also not used in these remaining operational routes.
+
+## Remaining target before completion
+
+Bring the following screens fully aligned:
 - `inventory-receipts`
 - `issues-returns`
 - `transfers`
 - `verification`
 - `disposals`
 
-## 7) Inconsistent forms
-
-These screens keep bespoke form layout blocks (token entry + form in separate cards with local headings) and should move to `PageHeader`/`FilterBar` + shared form fragments where possible.
-
-## 8) Inconsistent cards/KPI blocks
-
-- KPI-style summaries are not shared where available (no `KpiCard` usage in legacy transaction/stock modules).
-- List/summary sections use mixed card nesting and custom borders, unlike the newer standardized `card border-0 shadow-sm` pattern with shared component shells.
-
-## 9) Missing/weak empty and loading states
-
-- Several list pages show row-level “no data” rows but do not use standardized `EmptyState` cards for full-list empty states.
-- Detail-loading states are inconsistent (alerts, text placeholders, and table spinners mixed across screens).
+without changing backend calls, route shape, or business behavior.
