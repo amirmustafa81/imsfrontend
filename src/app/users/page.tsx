@@ -304,7 +304,7 @@ export default function UsersPage() {
           <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
             <div
               className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
-              style={{ width: "min(50vw, 960px)", maxWidth: "min(50vw, 960px)" }}
+              style={{ width: "min(44vw, 860px)", maxWidth: "min(44vw, 860px)" }}
             >
               <form className="modal-content border-0 shadow-lg" onSubmit={saveUser}>
                 <div className="modal-header px-4 py-3">
