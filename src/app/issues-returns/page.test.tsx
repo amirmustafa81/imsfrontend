@@ -620,4 +620,54 @@ describe("IssuesReturnsPage adjustment flow", () => {
 
     expect(mockedApi.post).not.toHaveBeenCalled();
   });
+
+  test("requires from scope for issue transactions", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "issue");
+    await fillRequiredCommonFields(user);
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/please complete from department id for issue/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
+  test("requires to scope for return transactions", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "return");
+    await fillRequiredCommonFields(user);
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/please complete to department id for return/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
+  test("requires both source and destination scope for transfer transactions", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "transfer");
+    await fillRequiredCommonFields(user);
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/please complete from department id for transfer/i)).toBeInTheDocument();
+    });
+
+    await user.selectOptions(getSelectValue(/from department/i), "2");
+    await user.selectOptions(getSelectValue(/from store/i), "11");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/please complete to department id for transfer/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
 });
