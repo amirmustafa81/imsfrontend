@@ -13,6 +13,7 @@ const modules = [
   { label: "Issue / Return", href: "/issues-returns", icon: "bi-arrow-left-right" },
   { label: "Asset Transfer", href: "/transfers", icon: "bi-diagram-3" },
   { label: "Physical Verification", href: "/verification", icon: "bi-clipboard-check" },
+  { label: "Disposal", href: "/disposals", icon: "bi-trash" },
   { label: "Controlled Stationery", href: "/controlled-stationery", icon: "bi-journal-check" },
   { label: "Depreciation", href: "/depreciation", icon: "bi-graph-down-arrow" },
   { label: "Master Data", href: "/master-data", icon: "bi-database-gear" },
