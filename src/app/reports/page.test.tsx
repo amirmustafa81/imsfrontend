@@ -4,12 +4,6 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import ReportsPage from "./page";
 
-type LookupResponse = {
-  data: {
-    data: Array<{ id: number; code?: string; name?: string; project_code?: string; title?: string; title_code?: string }>;
-  };
-};
-
 type ReportRow = {
   id: number;
   batch_no: string;
