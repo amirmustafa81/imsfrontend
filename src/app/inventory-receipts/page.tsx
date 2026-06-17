@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -91,6 +91,12 @@ type ReceiptForm = {
   post_now: boolean;
 };
 
+type PendingAttachment = {
+  file: File;
+  name: string;
+  size: number;
+};
+
 const receiptTypes = [
   { value: "purchase", label: "Purchase" },
   { value: "donation", label: "Donation" },
@@ -130,6 +136,9 @@ const emptyItem: ReceiptItemInput = {
   inspection_status: "pending",
   inspection_remarks: "",
 };
+
+const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 
 const defaultForm: ReceiptForm = {
   receipt_no: "",
@@ -177,11 +186,28 @@ export default function InventoryReceiptsPage() {
     remarks: "",
   });
   const [items, setItems] = useState<ReceiptItemInput[]>([emptyItem]);
+  const [attachmentFiles, setAttachmentFiles] = useState<PendingAttachment[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<number, ReceiptItem[]>>({});
   const [expandedLoading, setExpandedLoading] = useState<Record<number, boolean>>({});
+
+  const [isPostingReceipt, setIsPostingReceipt] = useState(false);
+
+  const attachmentTotalBytes = useMemo(
+    () => attachmentFiles.reduce((acc, item) => acc + item.size, 0),
+    [attachmentFiles],
+  );
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return "0 KB";
+    if (bytes >= 1024 * 1024) {
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  };
 
   const authHeaders = useMemo(
     () => ({
@@ -324,6 +350,41 @@ export default function InventoryReceiptsPage() {
     setItems((current) => current.filter((_, idx) => idx !== index));
   };
 
+  const removeAttachment = (index: number) => {
+    setAttachmentFiles((current) => current.filter((_, idx) => idx !== index));
+  };
+
+  const handleAttachmentChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const incoming = event.target.files;
+    if (!incoming) return;
+
+    const nextFiles = Array.from(incoming);
+    let runningTotal = attachmentTotalBytes;
+
+    for (const file of nextFiles) {
+      if (file.size === 0) {
+        setError("Each attachment must be greater than 0 bytes.");
+        return;
+      }
+
+      if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+        setError("Each attachment must be 10 MB or less.");
+        return;
+      }
+
+      if (runningTotal + file.size > MAX_TOTAL_ATTACHMENT_BYTES) {
+        setError("Total attachment size cannot exceed 50 MB.");
+        return;
+      }
+
+      setAttachmentFiles((current) => [...current, { file, name: file.name, size: file.size }]);
+      runningTotal += file.size;
+      setError("");
+    }
+
+    event.target.value = "";
+  };
+
   const submitToken = () => {
     if (typeof window === "undefined") return;
     localStorage.setItem("ims_api_token", tmpToken);
@@ -374,6 +435,22 @@ export default function InventoryReceiptsPage() {
     }
   };
 
+  const postReceipt = async (receiptId: number) => {
+    if (!token) return;
+
+    await api.post(`/inventory-receipts/${receiptId}/post`, {}, { ...authHeaders });
+  };
+
+  const uploadReceiptAttachment = async (receiptId: number, file: File) => {
+    const formData = new FormData();
+    formData.append("entity_type", "inventory_receipt");
+    formData.append("entity_id", String(receiptId));
+    formData.append("document_type", "supporting");
+    formData.append("file", file);
+
+    await api.post("/documents", formData, { ...authHeaders });
+  };
+
   const saveReceipt = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -394,6 +471,11 @@ export default function InventoryReceiptsPage() {
 
     if (receiptItems.length === 0) {
       setError("Please add at least one item.");
+      return;
+    }
+
+    if (form.post_now && attachmentFiles.length === 0) {
+      setError("Please add at least one supporting document before posting this receipt.");
       return;
     }
 
@@ -446,8 +528,25 @@ export default function InventoryReceiptsPage() {
     }
 
     try {
-      await api.post("/inventory-receipts", payload, authHeaders);
-      setMessage("Receipt created successfully.");
+      setIsPostingReceipt(true);
+      const receiptResponse = await api.post("/inventory-receipts", { ...payload, post_now: false }, authHeaders);
+      const receiptId = receiptResponse.data?.data?.id;
+
+      if (!receiptId) {
+        throw new Error("Could not create receipt.");
+      }
+
+      for (const attachment of attachmentFiles) {
+        await uploadReceiptAttachment(receiptId, attachment.file);
+      }
+
+      if (form.post_now) {
+        await postReceipt(receiptId);
+        setMessage("Receipt created and posted successfully.");
+      } else {
+        setMessage("Receipt created successfully.");
+      }
+
       setError("");
       const nextForm = { ...defaultForm, receipt_date: form.receipt_date, receipt_type: form.receipt_type };
       setForm(nextForm);
@@ -458,9 +557,26 @@ export default function InventoryReceiptsPage() {
         remarks: "",
       });
       setItems([{ ...emptyItem }]);
+      setAttachmentFiles([]);
       await refreshRows();
     } catch {
       setError("Could not create receipt. Verify required fields.");
+      setIsPostingReceipt(false);
+      return;
+    }
+
+    setIsPostingReceipt(false);
+  };
+
+  const postReceiptAndRefresh = async (receiptId: number) => {
+    if (!token) return;
+
+    try {
+      await postReceipt(receiptId);
+      setMessage("Receipt posted and stock updated.");
+      await refreshRows();
+    } catch {
+      setError("Could not post receipt.");
     }
   };
 
@@ -481,18 +597,6 @@ export default function InventoryReceiptsPage() {
     } catch {
       setExpandedLoading((current) => ({ ...current, [receiptId]: false }));
       setError("Could not load receipt items.");
-    }
-  };
-
-  const postReceipt = async (receiptId: number) => {
-    if (!token) return;
-
-    try {
-      await api.post(`/inventory-receipts/${receiptId}/post`, {}, { ...authHeaders });
-      setMessage("Receipt posted and stock updated.");
-      await refreshRows();
-    } catch {
-      setError("Could not post receipt.");
     }
   };
 
@@ -880,6 +984,54 @@ export default function InventoryReceiptsPage() {
                     </div>
                   ))}
 
+                  <div className="col-12">
+                    <label className="form-label small">Supporting Documents</label>
+                    <div className="mb-2 small text-secondary">
+                      Max 10 MB per file, 50 MB total. Required when posting.
+                    </div>
+                    <div className="d-flex gap-2 align-items-center">
+                      <label className="btn btn-sm btn-outline-primary mb-0">
+                        <i className="bi bi-paperclip me-1" />
+                        Attach file
+                        <input
+                          type="file"
+                          hidden
+                          onChange={handleAttachmentChange}
+                          multiple
+                        />
+                      </label>
+                      <span className="small text-secondary">
+                        Total: {formatBytes(attachmentTotalBytes)} / 50 MB
+                      </span>
+                    </div>
+
+                    {attachmentFiles.length === 0 ? (
+                      <div className="text-secondary small mt-2">No files selected.</div>
+                    ) : (
+                      <ul className="list-group list-group-flush mt-2">
+                        {attachmentFiles.map((attachment, index) => (
+                          <li
+                            className="list-group-item d-flex justify-content-between align-items-center px-0"
+                            key={`${attachment.name}-${index}`}
+                          >
+                            <div>
+                              <i className="bi bi-file-earmark me-2" />
+                              {attachment.name}
+                              <span className="text-secondary small ms-2">{formatBytes(attachment.size)}</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => removeAttachment(index)}
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
                   <div className="col-12 form-check">
                     <input
                       id="post_now"
@@ -894,8 +1046,8 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12">
-                    <button className="btn btn-primary" type="submit">
-                      Save Receipt
+                    <button className="btn btn-primary" type="submit" disabled={isPostingReceipt}>
+                      {isPostingReceipt ? "Saving..." : "Save Receipt"}
                     </button>
                   </div>
                 </form>
@@ -1016,7 +1168,7 @@ export default function InventoryReceiptsPage() {
                                 <button
                                   className="btn btn-outline-success"
                                   type="button"
-                                  onClick={() => postReceipt(row.id)}
+                                  onClick={() => postReceiptAndRefresh(row.id)}
                                 >
                                   Post
                                 </button>
