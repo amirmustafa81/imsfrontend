@@ -348,6 +348,56 @@ describe("IssuesReturnsPage adjustment flow", () => {
     });
   });
 
+  test("switching adjustment direction keeps stale opposite scope fields from being submitted", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+    await user.selectOptions(getSelectValue(/to store/i), "11");
+
+    await user.click(screen.getByText(/decrease stock/i));
+    await user.selectOptions(getSelectValue(/from department/i), "2");
+    await user.selectOptions(getSelectValue(/from store/i), "11");
+
+    await user.click(screen.getByText(/increase stock/i));
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+    await user.selectOptions(getSelectValue(/to store/i), "11");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/transaction saved with id/i)).toBeInTheDocument();
+    });
+
+    const [, payload] = mockedApi.post.mock.calls[0];
+    expect(payload).toMatchObject({
+      to_department_id: 2,
+      to_store_id: 11,
+      from_department_id: null,
+      from_store_id: null,
+    });
+  });
+
+  test("direction-specific missing scope errors are explicit for both adjustment directions", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+    await user.selectOptions(getSelectValue(/to store/i), "11");
+    await user.click(screen.getByText(/decrease stock/i));
+
+    await user.selectOptions(getSelectValue(/from department/i), "2");
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/please complete from store id for adjustment/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
   test("clears destination scope when switching adjustment from increase to decrease", async () => {
     const { user } = await renderPage();
 
