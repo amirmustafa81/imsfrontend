@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import IssuesReturnsPage from "./page";
@@ -168,6 +168,12 @@ const getItemSelect = () => {
 
 const fillRequiredCommonFields = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.type(getInputByLabel(/transaction no/i), "INV-01");
+
+  await waitFor(() => {
+    const itemSelect = getItemSelect();
+    expect(itemSelect.querySelector("option[value='21']")).toBeTruthy();
+  });
+
   await user.selectOptions(getItemSelect(), "21");
 
   const quantityInput = getControlForLabel(/quantity/i);
@@ -177,6 +183,15 @@ const fillRequiredCommonFields = async (user: ReturnType<typeof userEvent.setup>
 
   await user.clear(quantityInput);
   await user.type(quantityInput, "2");
+};
+
+const setToken = (token: string | null) => {
+  if (token === null) {
+    localStorage.removeItem("ims_api_token");
+    return;
+  }
+
+  localStorage.setItem("ims_api_token", token);
 };
 
 const getSelectValue = (labelText: RegExp | string): HTMLSelectElement => {
@@ -354,5 +369,49 @@ describe("IssuesReturnsPage adjustment flow", () => {
     });
 
     expect(mockedApi.post).toHaveBeenCalledTimes(1);
+  });
+
+  test("blocks save when API token is missing", async () => {
+    setToken(null);
+
+    const { user } = await renderPage();
+
+    await user.type(getInputByLabel(/transaction no/i), "INV-01");
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    fireEvent.change(getSelectValue(/to department/i), { target: { value: "2" } });
+    fireEvent.change(getSelectValue(/to store/i), { target: { value: "11" } });
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/save token first/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
+  test("requires a valid item row before save", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+    await user.selectOptions(getSelectValue(/to store/i), "11");
+
+    const quantityInput = getControlForLabel(/quantity/i);
+    if (!quantityInput || !(quantityInput instanceof HTMLInputElement)) {
+      throw new Error("Quantity input not found");
+    }
+
+    await user.clear(quantityInput);
+    await user.type(quantityInput, "0");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/at least one valid item row with quantity is required/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
   });
 });
