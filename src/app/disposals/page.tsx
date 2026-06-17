@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "fixedAssets";
 
@@ -139,14 +140,6 @@ const toDisplayDate = (value: string | null | undefined): string => {
   return value.includes("T") ? (value.split("T")[0] ?? "-") : value;
 };
 
-const statusClass: Record<string, string> = {
-  draft: "text-bg-secondary",
-  recommended: "text-bg-info",
-  approved: "text-bg-primary",
-  completed: "text-bg-success",
-  cancelled: "text-bg-danger",
-};
-
 const labelFromAsset = (asset: FixedAsset | RowData): string => {
   const id = asset.asset_id || `A-${asset.id}`;
   const serial = asset.serial_number ? ` (${asset.serial_number})` : "";
@@ -240,8 +233,7 @@ export default function DisposalsPage() {
     })();
   }, [loadLookups]);
 
-  const submitToken = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitToken = () => {
     if (typeof window === "undefined") return;
     localStorage.setItem("ims_api_token", tmpToken);
     setToken(tmpToken);
@@ -389,76 +381,105 @@ export default function DisposalsPage() {
     return labelFromAsset(match as FixedAsset);
   };
 
-  const isLoading = !token;
+  const clearFilters = () => {
+    setFilter(initialFilters);
+  };
+
+  const disposalColumns = [
+    {
+      key: "disposal",
+      header: "Disposal",
+      render: (row: Disposal) => (
+        <>
+          <button className="btn btn-link p-0" onClick={() => setExpandedId(row.id === expandedId ? null : row.id)} type="button">
+            <i className="bi bi-list me-2" />
+            {row.disposal_no}
+          </button>
+          <div className="small text-secondary">
+            {row.disposal_type.replace("_", " ")} • {toDisplayDate(row.request_date)}
+          </div>
+        </>
+      ),
+    },
+    { key: "items_count", header: "Items", render: (row: Disposal) => row.items_count ?? 0 },
+    {
+      key: "status",
+      header: "Status",
+      render: (row: Disposal) => <StatusBadge status={row.status} />,
+    },
+    { key: "approval", header: "Approval", render: (row: Disposal) => row.approval_ref || "-" },
+    {
+      key: "actions",
+      header: "Actions",
+      className: "text-end",
+      render: (row: Disposal) => (
+        <div className="btn-group">
+          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setExpandedId((current) => (current === row.id ? null : row.id))} title="View items">
+            <i className="bi bi-eye" />
+          </button>
+          {row.status !== "completed" ? (
+            <button type="button" className="btn btn-sm btn-outline-success" onClick={() => postDisposal(row)} title="Post">
+              <i className="bi bi-upload" />
+            </button>
+          ) : null}
+          {row.status === "draft" ? (
+            <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => deleteDraft(row)} title="Delete">
+              <i className="bi bi-trash" />
+            </button>
+          ) : null}
+        </div>
+      ),
+    },
+  ];
+
+  const expandedItemColumns = [
+    { key: "asset", header: "Asset", render: (item: DisposalItem) => renderAssetLabel(item.asset_id) },
+    { key: "book", header: "Book Value", render: (item: DisposalItem) => toMoney(item.book_value) },
+    {
+      key: "disposalValue",
+      header: "Disposal Value",
+      render: (item: DisposalItem) => toMoney(item.disposal_value),
+    },
+    {
+      key: "reason",
+      header: "Reason",
+      render: (item: DisposalItem) => item.reason || "-",
+    },
+  ];
+
+  const selectedDisposal = expandedId === null ? null : disposals.find((disposal) => disposal.id === expandedId) ?? null;
 
   return (
-    <main className="min-vh-100 bg-body-tertiary">
-      <div className="container-fluid p-4">
-        <div className="row g-4">
-          <section className="col-12">
-            <div className="row g-3 align-items-end">
-              <div className="col-12 col-md-4">
-                <label className="form-label">Search / Disposal No / Approval / Remarks</label>
-                <input
-                  value={filter.search}
-                  onChange={(event) => setFilterValue("search", event.target.value)}
-                  className="form-control"
-                  placeholder="Search records..."
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="col-6 col-md-3">
-                <label className="form-label">Status</label>
-                <select
-                  className="form-select"
-                  value={filter.status}
-                  onChange={(event) => setFilterValue("status", event.target.value)}
-                  disabled={isLoading}
-                >
-                  {statusOptions.map((option) => (
-                    <option key={option.value || "all"} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-6 col-md-3">
-                <label className="form-label">Disposal Type</label>
-                <select
-                  className="form-select"
-                  value={filter.disposalType}
-                  onChange={(event) => setFilterValue("disposalType", event.target.value)}
-                  disabled={isLoading}
-                >
-                  <option value="">All Types</option>
-                  {disposalTypeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-12 col-md-2">
-                <form onSubmit={submitToken} className="d-flex gap-2">
-                  <input
-                    aria-label="ims-token"
-                    className="form-control form-control-sm"
-                    value={tmpToken}
-                    onChange={(event) => setTmpToken(event.target.value)}
-                    placeholder="API Token"
-                  />
-                  <button className="btn btn-outline-primary btn-sm">Set</button>
-                </form>
-              </div>
+    <main className="min-vh-100 bg-body-tertiary p-4">
+      <div className="container-fluid">
+        <PageHeader
+          title="Asset Disposals"
+          subtitle="Create disposal proposals and post disposal transactions with approval metadata."
+          actions={
+            <div className="d-flex gap-2">
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                value={tmpToken}
+                onChange={(event) => setTmpToken(event.target.value)}
+                placeholder="Paste API token"
+              />
+              <button className="btn btn-outline-primary btn-sm" type="button" onClick={submitToken}>
+                Save token
+              </button>
             </div>
+          }
+        />
 
-            <hr className="my-4" />
+        {(error || message) && (
+          <div className="mb-4">
+            {error && <div className="alert alert-danger py-2">{error}</div>}
+            {message && <div className="alert alert-success py-2">{message}</div>}
+          </div>
+        )}
 
-            {error ? <div className="alert alert-danger">{error}</div> : null}
-            {message ? <div className="alert alert-info">{message}</div> : null}
-          </section>
-
-          <section className="col-12 col-lg-4">
+        <div className="row g-4">
+          <section className="col-12 col-xxl-5">
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-white fw-semibold">Create Disposal</div>
               <div className="card-body">
@@ -510,32 +531,19 @@ export default function DisposalsPage() {
                   </div>
 
                   <div className="col-12">
-                    <label className="form-label">Approval Ref</label>
-                    <input
-                      className="form-control"
-                      value={form.approval_ref}
-                      onChange={(event) => setFormValue("approval_ref", event.target.value)}
-                      placeholder="APP-000"
-                    />
-                  </div>
-
-                  <div className="col-6">
-                    <label className="form-label">Approval Date</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={form.approval_date}
-                      onChange={(event) => setFormValue("approval_date", event.target.value)}
-                    />
-                  </div>
-
-                  <div className="col-6">
-                    <label className="form-label">Approved By</label>
-                    <input
-                      className="form-control"
-                      value={form.approved_by}
-                      onChange={(event) => setFormValue("approved_by", event.target.value)}
-                      placeholder="Approver name"
+                    <ApprovalReferenceFields
+                      value={{
+                        authority: form.approved_by,
+                        date: form.approval_date,
+                        ref: form.approval_ref,
+                        remarks: form.remarks,
+                      }}
+                      onChange={(value) => {
+                        setFormValue("approval_ref", value.ref);
+                        setFormValue("approval_date", value.date);
+                        setFormValue("approved_by", value.authority);
+                        setFormValue("remarks", value.remarks);
+                      }}
                     />
                   </div>
 
@@ -554,16 +562,6 @@ export default function DisposalsPage() {
                           </option>
                         ))}
                     </select>
-                  </div>
-
-                  <div className="col-12">
-                    <label className="form-label">Remarks</label>
-                    <textarea
-                      className="form-control"
-                      rows={2}
-                      value={form.remarks}
-                      onChange={(event) => setFormValue("remarks", event.target.value)}
-                    />
                   </div>
 
                   <div className="col-12">
@@ -662,117 +660,63 @@ export default function DisposalsPage() {
             </div>
           </section>
 
-          <section className="col-12 col-lg-8">
+          <section className="col-12 col-xxl-7">
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-white fw-semibold">Disposal List</div>
               <div className="card-body">
-                <div className="table-responsive">
-                  <table className="table table-sm align-middle">
-                    <thead>
-                      <tr>
-                        <th>Disposal No</th>
-                        <th>Type</th>
-                        <th>Request Date</th>
-                        <th>Items</th>
-                        <th>Status</th>
-                        <th>Approval</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRows.map((disposal) => (
-                        <Fragment key={disposal.id}>
-                          <tr>
-                            <td>{disposal.disposal_no}</td>
-                            <td className="text-capitalize">{disposal.disposal_type.replace("_", " ")}</td>
-                            <td>{toDisplayDate(disposal.request_date)}</td>
-                            <td>{disposal.items_count ?? 0}</td>
-                            <td>
-                              <span className={`badge ${statusClass[disposal.status] ?? "text-bg-secondary"}`}>
-                                {disposal.status}
-                              </span>
-                            </td>
-                            <td>{disposal.approval_ref || "-"}</td>
-                            <td>
-                              <div className="d-flex gap-2">
-                                {disposal.status !== "completed" ? (
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-success"
-                                    onClick={() => postDisposal(disposal)}
-                                  >
-                                    Post
-                                  </button>
-                                ) : null}
-                                {disposal.status === "draft" ? (
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-outline-danger"
-                                    onClick={() => deleteDraft(disposal)}
-                                  >
-                                    Delete
-                                  </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  className="btn btn-sm btn-outline-secondary"
-                                  onClick={() =>
-                                    setExpandedId((current) => (current === disposal.id ? null : disposal.id))
-                                  }
-                                >
-                                  {expandedId === disposal.id ? "Hide Items" : "View Items"}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                          {expandedId === disposal.id ? (
-                            <tr>
-                              <td colSpan={7}>
-                                <div className="table-responsive">
-                                  <table className="table table-sm mb-0">
-                                    <thead>
-                                      <tr>
-                                        <th>Asset</th>
-                                        <th>Book Value</th>
-                                        <th>Disposal Value</th>
-                                        <th>Reason</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {(disposal.items ?? []).length ? (
-                                        (disposal.items ?? []).map((disposalItem) => (
-                                          <tr key={disposalItem.id}>
-                                            <td>{renderAssetLabel(disposalItem.asset_id)}</td>
-                                            <td>{toMoney(disposalItem.book_value)}</td>
-                                            <td>{toMoney(disposalItem.disposal_value)}</td>
-                                            <td>{disposalItem.reason || "-"}</td>
-                                          </tr>
-                                        ))
-                                      ) : (
-                                        <tr>
-                                          <td colSpan={4} className="text-secondary">
-                                            No item rows returned by backend.
-                                          </td>
-                                        </tr>
-                                      )}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : null}
-                        </Fragment>
+                <FilterBar onReset={clearFilters}>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small mb-1">Search / Disposal No / Approval / Remarks</label>
+                    <input
+                      value={filter.search}
+                      onChange={(event) => setFilterValue("search", event.target.value)}
+                      className="form-control form-control-sm"
+                      placeholder="Search records..."
+                    />
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small mb-1">Status</label>
+                    <select
+                      className="form-select form-select-sm"
+                      value={filter.status}
+                      onChange={(event) => setFilterValue("status", event.target.value)}
+                    >
+                      {statusOptions.map((option) => (
+                        <option key={option.value || "all"} value={option.value}>
+                          {option.label}
+                        </option>
                       ))}
-                      {filteredRows.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="text-secondary">
-                            No disposal records match filters.
-                          </td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
+                    </select>
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small mb-1">Disposal Type</label>
+                    <select
+                      className="form-select form-select-sm"
+                      value={filter.disposalType}
+                      onChange={(event) => setFilterValue("disposalType", event.target.value)}
+                    >
+                      <option value="">All Types</option>
+                      {disposalTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </FilterBar>
+
+                {filteredRows.length === 0 ? (
+                  <EmptyState title="No disposals found" message="No records match the current filters." icon="bi-recycle" />
+                ) : (
+                  <DataTable columns={disposalColumns} rows={filteredRows} />
+                )}
+
+                {selectedDisposal ? (
+                  <div className="mt-3">
+                    <h3 className="h6">Disposal items for #{selectedDisposal.disposal_no}</h3>
+                    <DataTable columns={expandedItemColumns} rows={selectedDisposal.items ?? []} empty="No item rows returned by backend." />
+                  </div>
+                ) : null}
               </div>
             </div>
           </section>

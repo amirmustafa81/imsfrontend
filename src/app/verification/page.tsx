@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "buildings" | "rooms" | "items" | "funding-sources" | "research-projects";
 
@@ -109,10 +109,10 @@ const verificationTypes = [
 ];
 
 const verificationStatuses = [
-  { value: "planned", label: "Planned", className: "text-bg-secondary" },
-  { value: "in_progress", label: "In Progress", className: "text-bg-primary" },
-  { value: "completed", label: "Completed", className: "text-bg-success" },
-  { value: "cancelled", label: "Cancelled", className: "text-bg-danger" },
+  { value: "planned", label: "Planned" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 const itemStatuses = [
@@ -431,55 +431,136 @@ export default function VerificationPage() {
     }
   };
 
+  const clearFilters = () => {
+    setSearch("");
+    setTypeFilter("");
+    setStatusFilter("");
+    setDepartmentFilter("");
+    setProjectFilter("");
+  };
+
+  const verificationColumns = [
+    {
+      key: "verification",
+      header: "Verification",
+      render: (row: Verification) => (
+        <>
+          <button className="btn btn-link p-0" type="button" onClick={() => toggleExpand(row.id)}>
+            <i className="bi bi-list me-2" />
+            {row.verification_no}
+          </button>
+          <div className="small text-secondary">{row.remarks ?? "-"}</div>
+        </>
+      ),
+    },
+    {
+      key: "date",
+      header: "Date",
+      render: (row: Verification) => (
+        <div className="small">
+          {row.start_date}
+          {row.end_date ? ` to ${row.end_date}` : ""}
+        </div>
+      ),
+    },
+    { key: "type", header: "Type", render: (row: Verification) => row.verification_type },
+    {
+      key: "scope",
+      header: "Location Scope",
+      render: (row: Verification) => (
+        <div className="small">
+          Dept: {lookupLabel("departments", row.department_id)}
+          <br />
+          Project: {lookupLabel("research-projects", row.project_id)}
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row: Verification) => <StatusBadge status={row.status} />,
+    },
+    { key: "items", header: "Items", render: (row: Verification) => row.items_count ?? 0 },
+    {
+      key: "actions",
+      header: "Actions",
+      className: "text-end",
+      render: (row: Verification) => (
+        <div className="btn-group">
+          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(row.id)} title="View items">
+            <i className="bi bi-eye" />
+          </button>
+          <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => deleteVerification(row.id)} title="Delete">
+            <i className="bi bi-trash" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const expandedItemColumns = [
+    { key: "asset", header: "Item / Asset", render: (item: VerificationItem) => (item.asset_id ? `Asset ${item.asset_id}` : `Item ${item.item_id ?? "-"}`) },
+    {
+      key: "expectedScope",
+      header: "Expected Scope",
+      render: (item: VerificationItem) => (
+        <>
+          {lookupLabel("departments", item.expected_department_id)} / {lookupLabel("rooms", item.expected_room_id)}
+        </>
+      ),
+    },
+    {
+      key: "foundScope",
+      header: "Found Scope",
+      render: (item: VerificationItem) => (
+        <>
+          {lookupLabel("departments", item.found_department_id)} / {lookupLabel("rooms", item.found_room_id)}
+        </>
+      ),
+    },
+    {
+      key: "qty",
+      header: "Qty",
+      render: (item: VerificationItem) => (
+        <>
+          {item.expected_quantity ?? "-"} / {item.found_quantity ?? "-"}
+        </>
+      ),
+    },
+    { key: "status", header: "Status", render: (item: VerificationItem) => <StatusBadge status={item.verification_status} /> },
+    { key: "remarks", header: "Remarks", render: (item: VerificationItem) => item.condition_remarks ?? "-" },
+  ];
+
+  const selectedVerification = expandedId === null ? null : rows.find((verification) => verification.id === expandedId) ?? null;
+
   return (
     <main className="min-vh-100 bg-body-tertiary p-4">
       <div className="container-fluid">
-        <Link href="/" className="btn btn-link px-0 mb-3">
-          <i className="bi bi-arrow-left me-2" />
-          Dashboard
-        </Link>
+        <PageHeader
+          title="Physical Verification"
+          subtitle="Create verification rounds and record item/asset discrepancies for audit trail."
+          actions={
+            <div className="d-flex gap-2">
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                value={tmpToken}
+                onChange={(event) => setTmpToken(event.target.value)}
+                placeholder="Paste API token"
+              />
+              <button className="btn btn-outline-primary btn-sm" type="button" onClick={submitToken}>
+                Save token
+              </button>
+            </div>
+          }
+        />
 
-        <div className="row g-3 mb-4">
-          <div className="col-12 col-xl-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">API Token</div>
-              <div className="card-body">
-                <label className="form-label small">Bearer token</label>
-                <div className="input-group">
-                  <input
-                    className="form-control"
-                    value={tmpToken}
-                    onChange={(e) => setTmpToken(e.target.value)}
-                    placeholder="Paste API token"
-                  />
-                  <button type="button" className="btn btn-outline-primary" onClick={submitToken}>
-                    Save token
-                  </button>
-                </div>
-              </div>
-            </div>
+        {(message || error) && (
+          <div className="mb-4">
+            {message && <div className="alert alert-success py-2">{message}</div>}
+            {error && <div className="alert alert-danger py-2">{error}</div>}
           </div>
-          <div className="col-12 col-xl-8">
-            <div className="row g-3">
-              <div className="col-12">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-body">
-                    <h1 className="h4 mb-3">Physical Verification</h1>
-                    <p className="text-secondary mb-0">
-                      Create verification rounds and record item/asset discrepancies for audit trail.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              {(message || error) && (
-                <div className="col-12">
-                  {message && <div className="alert alert-success mb-0">{message}</div>}
-                  {error && <div className="alert alert-danger mb-0">{error}</div>}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        )}
 
         <div className="row g-4">
           <section className="col-12 col-xxl-5">
@@ -796,17 +877,19 @@ export default function VerificationPage() {
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-white fw-semibold">Verification List</div>
               <div className="card-body">
-                <div className="row g-2 mb-3">
+                <FilterBar onReset={clearFilters}>
                   <div className="col-12 col-md-4">
+                    <label className="form-label small mb-1">Search</label>
                     <input
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search verification no / remarks"
+                      placeholder="Verification no / remarks"
                     />
                   </div>
                   <div className="col-12 col-md-2">
-                    <select className="form-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                    <label className="form-label small mb-1">Type</label>
+                    <select className="form-select form-select-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
                       <option value="">All types</option>
                       {verificationTypes.map((type) => (
                         <option key={type.value} value={type.value}>
@@ -816,7 +899,8 @@ export default function VerificationPage() {
                     </select>
                   </div>
                   <div className="col-12 col-md-2">
-                    <select className="form-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                    <label className="form-label small mb-1">Status</label>
+                    <select className="form-select form-select-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                       <option value="">All statuses</option>
                       {verificationStatuses.map((status) => (
                         <option key={status.value} value={status.value}>
@@ -826,7 +910,8 @@ export default function VerificationPage() {
                     </select>
                   </div>
                   <div className="col-12 col-md-2">
-                    <select className="form-select" value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
+                    <label className="form-label small mb-1">Department</label>
+                    <select className="form-select form-select-sm" value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
                       <option value="">All departments</option>
                       {lookups.departments.map((department) => (
                         <option key={department.id} value={department.id}>
@@ -836,7 +921,8 @@ export default function VerificationPage() {
                     </select>
                   </div>
                   <div className="col-12 col-md-2">
-                    <select className="form-select" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+                    <label className="form-label small mb-1">Project</label>
+                    <select className="form-select form-select-sm" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
                       <option value="">All projects</option>
                       {lookups["research-projects"].map((project) => (
                         <option key={project.id} value={project.id}>
@@ -845,114 +931,28 @@ export default function VerificationPage() {
                       ))}
                     </select>
                   </div>
-                </div>
+                </FilterBar>
 
-                <div className="table-responsive">
-                  <table className="table table-sm align-middle">
-                    <thead>
-                      <tr>
-                        <th>Verification</th>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Location Scope</th>
-                        <th>Status</th>
-                        <th>Items</th>
-                        <th className="text-end">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row) => (
-                        <tr key={row.id}>
-                          <td>
-                            <button className="btn btn-link p-0" onClick={() => toggleExpand(row.id)} type="button">
-                              <i className="bi bi-list me-2" />
-                              {row.verification_no}
-                            </button>
-                            <div className="small text-secondary">{row.remarks ?? "-"}</div>
-                          </td>
-                          <td>
-                            <div className="small">
-                              {row.start_date}
-                              {row.end_date ? ` to ${row.end_date}` : ""}
-                            </div>
-                          </td>
-                          <td>{row.verification_type}</td>
-                          <td>
-                            <div className="small">
-                              Dept: {lookupLabel("departments", row.department_id)}
-                              <br />
-                              Project: {lookupLabel("research-projects", row.project_id)}
-                            </div>
-                          </td>
-                          <td>
-                            <span
-                              className={`badge ${
-                                verificationStatuses.find((status) => status.value === row.status)?.className ?? "text-bg-secondary"
-                              }`}
-                            >
-                              {row.status.replace("_", " ")}
-                            </span>
-                          </td>
-                          <td>{row.items_count ?? 0}</td>
-                          <td className="text-end">
-                            <div className="btn-group">
-                              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(row.id)} title="View items">
-                                <i className="bi bi-eye" />
-                              </button>
-                              <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => deleteVerification(row.id)} title="Delete">
-                                <i className="bi bi-trash" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {rows.length === 0 ? (
+                  <EmptyState title="No verification records" message="No verification records match the current filters." icon="bi-clipboard-check" />
+                ) : (
+                  <DataTable columns={verificationColumns} rows={rows} />
+                )}
 
-                {expandedId && (
+                {selectedVerification ? (
                   <div className="mt-3">
-                    <h3 className="h6">Verification details for #{expandedId}</h3>
-                    {expandedLoading[expandedId] ? (
+                    <h3 className="h6">Verification details for #{selectedVerification.verification_no}</h3>
+                    {expandedLoading[selectedVerification.id] ? (
                       <div className="text-secondary">Loading details...</div>
                     ) : (
-                      <div className="table-responsive">
-                        <table className="table table-sm align-middle mb-0">
-                          <thead>
-                            <tr>
-                              <th>Item / Asset</th>
-                              <th>Expected Scope</th>
-                              <th>Found Scope</th>
-                              <th>Qty</th>
-                              <th>Status</th>
-                              <th>Remarks</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(expandedItems[expandedId] ?? []).map((item) => (
-                              <tr key={item.id}>
-                                <td>
-                                  {item.asset_id ? `Asset ${item.asset_id}` : `Item ${item.item_id ?? "-"}`}
-                                </td>
-                                <td>
-                                  {lookupLabel("departments", item.expected_department_id)} / {lookupLabel("rooms", item.expected_room_id)}
-                                </td>
-                                <td>
-                                  {lookupLabel("departments", item.found_department_id)} / {lookupLabel("rooms", item.found_room_id)}
-                                </td>
-                                <td>{item.expected_quantity ?? "-"} / {item.found_quantity ?? "-"}</td>
-                                <td>
-                                  <span className="badge text-bg-info">{item.verification_status}</span>
-                                </td>
-                                <td>{item.condition_remarks ?? "-"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <DataTable
+                        columns={expandedItemColumns}
+                        rows={expandedItems[selectedVerification.id] ?? []}
+                        empty="No detail rows returned by backend."
+                      />
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           </section>

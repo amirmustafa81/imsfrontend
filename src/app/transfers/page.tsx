@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "stores" | "items" | "funding-sources" | "research-projects";
 
@@ -385,57 +385,107 @@ export default function TransfersPage() {
     }
   };
 
+  const clearFilters = () => {
+    setSearch("");
+    setDepartmentFilter("");
+    setStoreFilter("");
+    setStatusFilter("");
+  };
+
+  const transferColumns = [
+    {
+      key: "transfer",
+      header: "Transfer",
+      render: (row: Transfer) => (
+        <>
+          <button className="btn btn-link p-0" onClick={() => toggleExpand(row.id)} type="button">
+            <i className="bi bi-list me-2" />
+            {row.transaction_no}
+          </button>
+          <div className="small text-secondary">{row.purpose ?? "-"}</div>
+        </>
+      ),
+    },
+    { key: "transaction_date", header: "Date", render: (row: Transfer) => row.transaction_date },
+    {
+      key: "flow",
+      header: "From / To",
+      render: (row: Transfer) => (
+        <div className="small">
+          <div>
+            <strong>From:</strong> {lookupLabel("departments", row.from_department_id)} / {lookupLabel("stores", row.from_store_id)}
+          </div>
+          <div>
+            <strong>To:</strong> {lookupLabel("departments", row.to_department_id)} / {lookupLabel("stores", row.to_store_id)}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row: Transfer) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      className: "text-end",
+      render: (row: Transfer) => (
+        <div className="btn-group">
+          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(row.id)} title="View items">
+            <i className="bi bi-eye" />
+          </button>
+          {row.status !== "posted" && (
+            <>
+              <button type="button" className="btn btn-sm btn-outline-success" onClick={() => postTransfer(row.id)} title="Post">
+                <i className="bi bi-upload" />
+              </button>
+              <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => deleteTransfer(row.id)} title="Delete">
+                <i className="bi bi-trash" />
+              </button>
+            </>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const expandedItemColumns = [
+    { key: "item", header: "Item", render: (item: TransferItem) => lookupLabel("items", item.item_id) },
+    { key: "asset", header: "Asset", render: (item: TransferItem) => item.asset_id ?? "-" },
+    { key: "qty", header: "Qty", render: (item: TransferItem) => item.quantity },
+    { key: "unitCost", header: "Unit Cost", render: (item: TransferItem) => item.unit_cost ?? "-" },
+    { key: "remarks", header: "Remarks", render: (item: TransferItem) => item.remarks ?? "-" },
+  ];
+
   return (
     <main className="min-vh-100 bg-body-tertiary p-4">
       <div className="container-fluid">
-        <Link href="/" className="btn btn-link px-0 mb-3">
-          <i className="bi bi-arrow-left me-2" />
-          Dashboard
-        </Link>
-
-        <div className="row g-3 mb-4">
-          <div className="col-12 col-xl-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">API Token</div>
-              <div className="card-body">
-                <label className="form-label small">Bearer token</label>
-                <div className="input-group">
-                  <input
-                    type="text"
-                    value={tmpToken}
-                    onChange={(e) => setTmpToken(e.target.value)}
-                    className="form-control"
-                    placeholder="Paste API token"
-                  />
-                  <button type="button" className="btn btn-outline-primary" onClick={submitToken}>
-                    Save token
-                  </button>
-                </div>
-              </div>
+        <PageHeader
+          title="Asset Transfers"
+          subtitle="Create internal transfer transactions and post to move stock between departments and stores."
+          actions={
+            <div className="d-flex gap-2">
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                value={tmpToken}
+                onChange={(e) => setTmpToken(e.target.value)}
+                placeholder="Paste API token"
+              />
+              <button className="btn btn-outline-primary btn-sm" type="button" onClick={submitToken}>
+                Save token
+              </button>
             </div>
-          </div>
+          }
+        />
 
-          <div className="col-12 col-xl-8">
-            <div className="row g-3">
-              <div className="col-12">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-body">
-                    <h1 className="h4 mb-3">Asset Transfers</h1>
-                    <p className="text-secondary mb-0">
-                      Create internal transfer transactions and post to move stock between departments and stores.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              {(message || error) && (
-                <div className="col-12">
-                  {message && <div className="alert alert-success mb-0">{message}</div>}
-                  {error && <div className="alert alert-danger mb-0">{error}</div>}
-                </div>
-              )}
-            </div>
+        {(message || error) && (
+          <div className="mb-4">
+            {message && <div className="alert alert-success py-2">{message}</div>}
+            {error && <div className="alert alert-danger py-2">{error}</div>}
           </div>
-        </div>
+        )}
 
         <div className="row g-4">
           <section className="col-12 col-xxl-5">
@@ -557,30 +607,19 @@ export default function TransfersPage() {
                     </div>
 
                     <div className="col-12">
-                      <label className="form-label">Manual approval reference</label>
-                      <input
-                        className="form-control"
-                        value={form.manual_approval_ref}
-                        onChange={(e) => setFormValue("manual_approval_ref", e.target.value)}
-                        placeholder="e.g. MO/2026/011"
-                      />
-                    </div>
-                    <div className="col-12 col-md-6">
-                      <label className="form-label">Manual approval date</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={form.manual_approval_date}
-                        onChange={(e) => setFormValue("manual_approval_date", e.target.value)}
-                      />
-                    </div>
-                    <div className="col-12 col-md-6">
-                      <label className="form-label">Manual approval by</label>
-                      <input
-                        className="form-control"
-                        value={form.manual_approved_by}
-                        onChange={(e) => setFormValue("manual_approved_by", e.target.value)}
-                        placeholder="Approver name"
+                      <ApprovalReferenceFields
+                        value={{
+                          ref: form.manual_approval_ref,
+                          authority: form.manual_approved_by,
+                          date: form.manual_approval_date,
+                          remarks: form.remarks,
+                        }}
+                        onChange={(value) => {
+                          setFormValue("manual_approval_ref", value.ref);
+                          setFormValue("manual_approved_by", value.authority);
+                          setFormValue("manual_approval_date", value.date);
+                          setFormValue("remarks", value.remarks);
+                        }}
                       />
                     </div>
                     <div className="col-12">
@@ -591,16 +630,6 @@ export default function TransfersPage() {
                         value={form.purpose}
                         onChange={(e) => setFormValue("purpose", e.target.value)}
                         placeholder="Transfer reason"
-                      />
-                    </div>
-                    <div className="col-12">
-                      <label className="form-label">Remarks</label>
-                      <textarea
-                        className="form-control"
-                        rows={2}
-                        value={form.remarks}
-                        onChange={(e) => setFormValue("remarks", e.target.value)}
-                        placeholder="Notes and comments"
                       />
                     </div>
                   </div>
@@ -717,17 +746,19 @@ export default function TransfersPage() {
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-white fw-semibold">Transfer List</div>
               <div className="card-body">
-                <div className="row g-2 mb-3">
+                <FilterBar onReset={clearFilters}>
                   <div className="col-12 col-md-4">
+                    <label className="form-label small mb-1">Search</label>
                     <input
-                      className="form-control"
-                      placeholder="Search transfer number / purpose / remarks"
+                      className="form-control form-control-sm"
                       value={search}
-                      onChange={(e) => setSearch(e.target.value)}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Transfer number / purpose / remarks"
                     />
                   </div>
                   <div className="col-12 col-md-2">
-                    <select className="form-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                    <label className="form-label small mb-1">Status</label>
+                    <select className="form-select form-select-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                       <option value="">All statuses</option>
                       <option value="draft">Draft</option>
                       <option value="posted">Posted</option>
@@ -735,7 +766,8 @@ export default function TransfersPage() {
                     </select>
                   </div>
                   <div className="col-12 col-md-3">
-                    <select className="form-select" value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
+                    <label className="form-label small mb-1">Department</label>
+                    <select className="form-select form-select-sm" value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}>
                       <option value="">All departments</option>
                       {lookups.departments.map((department) => (
                         <option key={department.id} value={department.id}>
@@ -745,7 +777,8 @@ export default function TransfersPage() {
                     </select>
                   </div>
                   <div className="col-12 col-md-3">
-                    <select className="form-select" value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)}>
+                    <label className="form-label small mb-1">Store</label>
+                    <select className="form-select form-select-sm" value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)}>
                       <option value="">All stores</option>
                       {lookups.stores.map((store) => (
                         <option key={store.id} value={store.id}>
@@ -754,67 +787,13 @@ export default function TransfersPage() {
                       ))}
                     </select>
                   </div>
-                </div>
+                </FilterBar>
 
-                <div className="table-responsive">
-                  <table className="table table-sm align-middle">
-                    <thead>
-                      <tr>
-                        <th>Transfer</th>
-                        <th>Date</th>
-                        <th>From / To</th>
-                        <th>Status</th>
-                        <th className="text-end">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row) => (
-                        <tr key={row.id}>
-                          <td>
-                            <button className="btn btn-link p-0" onClick={() => toggleExpand(row.id)} type="button">
-                              <i className="bi bi-list me-2" />
-                              {row.transaction_no}
-                            </button>
-                            <div className="small text-secondary">{row.purpose ?? "-"}</div>
-                          </td>
-                          <td>{row.transaction_date}</td>
-                          <td>
-                            <div className="small">
-                              <div>
-                                <strong>From:</strong> {lookupLabel("departments", row.from_department_id)} / {lookupLabel("stores", row.from_store_id)}
-                              </div>
-                              <div>
-                                <strong>To:</strong> {lookupLabel("departments", row.to_department_id)} / {lookupLabel("stores", row.to_store_id)}
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <span className={`badge ${row.status === "draft" ? "text-bg-warning" : row.status === "posted" ? "text-bg-success" : "text-bg-danger"}`}>
-                              {row.status}
-                            </span>
-                          </td>
-                          <td className="text-end">
-                            <div className="btn-group">
-                              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(row.id)} title="View items">
-                                <i className="bi bi-eye" />
-                              </button>
-                              {row.status !== "posted" && (
-                                <>
-                                  <button type="button" className="btn btn-sm btn-outline-success" onClick={() => postTransfer(row.id)} title="Post">
-                                    <i className="bi bi-upload" />
-                                  </button>
-                                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => deleteTransfer(row.id)} title="Delete">
-                                    <i className="bi bi-trash" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {rows.length === 0 ? (
+                  <EmptyState title="No transfers found" message="No records match the current filters." icon="bi-arrow-left-right" />
+                ) : (
+                  <DataTable columns={transferColumns} rows={rows} />
+                )}
 
                 {expandedId && (
                   <div className="mt-3">
@@ -822,30 +801,7 @@ export default function TransfersPage() {
                     {expandedLoading[expandedId] ? (
                       <div className="text-secondary">Loading items...</div>
                     ) : (
-                      <div className="table-responsive">
-                        <table className="table table-sm align-middle mb-0">
-                          <thead>
-                            <tr>
-                              <th>Item</th>
-                              <th>Asset</th>
-                              <th>Qty</th>
-                              <th>Unit Cost</th>
-                              <th>Remarks</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(expandedItems[expandedId] ?? []).map((item) => (
-                              <tr key={item.id}>
-                                <td>{lookupLabel("items", item.item_id)}</td>
-                                <td>{item.asset_id ?? "-"}</td>
-                                <td>{item.quantity}</td>
-                                <td>{item.unit_cost ?? "-"}</td>
-                                <td>{item.remarks ?? "-"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <DataTable columns={expandedItemColumns} rows={expandedItems[expandedId] ?? []} empty="No item rows returned by backend." />
                     )}
                   </div>
                 )}
