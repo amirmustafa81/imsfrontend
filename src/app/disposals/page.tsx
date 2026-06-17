@@ -740,7 +740,7 @@ export default function DisposalsPage() {
                                     </thead>
                                     <tbody>
                                       {(disposal.items ?? []).length ? (
-                                        disposal.items.map((disposalItem) => (
+                                        (disposal.items ?? []).map((disposalItem) => (
                                           <tr key={disposalItem.id}>
                                             <td>{renderAssetLabel(disposalItem.asset_id)}</td>
                                             <td>{toMoney(disposalItem.book_value)}</td>
