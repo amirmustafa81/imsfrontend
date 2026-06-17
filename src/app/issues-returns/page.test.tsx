@@ -179,6 +179,15 @@ const fillRequiredCommonFields = async (user: ReturnType<typeof userEvent.setup>
   await user.type(quantityInput, "2");
 };
 
+const getSelectValue = (labelText: RegExp | string): HTMLSelectElement => {
+  const control = getControlForLabel(labelText);
+  if (!(control instanceof HTMLSelectElement)) {
+    throw new Error(`Control for label "${String(labelText)}" is not a select.`);
+  }
+
+  return control;
+};
+
 describe("IssuesReturnsPage adjustment flow", () => {
   test("shows destination scope only for adjustment increase", async () => {
     const { user } = await renderPage();
@@ -292,6 +301,39 @@ describe("IssuesReturnsPage adjustment flow", () => {
       from_department_id: 2,
       from_store_id: 11,
       items: [expect.objectContaining({ item_id: 21, quantity: 2 })],
+    });
+  });
+
+  test("clears destination scope when switching adjustment from increase to decrease", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+    await user.selectOptions(getSelectValue(/to store/i), "11");
+
+    await user.click(screen.getByText(/decrease stock/i));
+    await user.click(screen.getByText(/increase stock/i));
+
+    await waitFor(() => {
+      expect(getSelectValue(/to department/i)).toHaveValue("");
+      expect(getSelectValue(/to store/i)).toHaveValue("");
+    });
+  });
+
+  test("clears source scope when switching adjustment from decrease to increase", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await user.click(screen.getByText(/decrease stock/i));
+    await user.selectOptions(getSelectValue(/from department/i), "2");
+    await user.selectOptions(getSelectValue(/from store/i), "11");
+
+    await user.click(screen.getByText(/increase stock/i));
+    await user.click(screen.getByText(/decrease stock/i));
+
+    await waitFor(() => {
+      expect(getSelectValue(/from department/i)).toHaveValue("");
+      expect(getSelectValue(/from store/i)).toHaveValue("");
     });
   });
 });
