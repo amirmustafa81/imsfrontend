@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "stores" | "items" | "research-projects";
 
@@ -86,19 +86,19 @@ type BatchForm = {
   use_range: boolean;
 };
 
-const batchStatusClass: Record<BatchStatus, string> = {
-  active: "text-bg-success",
-  closed: "text-bg-primary",
-  cancelled: "text-bg-danger",
+const toBatchStatusLabel = (status: BatchStatus) => {
+  if (status === "active") return "In Store";
+  if (status === "closed") return "Closed";
+  return "Cancelled";
 };
 
-const serialStatusClass: Record<SerialStatus, string> = {
-  in_stock: "text-bg-success",
-  issued: "text-bg-info",
-  consumed: "text-bg-secondary",
-  missing: "text-bg-warning",
-  cancelled: "text-bg-danger",
-  damaged: "text-bg-dark",
+const toSerialStatusLabel = (status: SerialStatus) => {
+  if (status === "in_stock") return "In Store";
+  if (status === "issued") return "Issued";
+  if (status === "consumed") return "Disposed";
+  if (status === "missing") return "Missing";
+  if (status === "damaged") return "Damaged";
+  return "Cancelled";
 };
 
 const serialActionLabels: Array<{ value: SerialAction; label: string }> = [
@@ -118,6 +118,10 @@ const serialActionClass: Record<SerialAction, string> = {
   mark_damaged: "text-bg-dark",
   cancel: "text-bg-danger",
 };
+
+const batchStatusOptions: BatchStatus[] = ["active", "closed", "cancelled"];
+
+const serialStatusOptions: SerialStatus[] = ["in_stock", "issued", "consumed", "missing", "cancelled", "damaged"];
 
 const defaultBatchForm: BatchForm = {
   batch_no: "",
@@ -502,24 +506,205 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
     }
   };
 
+  const batchColumns = [
+    {
+      key: "batch_no",
+      header: "Batch",
+      render: (batch: ControlledBatch) => (
+        <div>
+          <div className="fw-semibold">{batch.batch_no}</div>
+          <small className="text-secondary">{batch.serial_from} → {batch.serial_to}</small>
+        </div>
+      ),
+    },
+    {
+      key: "item_id",
+      header: "Item",
+      render: (batch: ControlledBatch) => <>{lookupLabel(lookups.items, batch.item_id)}</>,
+    },
+    {
+      key: "total_quantity",
+      header: "Quantity",
+      render: (batch: ControlledBatch) => (
+        <>
+          <span className="badge text-bg-light text-dark">Total: {batch.total_quantity}</span>
+          {batch.serials_count ? <span className="ms-2">Serial rows: {batch.serials_count}</span> : null}
+        </>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (batch: ControlledBatch) => <StatusBadge status={toBatchStatusLabel(batch.status)} />,
+    },
+    {
+      key: "department_store",
+      header: "Department/Store",
+      render: (batch: ControlledBatch) => (
+        <div>
+          <div>{lookupLabel(lookups.departments, batch.department_id)}</div>
+          <small className="text-secondary">{batch.store_id ? lookupLabel(lookups.stores, batch.store_id) : "-"}</small>
+        </div>
+      ),
+    },
+    {
+      key: "received_date",
+      header: "Received",
+      render: (batch: ControlledBatch) => <>{batch.received_date}</>,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      render: (batch: ControlledBatch) => (
+        <button className="btn btn-sm btn-outline-danger" type="button" onClick={() => deleteBatch(batch.id)}>
+          <i className="bi bi-trash3 me-1" />
+          Delete
+        </button>
+      ),
+    },
+  ];
+
+  const serialColumns = [
+    {
+      key: "serial_no",
+      header: "Serial",
+      render: (serial: ControlledSerial) => (
+        <div className="text-nowrap">
+          <div className="fw-semibold">{serial.serial_no}</div>
+          <small className="text-secondary">Batch ID {serial.batch_id}</small>
+        </div>
+      ),
+    },
+    {
+      key: "item",
+      header: "Item",
+      render: (serial: ControlledSerial) => <>{lookupLabel(lookups.items, serial.item_id)}</>,
+    },
+    {
+      key: "location",
+      header: "Location",
+      render: (serial: ControlledSerial) => (
+        <div>
+          <div>{lookupLabel(lookups.departments, serial.current_department_id)}</div>
+          <small className="text-secondary">{lookupLabel(lookups.stores, serial.current_store_id)}</small>
+        </div>
+      ),
+    },
+    {
+      key: "custodian",
+      header: "Custodian",
+      render: (serial: ControlledSerial) => <>{serial.issued_to_user_id ? `User ${serial.issued_to_user_id}` : "-"}</>,
+    },
+    {
+      key: "project",
+      header: "Project",
+      render: (serial: ControlledSerial) => <>{lookupLabel(lookups["research-projects"], serial.project_id)}</>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (serial: ControlledSerial) => <StatusBadge status={toSerialStatusLabel(serial.status)} />,
+    },
+    {
+      key: "action",
+      header: "Action",
+      className: "text-nowrap",
+      render: (serial: ControlledSerial) => {
+        const actionDraft = loadActionDraft(serial.id);
+
+        return (
+          <div>
+            <div className="d-flex gap-2 flex-wrap mb-2">
+              <select
+                className="form-select form-select-sm"
+                style={{ minWidth: 170 }}
+                value={actionDraft.action}
+                onChange={(event) => setSerialActionValue(serial.id, "action", event.target.value)}
+              >
+                {serialActionLabels.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                className={`btn btn-sm btn-outline-${serialActionClass[actionDraft.action].replace("text-bg-", "")}`}
+                type="button"
+                onClick={() => {
+                  void applySerialAction(serial);
+                }}
+                disabled={serialActionBusy[serial.id]}
+              >
+                {serialActionBusy[serial.id] ? "Applying..." : "Apply"}
+              </button>
+            </div>
+            <div className="d-flex gap-2 flex-wrap">
+              {actionDraft.action === "issue" ? (
+                <input
+                  className="form-control form-control-sm"
+                  style={{ minWidth: 180 }}
+                  placeholder="Issued to user ID"
+                  value={actionDraft.issued_to_user_id}
+                  onChange={(event) => setSerialActionValue(serial.id, "issued_to_user_id", event.target.value)}
+                />
+              ) : null}
+              <input
+                className="form-control form-control-sm"
+                style={{ minWidth: 180 }}
+                placeholder="Project ID (optional)"
+                value={actionDraft.project_id}
+                onChange={(event) => setSerialActionValue(serial.id, "project_id", event.target.value)}
+              />
+              <input
+                className="form-control form-control-sm"
+                style={{ minWidth: 180 }}
+                placeholder="To Department ID (optional)"
+                value={actionDraft.to_department_id}
+                onChange={(event) => setSerialActionValue(serial.id, "to_department_id", event.target.value)}
+              />
+            </div>
+            <input
+              className="form-control form-control-sm mt-2"
+              placeholder="Remarks"
+              value={actionDraft.remarks}
+              onChange={(event) => setSerialActionValue(serial.id, "remarks", event.target.value)}
+            />
+          </div>
+        );
+      },
+    },
+  ];
+
+  const resetBatchFilters = () => {
+    setBatchSearch("");
+    setBatchStatusFilter("");
+    setBatchItemFilter("");
+    setBatchDepartmentFilter("");
+    setBatchStoreFilter("");
+    setError("");
+    setMessage("Batch filters reset.");
+  };
+
+  const resetSerialFilters = () => {
+    setSerialSearch("");
+    setSerialStatusFilter("");
+    setSerialItemFilter("");
+    setSerialDepartmentFilter("");
+    setSerialStoreFilter("");
+    setError("");
+    setMessage("Serial filters reset.");
+  };
+
   return (
     <main className="min-vh-100 bg-body-tertiary p-4">
       <div className="container-fluid">
-        <Link href="/" className="btn btn-link px-0 mb-3">
-          <i className="bi bi-arrow-left me-2" />
-          Dashboard
-        </Link>
-
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-body p-4">
-            <h1 className="h3 mb-2">Controlled Stationery</h1>
-            <p className="text-secondary mb-3">
-              Track controlled stationery by batch and serial number for per-issue, consumption, return, missing, and damage actions.
-            </p>
-
-            <div className="row g-3 align-items-end">
-              <div className="col-sm-9">
-                <label htmlFor="token" className="form-label">
+        <PageHeader
+          title="Controlled Stationery"
+          subtitle="Track controlled stationery by batch and serial number for issue, consume, return, missing, and damage actions."
+          actions={
+            <form onSubmit={(event) => { event.preventDefault(); submitToken(); }} className="d-flex gap-2 align-items-end">
+              <div>
+                <label htmlFor="token" className="form-label small mb-1">
                   API Token
                 </label>
                 <input
@@ -527,21 +712,21 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                   value={tmpToken}
                   onChange={(event) => setTmpToken(event.target.value)}
                   type="password"
-                  className="form-control font-monospace"
+                  placeholder="Paste API token"
+                  className="form-control form-control-sm"
                 />
               </div>
-              <div className="col-sm-3">
-                <button className="btn btn-primary w-100" type="button" onClick={submitToken}>
-                  Save Token
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+              <button className="btn btn-primary" type="submit">
+                Save token
+              </button>
+            </form>
+          }
+        />
 
         {(message || error) && (
-          <div className={`alert ${error ? "alert-danger" : "alert-success"} mb-4`} role="alert">
-            {error || message}
+          <div className="mb-3">
+            {message ? <div className="alert alert-success mb-0">{message}</div> : null}
+            {error ? <div className="alert alert-danger mb-0">{error}</div> : null}
           </div>
         )}
 
@@ -797,154 +982,33 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
           </div>
 
           <div className="col-lg-7">
-            <div className="card border-0 shadow-sm mb-4">
-              <div className="card-body p-4">
-                <h2 className="h5 mb-3">Batch Filters</h2>
-                <div className="row g-2">
-                  <div className="col-md-4">
-                    <label className="form-label">Search</label>
-                    <input
-                      className="form-control"
-                      value={batchSearch}
-                      onChange={(event) => setBatchSearch(event.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-2">
-                    <label className="form-label">Status</label>
-                    <select className="form-select" value={batchStatusFilter} onChange={(event) => setBatchStatusFilter(event.target.value)}>
-                      <option value="">All</option>
-                      <option value="active">Active</option>
-                      <option value="closed">Closed</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
-                  </div>
-                  <div className="col-md-3">
-                    <label className="form-label">Item</label>
-                    <select className="form-select" value={batchItemFilter} onChange={(event) => setBatchItemFilter(event.target.value)}>
-                      <option value="">All</option>
-                      {lookups.items.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.item_code ? `${item.item_code} - ${item.name}` : `${item.id} - ${item.name}`}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-md-3">
-                    <label className="form-label">Department</label>
-                    <select
-                      className="form-select"
-                      value={batchDepartmentFilter}
-                      onChange={(event) => setBatchDepartmentFilter(event.target.value)}
-                    >
-                      <option value="">All</option>
-                      {lookups.departments.map((department) => (
-                        <option key={department.id} value={department.id}>
-                          {department.code} - {department.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-md-3">
-                    <label className="form-label">Store</label>
-                    <select className="form-select" value={batchStoreFilter} onChange={(event) => setBatchStoreFilter(event.target.value)}>
-                      <option value="">All</option>
-                      {lookups.stores.map((store) => (
-                        <option key={store.id} value={store.id}>
-                          {store.code ?? store.id} - {store.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="card border-0 shadow-sm mb-4">
-              <div className="card-body p-4">
-                <h2 className="h5 mb-3">Controlled Stationery Batches</h2>
-                <div className="table-responsive">
-                  <table className="table table-sm table-hover align-middle">
-                    <thead>
-                      <tr>
-                        <th>Batch</th>
-                        <th>Item</th>
-                        <th>Quantity</th>
-                        <th>Status</th>
-                        <th>Department/Store</th>
-                        <th>Received</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {batches.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="text-center text-secondary">
-                            No batch records.
-                          </td>
-                        </tr>
-                      ) : (
-                        batches.map((batch) => (
-                          <tr key={batch.id}>
-                            <td>
-                              <div className="fw-semibold">{batch.batch_no}</div>
-                              <small className="text-secondary">{batch.serial_from} → {batch.serial_to}</small>
-                            </td>
-                            <td>{lookupLabel(lookups.items, batch.item_id)}</td>
-                            <td>
-                              <span className="badge text-bg-light text-dark">Total: {batch.total_quantity}</span>
-                              {batch.serials_count ? <span className="ms-2">| Serial rows: {batch.serials_count}</span> : null}
-                            </td>
-                            <td>
-                              <span className={`badge ${batchStatusClass[batch.status]}`}>{batch.status}</span>
-                            </td>
-                            <td>
-                              <div>{lookupLabel(lookups.departments, batch.department_id)}</div>
-                              <small className="text-secondary">{batch.store_id ? lookupLabel(lookups.stores, batch.store_id) : "-"}</small>
-                            </td>
-                            <td>{batch.received_date}</td>
-                            <td>
-                              <button className="btn btn-sm btn-outline-danger" type="button" onClick={() => deleteBatch(batch.id)}>
-                                <i className="bi bi-trash3 me-1" />
-                                Delete
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-4">
-            <h2 className="h5 mb-3">Serials Filter & Actions</h2>
-            <div className="row g-2 mb-3">
-              <div className="col-md-3">
-                <label className="form-label">Search</label>
+            <FilterBar onReset={resetBatchFilters}>
+              <div className="col-12 col-md-4">
+                <label className="form-label small">Search</label>
                 <input
-                  className="form-control"
-                  value={serialSearch}
-                  onChange={(event) => setSerialSearch(event.target.value)}
+                  className="form-control form-control-sm"
+                  value={batchSearch}
+                  onChange={(event) => setBatchSearch(event.target.value)}
                 />
               </div>
-              <div className="col-md-2">
-                <label className="form-label">Status</label>
-                <select className="form-select" value={serialStatusFilter} onChange={(event) => setSerialStatusFilter(event.target.value)}>
+              <div className="col-12 col-md-3">
+                <label className="form-label small">Status</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={batchStatusFilter}
+                  onChange={(event) => setBatchStatusFilter(event.target.value)}
+                >
                   <option value="">All</option>
-                  {Object.keys(serialStatusClass).map((status) => (
+                  {batchStatusOptions.map((status) => (
                     <option key={status} value={status}>
-                      {status}
+                      {toBatchStatusLabel(status)}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="col-md-3">
-                <label className="form-label">Item</label>
-                <select className="form-select" value={serialItemFilter} onChange={(event) => setSerialItemFilter(event.target.value)}>
+              <div className="col-12 col-md-2">
+                <label className="form-label small">Item</label>
+                <select className="form-select form-select-sm" value={batchItemFilter} onChange={(event) => setBatchItemFilter(event.target.value)}>
                   <option value="">All</option>
                   {lookups.items.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -953,12 +1017,12 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                   ))}
                 </select>
               </div>
-              <div className="col-md-2">
-                <label className="form-label">Department</label>
+              <div className="col-12 col-md-3">
+                <label className="form-label small">Department</label>
                 <select
-                  className="form-select"
-                  value={serialDepartmentFilter}
-                  onChange={(event) => setSerialDepartmentFilter(event.target.value)}
+                  className="form-select form-select-sm"
+                  value={batchDepartmentFilter}
+                  onChange={(event) => setBatchDepartmentFilter(event.target.value)}
                 >
                   <option value="">All</option>
                   {lookups.departments.map((department) => (
@@ -968,9 +1032,9 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                   ))}
                 </select>
               </div>
-              <div className="col-md-2">
-                <label className="form-label">Store</label>
-                <select className="form-select" value={serialStoreFilter} onChange={(event) => setSerialStoreFilter(event.target.value)}>
+              <div className="col-12 col-md-2">
+                <label className="form-label small">Store</label>
+                <select className="form-select form-select-sm" value={batchStoreFilter} onChange={(event) => setBatchStoreFilter(event.target.value)}>
                   <option value="">All</option>
                   {lookups.stores.map((store) => (
                     <option key={store.id} value={store.id}>
@@ -979,112 +1043,69 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                   ))}
                 </select>
               </div>
-            </div>
+            </FilterBar>
 
-            <div className="table-responsive">
-              <table className="table table-sm table-hover align-middle">
-                <thead>
-                  <tr>
-                    <th>Serial</th>
-                    <th>Item</th>
-                    <th>Location</th>
-                    <th>Custodian</th>
-                    <th>Project</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                      {serials.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="text-center text-secondary">
-                        No serial records.
-                      </td>
-                    </tr>
-                      ) : (
-                        serials.map((serial) => {
-                          const actionDraft = loadActionDraft(serial.id);
-                          return (
-                        <tr key={serial.id}>
-                          <td className="text-nowrap">
-                            <div className="fw-semibold">{serial.serial_no}</div>
-                            <small className="text-secondary">Batch ID {serial.batch_id}</small>
-                          </td>
-                          <td>{lookupLabel(lookups.items, serial.item_id)}</td>
-                          <td>
-                            <div>{lookupLabel(lookups.departments, serial.current_department_id)}</div>
-                            <small className="text-secondary">{lookupLabel(lookups.stores, serial.current_store_id)}</small>
-                          </td>
-                          <td>{serial.issued_to_user_id ? `User ${serial.issued_to_user_id}` : "-"}</td>
-                          <td>{lookupLabel(lookups["research-projects"], serial.project_id)}</td>
-                          <td>
-                            <span className={`badge ${serialStatusClass[serial.status]}`}>{serial.status}</span>
-                          </td>
-                          <td>
-                            <div className="d-flex gap-2 flex-wrap mb-2">
-                              <select
-                                className="form-select form-select-sm"
-                                style={{ minWidth: 170 }}
-                                value={actionDraft.action}
-                                onChange={(event) => setSerialActionValue(serial.id, "action", event.target.value)}
-                              >
-                                {serialActionLabels.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                className={`btn btn-sm btn-outline-${serialActionClass[actionDraft.action].replace("text-bg-", "")}`}
-                                type="button"
-                                onClick={() => {
-                                  void applySerialAction(serial);
-                                }}
-                                disabled={serialActionBusy[serial.id]}
-                              >
-                                {serialActionBusy[serial.id] ? "Applying..." : "Apply"}
-                              </button>
-                            </div>
-                            <div className="d-flex gap-2 flex-wrap">
-                              {actionDraft.action === "issue" && (
-                                <input
-                                  className="form-control form-control-sm"
-                                  style={{ minWidth: 180 }}
-                                  placeholder="Issued to user ID"
-                                  value={actionDraft.issued_to_user_id}
-                                  onChange={(event) => setSerialActionValue(serial.id, "issued_to_user_id", event.target.value)}
-                                />
-                              )}
-                              <input
-                                className="form-control form-control-sm"
-                                style={{ minWidth: 180 }}
-                                placeholder="Project ID (optional)"
-                                value={actionDraft.project_id}
-                                onChange={(event) => setSerialActionValue(serial.id, "project_id", event.target.value)}
-                              />
-                              <input
-                                className="form-control form-control-sm"
-                                style={{ minWidth: 180 }}
-                                placeholder="To Department ID (optional)"
-                                value={actionDraft.to_department_id}
-                                onChange={(event) => setSerialActionValue(serial.id, "to_department_id", event.target.value)}
-                              />
-                            </div>
-                            <input
-                              className="form-control form-control-sm mt-2"
-                              placeholder="Remarks"
-                              value={actionDraft.remarks}
-                              onChange={(event) => setSerialActionValue(serial.id, "remarks", event.target.value)}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <h2 className="h5 mb-2">Controlled Stationery Batches</h2>
+            <DataTable columns={batchColumns} rows={batches} empty="No batch records." />
           </div>
+        </div>
+        <div className="mb-4">
+          <h2 className="h5 mb-2">Serials Filter & Actions</h2>
+          <FilterBar onReset={resetSerialFilters}>
+            <div className="col-12 col-md-3">
+              <label className="form-label small">Search</label>
+              <input className="form-control form-control-sm" value={serialSearch} onChange={(event) => setSerialSearch(event.target.value)} />
+            </div>
+            <div className="col-12 col-md-2">
+              <label className="form-label small">Status</label>
+              <select className="form-select form-select-sm" value={serialStatusFilter} onChange={(event) => setSerialStatusFilter(event.target.value)}>
+                <option value="">All</option>
+                {serialStatusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {toSerialStatusLabel(status)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-12 col-md-3">
+              <label className="form-label small">Item</label>
+              <select className="form-select form-select-sm" value={serialItemFilter} onChange={(event) => setSerialItemFilter(event.target.value)}>
+                <option value="">All</option>
+                {lookups.items.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.item_code ? `${item.item_code} - ${item.name}` : `${item.id} - ${item.name}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-12 col-md-2">
+              <label className="form-label small">Department</label>
+              <select
+                className="form-select form-select-sm"
+                value={serialDepartmentFilter}
+                onChange={(event) => setSerialDepartmentFilter(event.target.value)}
+              >
+                <option value="">All</option>
+                {lookups.departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.code} - {department.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-12 col-md-2">
+              <label className="form-label small">Store</label>
+              <select className="form-select form-select-sm" value={serialStoreFilter} onChange={(event) => setSerialStoreFilter(event.target.value)}>
+                <option value="">All</option>
+                {lookups.stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.code ?? store.id} - {store.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </FilterBar>
+          <DataTable columns={serialColumns} rows={serials} empty="No serial records." />
         </div>
       </div>
     </main>
