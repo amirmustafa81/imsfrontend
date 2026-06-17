@@ -318,8 +318,8 @@ export default function AssetsPage() {
   ];
 
   return (
-    <main className="min-vh-100 bg-body-tertiary p-4">
-      <div className="container-fluid">
+    <main className="min-vh-100 bg-body-tertiary">
+      <div className="container-fluid p-4">
         <PageHeader
           title="Fixed Asset Register"
           subtitle="View capitalized assets, tags, custody, locations, and status."

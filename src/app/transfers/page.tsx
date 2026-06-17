@@ -459,8 +459,8 @@ export default function TransfersPage() {
   ];
 
   return (
-    <main className="min-vh-100 bg-body-tertiary p-4">
-      <div className="container-fluid">
+    <main className="min-vh-100 bg-body-tertiary">
+      <div className="container-fluid p-4">
         <PageHeader
           title="Asset Transfers"
           subtitle="Create internal transfer transactions and post to move stock between departments and stores."

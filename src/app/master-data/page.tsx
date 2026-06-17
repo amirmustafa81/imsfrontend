@@ -633,8 +633,8 @@ export default function MasterDataPage() {
   ];
 
   return (
-    <main className="min-vh-100 bg-body-tertiary p-4">
-      <div className="container-fluid">
+    <main className="min-vh-100 bg-body-tertiary">
+      <div className="container-fluid p-4">
         <PageHeader
           title="Master Data Console"
           subtitle="Create, edit, and deactivate master records used across IMS modules."

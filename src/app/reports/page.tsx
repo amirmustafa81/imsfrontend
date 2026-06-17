@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { DataTable, ExportButtons, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, ExportButtons, FileAttachmentList, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type ReportType =
   | "controlled_stationery_batches"
@@ -63,6 +63,13 @@ type ReportFilters = Record<FilterKey, string>;
 type ReportColumn = {
   key: string;
   label: string;
+};
+
+type ExportArtifact = {
+  name: string;
+  size: string;
+  uploadedBy: string;
+  at: string;
 };
 
 type FilterSelectOption = {
@@ -841,6 +848,7 @@ export default function ReportsPage() {
     depreciation: { ...emptyFilters },
   });
   const [rows, setRows] = useState<RowData[]>([]);
+  const [exportArtifacts, setExportArtifacts] = useState<ExportArtifact[]>([]);
   const [message, setMessage] = useState("Load a report to begin.");
   const [error, setError] = useState("");
 
@@ -853,6 +861,9 @@ export default function ReportsPage() {
 
   const reportConfig = reportConfigs[activeReport];
   const currentFilters = filters[activeReport];
+  const addExportArtifact = useCallback((artifact: ExportArtifact) => {
+    setExportArtifacts((current) => [artifact, ...current].slice(0, 12));
+  }, []);
 
   const lookupLabel = useCallback((rows: RowData[], value: unknown, fallback?: string) => {
     if (value === null || value === undefined || value === "") return fallback ?? "-";
@@ -985,6 +996,12 @@ export default function ReportsPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(objectUrl);
+      addExportArtifact({
+        name: fileName,
+        size: `${Math.max(blob.size / 1024, 0).toFixed(1)} KB`,
+        uploadedBy: "System",
+        at: new Date().toLocaleString(),
+      });
       setMessage("CSV export download started.");
       setError("");
     } catch {
@@ -1045,11 +1062,19 @@ export default function ReportsPage() {
       </html>
     `;
 
+    const fileName = `ims_${activeReport}_${new Date().toISOString().slice(0, 19).replace(":", "-").replace(":", "-")}.pdf`;
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       setError("Unable to open print window. Check your browser pop-up settings.");
       return;
     }
+
+    addExportArtifact({
+      name: fileName,
+      size: "Generated",
+      uploadedBy: "System",
+      at: new Date().toLocaleString(),
+    });
 
     printWindow.document.open();
     printWindow.document.write(html);
@@ -1084,10 +1109,10 @@ export default function ReportsPage() {
 
   const renderFilterInput = (label: string, key: keyof ReportFilters, type: "text" | "number" = "text", min?: number) => (
     <div className="col-6 col-lg-2">
-      <label className="form-label">{label}</label>
+      <label className="form-label small">{label}</label>
       <input
         type={type}
-        className="form-control"
+        className="form-control form-control-sm"
         value={currentFilters[key]}
         onChange={(event) => updateFilter(key, event.target.value)}
         min={min}
@@ -1098,9 +1123,9 @@ export default function ReportsPage() {
 
   const renderLookupSelect = (label: string, key: keyof ReportFilters, rows: RowData[], emptyLabel: string, includeCode = true) => (
     <div className="col-6 col-lg-2">
-      <label className="form-label">{label}</label>
+      <label className="form-label small">{label}</label>
       <select
-        className="form-select"
+        className="form-select form-select-sm"
         value={currentFilters[key]}
         onChange={(event) => updateFilter(key, event.target.value)}
       >
@@ -1116,9 +1141,9 @@ export default function ReportsPage() {
 
   const renderStatusSelect = (label: string, options: FilterSelectOption[], field: keyof ReportFilters) => (
     <div className="col-6 col-lg-2">
-      <label className="form-label">{label}</label>
+      <label className="form-label small">{label}</label>
       <select
-        className="form-select"
+        className="form-select form-select-sm"
         value={currentFilters[field]}
         onChange={(event) => updateFilter(field, event.target.value)}
       >
@@ -1148,8 +1173,8 @@ export default function ReportsPage() {
   );
 
   return (
-    <main className="min-vh-100 bg-body-tertiary p-4">
-      <div className="container-fluid">
+    <main className="min-vh-100 bg-body-tertiary">
+      <div className="container-fluid p-4">
         <PageHeader
           title="Reports"
           subtitle={reportConfig.subtitle}
@@ -1276,7 +1301,14 @@ export default function ReportsPage() {
             renderStatusSelect("Receipt Type", reportConfig.filters.receiptTypeFilter.options, reportConfig.filters.receiptTypeFilter.field)}
         </FilterBar>
 
-        <DataTable columns={tableColumns} rows={rows} empty="No rows found." />
+        <div className="row g-3">
+          <div className="col-12">
+            <DataTable columns={tableColumns} rows={rows} empty="No rows found." />
+          </div>
+          <div className="col-12">
+            <FileAttachmentList files={exportArtifacts} />
+          </div>
+        </div>
       </div>
     </main>
   );

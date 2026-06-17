@@ -252,8 +252,8 @@ export default function DepreciationPage() {
   ];
 
   return (
-    <main className="min-vh-100 bg-body-tertiary p-4">
-      <div className="container-fluid">
+    <main className="min-vh-100 bg-body-tertiary">
+      <div className="container-fluid p-4">
         <PageHeader
           title="Depreciation"
           subtitle="Review straight-line depreciation entries, period totals, and run status by asset."

@@ -512,8 +512,8 @@ export default function InventoryReceiptsPage() {
   };
 
   return (
-    <main className="min-vh-100 bg-body-tertiary p-4">
-      <div className="container-fluid">
+    <main className="min-vh-100 bg-body-tertiary">
+      <div className="container-fluid p-4">
         <PageHeader
           title="Receipts / GRN"
           subtitle="Create and post goods receipts"

@@ -450,8 +450,8 @@ export default function DisposalsPage() {
   const selectedDisposal = expandedId === null ? null : disposals.find((disposal) => disposal.id === expandedId) ?? null;
 
   return (
-    <main className="min-vh-100 bg-body-tertiary p-4">
-      <div className="container-fluid">
+    <main className="min-vh-100 bg-body-tertiary">
+      <div className="container-fluid p-4">
         <PageHeader
           title="Asset Disposals"
           subtitle="Create disposal proposals and post disposal transactions with approval metadata."

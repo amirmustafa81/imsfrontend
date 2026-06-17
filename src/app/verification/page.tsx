@@ -534,8 +534,8 @@ export default function VerificationPage() {
   const selectedVerification = expandedId === null ? null : rows.find((verification) => verification.id === expandedId) ?? null;
 
   return (
-    <main className="min-vh-100 bg-body-tertiary p-4">
-      <div className="container-fluid">
+    <main className="min-vh-100 bg-body-tertiary">
+      <div className="container-fluid p-4">
         <PageHeader
           title="Physical Verification"
           subtitle="Create verification rounds and record item/asset discrepancies for audit trail."

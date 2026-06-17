@@ -2,67 +2,49 @@
 
 ## Objective
 
-Align all active IMS screens with the Loveable source-of-truth system in:
+Use `DESIGN_SYSTEM.md` and `COMPONENT_INVENTORY.md` as implementation source and align all IMS screens under `src/app` while preserving business logic and routes.
 
-- `DESIGN_SYSTEM.md`
-- `COMPONENT_INVENTORY.md`
+## Current implementation status (high confidence)
 
-while keeping business logic, routes, and API behavior unchanged.
-
-## Current implementation
-
-### Completed alignment
-
-- Shell and page entry structure is standardized via `layout.tsx`, `PageHeader`, shared spacing, and card grouping.
-- Shared components now used broadly:
-  - `PageHeader` in all pages
-  - `FilterBar` in all filter-heavy pages
-  - `DataTable` for all operational lists
-  - `StatusBadge` in all status-heavy views
-  - `EmptyState` for list-level empties
-  - `ApprovalReferenceFields` in transactional approval flows
-  - `ExportButtons` in reports export view
-- Expanded item/detail tables in active modules use `DataTable`, including `inventory-receipts/page.tsx`.
-- Dashboard status rendering has been moved to `StatusBadge`.
-
-### Remaining gaps
-
-- `controlled-stationery/page.tsx` still contains a helper-driven action-color map (`serialActionClass`) and one non-standard badge style (`text-bg-light`) for quantity summary.
-- `Timeline` and `FileAttachmentList` are not yet mapped to active flows.
+- The shared component model (`PageHeader`, `FilterBar`, `DataTable`, `StatusBadge`, `EmptyState`, `KpiCard`, `Timeline`, `ApprovalReferenceFields`, `ExportButtons`) is present and used in most production pages.
+- IA shell and navigation are centralized in `src/components/ims/shell.tsx`.
+- Remaining implementation gap is now limited to:
+  1. Layout wrapper consistency (`p-4` placement),
+  2. `reports` filter control density,
+  3. `FileAttachmentList` adoption in an active route.
 
 ## Gap matrix
 
-| Item | Current implementation | Target pattern | Affected files | Priority | Effort | Recommended fix |
+| Gap | Current pattern | Target pattern | Affected files | Priority | Effort | Recommended fix |
 | --- | --- | --- | --- | --- | --- | --- |
-| Shell spacing consistency | Minor variation (`p-4` on container in dashboard page only) | Optional full-page pattern standardization | `src/app/page.tsx` | Low | Very low | Optional: move/normalize spacing if strict parity is required. |
-| Action button semantics | Local action color map plus one neutral badge helper | Keep business semantics, but align to shared utility tone map | `src/app/controlled-stationery/page.tsx` | Medium | Low | Replace custom summary badge tone and map action styles to explicit `btn-outline-*` classes. |
-| Component coverage | `Timeline` / `FileAttachmentList` not yet used in live flows | Adopt when corresponding flows are implemented | `N/A` (future) | Medium | Medium (on feature introduction) | Add in future stories where timeline/attachment UI is required; add tests and docs at that time. |
-| Table source consistency | Non-UI report export creates `<table>` HTML string | Keep for export only | `src/app/reports/page.tsx` | Low | None | No code change needed; this is not a UI table component. |
+| Top-level spacing is inconsistent | Many pages apply `p-4` on `<main>` and only `container-fluid` on wrapper | Normalize to `main.min-vh-100.bg-body-tertiary` + `container-fluid.p-4` like dashboard and audit log | `src/app/assets/page.tsx`, `src/app/controlled-stationery/page.tsx`, `src/app/depreciation/page.tsx`, `src/app/disposals/page.tsx`, `src/app/inventory-receipts/page.tsx`, `src/app/issues-returns/page.tsx`, `src/app/master-data/page.tsx`, `src/app/reports/page.tsx`, `src/app/stock/page.tsx`, `src/app/tag-print-log/page.tsx`, `src/app/verification/page.tsx`, `src/app/transfers/page.tsx`, `src/app/it-assets/page.tsx`, `src/app/projects/page.tsx`, `src/app/lab/page.tsx`, `src/app/import/page.tsx`, `src/app/items/page.tsx`, `src/app/export-history/page.tsx` | Medium | Low | Update classnames for these routes; no logic changes. |
+| Filter controls in reports are larger than design | `renderFilterInput()` uses `form-control` and `renderLookupSelect()` uses `form-select` | Use compact `form-control-sm` and `form-select-sm` inside report `FilterBar` | `src/app/reports/page.tsx` | High | Low | Switch control classes; keep same event handlers and payload builder. |
+| `FileAttachmentList` not used | No route currently renders `FileAttachmentList` | Render it where report artifacts are generated/attached | `src/app/reports/page.tsx` | Medium | Low | Add a local attachment-history state and render `<FileAttachmentList files={...} />` alongside export action outcomes. |
 
-## Recommended staged implementation
+## Refactor plan
 
-### Stage 1 (Complete)
+### Stage 1 (Safety + Visibility)
 
-1. Audit current pages against the design contracts.
-2. Refactor active screens to shared layout primitives (`PageHeader`, `FilterBar`, `DataTable`, `StatusBadge`, `EmptyState`, `ApprovalReferenceFields`).
-3. Verify with lint/typecheck.
+- Keep `DESIGN_SYSTEM.md` and `COMPONENT_INVENTORY.md` as immutable.
+- Update spacing classes on identified screens to enforce a single top-level padding contract.
+- Reduce report filter control density to match shared `FilterBar` style.
 
-### Stage 2 (Polish)
+### Stage 2 (Component coverage completion)
 
-1. Tidy remaining helper-driven visual exceptions in `controlled-stationery/page.tsx` if strict visual parity is required.
-2. Keep business behavior and endpoints untouched.
+- Add shared `FileAttachmentList` usage in reports, using export actions to append an attachment metadata row (filename/size/uploader/time).
+- Keep component read-only behavior and local-only state so API contracts are not changed.
 
-### Stage 3 (Future adoption)
+### Stage 3 (Validation)
 
-1. Wire `Timeline` where chronological audit/action streams are presented.
-2. Wire `FileAttachmentList` when attachments become mandatory for a live IMS workflow.
+- Run `npm run lint` and `npm run typecheck`.
+- Re-open audit matrix and confirm no other pages deviate from the new layout contract.
+- Re-generate `IMS_UI_AUDIT.md` if any new modules are added.
 
-## Verification plan
+## Verification checklist
 
-- Re-run `npm run lint` and `npm run typecheck` after each stage.
-- For each page in IA scope, confirm:
-  - shell + header pattern
-  - shared components for tables/filters/status
-  - existing API/form logic preserved
-  - no route changes
+- `DESIGN_SYSTEM.md` tokens and patterns remain source of truth (no custom semantic colors introduced).
+- No route adds new business API logic.
+- No new route-level top bars or side navigation components.
+- Shared components are preferred over local equivalents.
+- Every active route uses shell-consistent spacing and shared patterns above.
 

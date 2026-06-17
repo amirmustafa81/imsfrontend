@@ -613,8 +613,8 @@ export default function IssuesReturnsPage() {
   ];
 
   return (
-    <main className="min-vh-100 bg-body-tertiary p-4">
-      <div className="container-fluid">
+    <main className="min-vh-100 bg-body-tertiary">
+      <div className="container-fluid p-4">
         <PageHeader
           title="Issue / Return / Transfer / Adjustment"
           subtitle="Create stock movement vouchers and post to update balances for issue, return, transfer, adjustment, and consumption."
