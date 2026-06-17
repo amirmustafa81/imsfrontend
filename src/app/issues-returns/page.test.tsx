@@ -159,6 +159,26 @@ const getInputByLabel = (labelText: RegExp | string): HTMLInputElement => {
   return control;
 };
 
+const getItemSelect = () => {
+  const itemLabel = screen.getByText(/^Item$/i);
+  const itemSelect = itemLabel.parentElement?.querySelector("select");
+  if (!itemSelect) throw new Error("Item select not found");
+  return itemSelect;
+};
+
+const fillRequiredCommonFields = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.type(getInputByLabel(/transaction no/i), "INV-01");
+  await user.selectOptions(getItemSelect(), "21");
+
+  const quantityInput = getControlForLabel(/quantity/i);
+  if (!quantityInput || !(quantityInput instanceof HTMLInputElement)) {
+    throw new Error("Quantity input not found");
+  }
+
+  await user.clear(quantityInput);
+  await user.type(quantityInput, "2");
+};
+
 describe("IssuesReturnsPage adjustment flow", () => {
   test("shows destination scope only for adjustment increase", async () => {
     const { user } = await renderPage();
@@ -189,21 +209,12 @@ describe("IssuesReturnsPage adjustment flow", () => {
     const { user } = await renderPage();
 
     await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
-    await user.type(getInputByLabel(/transaction no/i), "INV-001");
-    const itemSelect = screen.getByText("Item").parentElement?.querySelector("select");
-    if (!itemSelect) throw new Error("Item select not found");
-    await user.selectOptions(itemSelect, "21");
-    const quantityInput = getControlForLabel(/quantity/i);
-    if (!quantityInput || !(quantityInput instanceof HTMLInputElement)) {
-      throw new Error("Quantity input not found");
-    }
-    await user.clear(quantityInput);
-    await user.type(quantityInput, "2");
+    await fillRequiredCommonFields(user);
 
     await user.click(screen.getByRole("button", { name: /save transaction/i }));
 
     await waitFor(() => {
-    expect(screen.getByText(/please complete to department id for adjustment/i)).toBeInTheDocument();
+      expect(screen.getByText(/please complete to department id for adjustment/i)).toBeInTheDocument();
     });
 
     expect(mockedApi.post).not.toHaveBeenCalled();
@@ -214,23 +225,73 @@ describe("IssuesReturnsPage adjustment flow", () => {
 
     await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
     await user.click(screen.getByText(/decrease stock/i));
-    await user.type(getInputByLabel(/transaction no/i), "INV-002");
-    const itemSelect = screen.getByText("Item").parentElement?.querySelector("select");
-    if (!itemSelect) throw new Error("Item select not found");
-    await user.selectOptions(itemSelect, "21");
-    const quantityInput = getControlForLabel(/quantity/i);
-    if (!quantityInput || !(quantityInput instanceof HTMLInputElement)) {
-      throw new Error("Quantity input not found");
-    }
-    await user.clear(quantityInput);
-    await user.type(quantityInput, "3");
+    await fillRequiredCommonFields(user);
 
     await user.click(screen.getByRole("button", { name: /save transaction/i }));
 
     await waitFor(() => {
-    expect(screen.getByText(/please complete from department id for adjustment/i)).toBeInTheDocument();
+      expect(screen.getByText(/please complete from department id for adjustment/i)).toBeInTheDocument();
     });
 
     expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
+  test("submits adjustment increase with destination scope and item row payload", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getControlForLabel(/to department/i) as HTMLSelectElement, "2");
+    await user.selectOptions(getControlForLabel(/to store/i) as HTMLSelectElement, "11");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/transaction saved with id/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledTimes(1);
+    const [url, payload] = mockedApi.post.mock.calls[0];
+    expect(url).toBe("/inventory-transactions");
+    expect(payload).toMatchObject({
+      transaction_type: "adjustment",
+      to_department_id: 2,
+      to_store_id: 11,
+      from_department_id: null,
+      from_store_id: null,
+      items: [
+        expect.objectContaining({
+          item_id: 21,
+          quantity: 2,
+        }),
+      ],
+    });
+  });
+
+  test("submits adjustment decrease with source scope and item row payload", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await user.click(screen.getByText(/decrease stock/i));
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getControlForLabel(/from department/i) as HTMLSelectElement, "2");
+    await user.selectOptions(getControlForLabel(/from store/i) as HTMLSelectElement, "11");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/transaction saved with id/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledTimes(1);
+    const [, payload] = mockedApi.post.mock.calls[0];
+    expect(payload).toMatchObject({
+      transaction_type: "adjustment",
+      to_department_id: null,
+      to_store_id: null,
+      from_department_id: 2,
+      from_store_id: 11,
+      items: [expect.objectContaining({ item_id: 21, quantity: 2 })],
+    });
   });
 });
