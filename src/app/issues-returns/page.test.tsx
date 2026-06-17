@@ -204,6 +204,35 @@ const getSelectValue = (labelText: RegExp | string): HTMLSelectElement => {
 };
 
 describe("IssuesReturnsPage adjustment flow", () => {
+  test("shows adjustment scope hint based on direction", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+
+    expect(screen.getByText(/Adjustment increase uses destination department\/store only\./i)).toBeInTheDocument();
+
+    await user.click(screen.getByText(/decrease stock/i));
+    expect(screen.getByText(/Adjustment decrease uses source department\/store only\./i)).toBeInTheDocument();
+  });
+
+  test("resets previous scope when changing adjustment direction and validates new required scope", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+    await user.selectOptions(getSelectValue(/to store/i), "11");
+
+    await user.click(screen.getByText(/decrease stock/i));
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/please complete from department id for adjustment/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
   test("shows destination scope only for adjustment increase", async () => {
     const { user } = await renderPage();
 
