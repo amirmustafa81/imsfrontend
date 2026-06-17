@@ -53,8 +53,8 @@ const NAV_GROUPS: SidebarGroup[] = [
     items: [
       { label: "Physical Verification", href: "/verification", icon: "bi-clipboard-check" },
       { label: "Disposal / Write-Off", href: "/disposals", icon: "bi-trash3" },
-      { label: "Asset Investigations", href: "/asset-investigations", icon: "bi-search", planned: true },
-      { label: "Maintenance Records", href: "/maintenance-records", icon: "bi-tools", planned: true },
+      { label: "Asset Investigations", href: "/asset-investigations", icon: "bi-search" },
+      { label: "Maintenance Records", href: "/maintenance-records", icon: "bi-tools" },
       { label: "Asset Movements", href: "/asset-movements", icon: "bi-arrow-up-right-circle" },
       { label: "Audit Log", href: "/audit-logs", icon: "bi-shield-check" },
     ],
