@@ -3,6 +3,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import "./globals.css";
 import { ImsShell } from "@/components/ims/shell";
+import { AuthProvider } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "UOH Inventory Management System",
@@ -17,7 +18,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <ImsShell>{children}</ImsShell>
+        <AuthProvider>
+          <ImsShell>{children}</ImsShell>
+        </AuthProvider>
       </body>
     </html>
   );

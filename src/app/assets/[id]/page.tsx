@@ -162,9 +162,11 @@ export default function AssetDetailPage() {
     }
   }, [authHeaders, id, token]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     void loadAsset();
   }, [loadAsset]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const movementRows = useMemo(() => movementResponseSearch(movements, search), [movements, search]);
 

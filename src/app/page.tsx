@@ -190,17 +190,18 @@ const sortByNewest = <T,>(rows: T[], getter: (row: T) => string | null | undefin
 export default function Home() {
   const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [loading, setLoading] = useState(false);
-  const [dashboardError, setDashboardError] = useState("");
+  const [dashboardError, setDashboardError] = useState(() =>
+    token ? "" : "Dashboard metrics need a valid API token in local storage.",
+  );
   const [metrics, setMetrics] = useState<DashboardMetric[]>(DEFAULT_METRICS);
   const [departmentCounts, setDepartmentCounts] = useState<DepartmentCount[]>([]);
   const [lowStockRows, setLowStockRows] = useState<LowStockTableRow[]>([]);
   const [recentReceiptRows, setRecentReceiptRows] = useState<ReceiptTableRow[]>([]);
   const [recentMovementRows, setRecentMovementRows] = useState<MovementTableRow[]>([]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!token) {
-      setDashboardError("Dashboard metrics need a valid API token in local storage.");
-      setMetrics(DEFAULT_METRICS);
       return;
     }
 
@@ -467,6 +468,7 @@ export default function Home() {
       active = false;
     };
   }, [token]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const maxDepartmentCount = Math.max(...departmentCounts.map((row) => row.count), 1);
 

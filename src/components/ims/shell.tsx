@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useState } from "react";
-import { usePathname } from "next/navigation";
+import { type ReactNode, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 
 type SidebarItem = {
   label: string;
@@ -85,13 +86,48 @@ const NAV_GROUPS: SidebarGroup[] = [
 
 export function ImsShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { isAuthenticated, loading, logout, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [workspace, setWorkspace] = useState("Administration");
 
+  const isLoginPage = pathname === "/login";
   const isActive = (href: string) => pathname === href;
 
-  const roleLabel = "Super Admin";
-  const userName = "admin";
+  const roleLabel = user?.roles?.[0]?.name ?? "User";
+  const userName = user?.name ?? "User";
+  const initials = userName
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "U";
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated && !isLoginPage) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, isLoginPage, loading, router]);
+
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
+
+  if (loading || !isAuthenticated) {
+    return (
+      <main className="min-vh-100 d-flex align-items-center justify-content-center bg-body-tertiary">
+        <div className="text-center">
+          <div className="spinner-border text-primary mb-3" role="status" />
+          <div className="fw-semibold">Loading IMS workspace...</div>
+        </div>
+      </main>
+    );
+  }
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace("/login");
+  };
 
   return (
     <div className="ims-shell min-vh-100 text-body">
@@ -165,11 +201,11 @@ export function ImsShell({ children }: { children: ReactNode }) {
               <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">3</span>
             </button>
 
-            <button className="ims-user-menu btn border-0 d-flex align-items-center gap-2" type="button">
-              <span className="ims-avatar">AD</span>
+            <button className="ims-user-menu btn border-0 d-flex align-items-center gap-2" type="button" onClick={handleLogout}>
+              <span className="ims-avatar">{initials}</span>
               <span className="text-start lh-sm">
                 <span className="fw-semibold d-block">{userName}</span>
-                <span className="small text-secondary">{roleLabel}</span>
+                <span className="small text-secondary">{roleLabel} - Logout</span>
               </span>
               <i className="bi bi-caret-down-fill small" />
             </button>
