@@ -14,11 +14,11 @@ export function PageHeader({
   breadcrumbs?: { label: string; to?: string }[];
 }) {
   return (
-    <div className="mb-3 d-flex flex-wrap justify-content-between align-items-end gap-2 border-bottom pb-2">
+    <div className="ims-page-header mb-3 d-flex flex-wrap justify-content-between align-items-end gap-2 border-bottom pb-3">
       <div>
         {breadcrumbs && breadcrumbs.length > 0 ? (
           <nav aria-label="breadcrumb">
-            <ol className="breadcrumb mb-1 small">
+            <ol className="breadcrumb ims-breadcrumb mb-2">
               {breadcrumbs.map((item, index) => (
                 <li
                   key={`${item.label}-${index}`}
@@ -31,8 +31,8 @@ export function PageHeader({
           </nav>
         ) : null}
 
-        <h4 className="mb-0 fw-semibold">{title}</h4>
-        {subtitle ? <div className="text-secondary small">{subtitle}</div> : null}
+        <h1 className="h2 mb-1 fw-bold">{title}</h1>
+        {subtitle ? <div className="text-secondary fs-6">{subtitle}</div> : null}
       </div>
 
       {actions ? <div className="d-flex gap-2">{actions}</div> : null}
@@ -144,7 +144,7 @@ const normalizeStatus = (status: string) => {
 
 export function StatusBadge({ status }: { status: string }) {
   const display = normalizeStatus(status);
-  return <span className={`badge ${STATUS_TONES[display] ?? "bg-secondary"}`}>{display}</span>;
+  return <span className={`badge rounded-pill ${STATUS_TONES[display] ?? "bg-secondary"}`}>{display}</span>;
 }
 
 export function EmptyState({
@@ -183,9 +183,9 @@ export function PhaseTwoStub({ title, description }: { title: string; descriptio
 
 export function FilterBar({ children, onReset }: { children: ReactNode; onReset?: () => void }) {
   return (
-    <div className="card border-0 shadow-sm mb-3">
-      <div className="card-body py-2">
-        <div className="row g-2 align-items-end">
+    <div className="card border-0 shadow-sm mb-3 ims-filter-card">
+      <div className="card-body p-3">
+        <div className="row g-3 align-items-end">
           {children}
           {onReset ? (
             <div className="col-auto">
@@ -205,16 +205,18 @@ export function DataTable<T extends Record<string, unknown>>({
   columns,
   rows,
   empty = "No records.",
+  rowClassName,
 }: {
   columns: { key: string; header: string; render?: (row: T) => ReactNode; className?: string }[];
   rows: T[];
   empty?: string;
+  rowClassName?: (row: T, index: number) => string;
 }) {
   return (
-    <div className="card border-0 shadow-sm">
+    <div className="card border-0 shadow-sm ims-table-card">
       <div className="table-responsive">
-        <table className="table table-sm table-hover mb-0 align-middle">
-          <thead className="table-light">
+        <table className="table table-sm table-hover mb-0 align-middle ims-data-table">
+          <thead>
             <tr>
               {columns.map((column) => (
                 <th className={column.className} key={column.key}>
@@ -233,7 +235,7 @@ export function DataTable<T extends Record<string, unknown>>({
               </tr>
             ) : (
               rows.map((row, index) => (
-                <tr key={`${row.id ?? index}`}>
+                <tr className={rowClassName?.(row, index)} key={`${row.id ?? index}`}>
                   {columns.map((column) => (
                     <td className={column.className} key={column.key}>
                       {column.render ? column.render(row) : (row[column.key] as ReactNode)}

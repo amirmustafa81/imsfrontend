@@ -54,6 +54,20 @@ The global theme is token-driven in `globals.css` under `:root` and `.dark`.
 - Sidebar border: `--sidebar-border` (`oklch(0.929 0.013 255.508)`)
 - Sidebar ring: `--sidebar-ring` (`oklch(0.704 0.04 256.788)`)
 
+### Accepted IMS shell tokens
+
+The accepted prototype uses additional named IMS tokens in `globals.css`; use these
+instead of one-off colors when building shell/table experiences:
+
+- Shell background: `--ims-shell-bg` (`#f3f5f9`)
+- Sidebar background: `--ims-sidebar-bg` (`#162b49`)
+- Sidebar border: `--ims-sidebar-border` (`#243957`)
+- Sidebar muted text: `--ims-sidebar-muted` (`#95a3b8`)
+- Sidebar active blue: `--ims-sidebar-active` (`#2f6df6`)
+- Brand accent: `--ims-brand-accent` (`#f6c343`)
+- Table border: `--ims-table-border` (`#d9dee7`)
+- Selected row: `--ims-row-active` (`#e7e7e7`)
+
 ### Dark theme
 
 `globals.css` defines dark-mode variants for each token under `.dark`.  
@@ -86,7 +100,7 @@ Bootstrap or existing utility behavior.
 - Secondary: `--secondary` + bootstrap secondary variants
 - Muted: muted text and section labels via `text-secondary`
 - Destructive: `btn btn-danger`, `text-bg-danger`, `bg-danger`
-- Sidebar: `--color-sidebar` etc are mapped in shell via white backgrounds and bootstrap list states
+- Sidebar: accepted IMS shell uses `--ims-sidebar-bg`, muted nav labels, and `--ims-sidebar-active`
 
 ## 4. Typography and Bootstrap utility usage
 
@@ -107,9 +121,9 @@ Bootstrap or existing utility behavior.
 
 Standard pages use:
 
-- `main` with `min-vh-100 bg-body-tertiary` (often plus `p-4`)
-- optional `container-fluid` wrapper
-- `PageHeader` at top with `title`, optional `subtitle`, optional right-side `actions`
+- `main` with `min-vh-100 bg-body-tertiary`
+- `container-fluid p-4` wrapper
+- `PageHeader` at top with optional breadcrumbs, `title`, optional `subtitle`, optional right-side `actions`
 - one or two-column row layout:
   - action / form cards left
   - table/list cards right
@@ -120,25 +134,26 @@ Standard pages use:
 Implemented in `/Users/amirmustafa/Documents/inventory/imsfrontend/src/components/ims/shell.tsx`:
 
 - Top bar:
-  - `header.bg-white.border-bottom`
-  - left: collapse button + logo link
-  - right: user label, role badge, department `<select>`, utility buttons
+  - `header.ims-topbar`
+  - left: sidebar toggle and global search (`Search items, assets, tags, GRN...`)
+  - right: workspace `<select>`, notification button with count badge, user avatar/menu
 - Side navigation:
-  - fixed `<aside>` width `250px` or `72px` when collapsed
-  - grouped sections (`Operations`, `Inventory`, `Assets`, ... `System`)
-  - planned items use muted list item with `Planned` badge
-  - active links use `active text-bg-primary text-white`
-- Main content area: fills remainder width with `main.flex-grow-1`
+  - fixed dark `<aside class="ims-sidebar">` width `252px` or `72px` when collapsed
+  - grouped sections (`Operations`, `Inventory`, `Assets`, `Specialized`, `Compliance`, `Reports & Docs`, `Administration`)
+  - brand block uses yellow building icon and `UoH IMS / Inventory Management`
+  - active links use `--ims-sidebar-active` blue
+- Main content area: `ims-main` with `ims-content` grey workspace
 
 ## 7. Table style
 
 - Shared table component: `DataTable`
 - Markup pattern:
-  - card wrapper: `card border-0 shadow-sm`
+  - card wrapper: `card border-0 shadow-sm ims-table-card`
   - responsive container: `table-responsive`
-  - table: `table table-sm table-hover mb-0 align-middle`
-  - header: `thead.table-light`
+  - table: `table table-sm table-hover mb-0 align-middle ims-data-table`
+  - header: white background with bold labels and `--ims-table-border`
   - each row uses compact spacing and text alignment classes as needed
+  - optional selected/reference rows use `table-active` via `DataTable.rowClassName`
 
 For complex nested detail rows (expanded sub-tables), the local implementation still uses
 bootstrap `table table-sm align-middle` and `table-responsive`.
@@ -148,11 +163,13 @@ bootstrap `table table-sm align-middle` and `table-responsive`.
 Shared filter component: `FilterBar`
 
 - Wrapper: `card border-0 shadow-sm mb-3`
-- body: `py-2`
-- child row: `row g-2 align-items-end`
+- accepted shell/card class: `ims-filter-card`
+- body: `p-3`
+- child row: `row g-3 align-items-end`
 - controls use `form-control-sm` / `form-select-sm`
 - reset action uses `btn btn-sm btn-outline-secondary`
-- Keep filters at form-field density (small controls, single-row alignment)
+- Item Master reference page may use default-sized controls inside the same `FilterBar`
+  to match the accepted screenshot.
 
 ## 9. Button hierarchy
 
@@ -174,6 +191,7 @@ Use bootstrap hierarchy and keep semantics consistent:
 - Missing/Rejected/Disposed/Cancelled: `bg-danger`/`bg-dark`
 - Posted/Active/Found: `bg-success`
 - Unknown statuses fallback to `bg-secondary`
+- `StatusBadge` renders rounded pill badges.
 
 Elsewhere, many pages also use explicit `badge text-bg-*` patterns.
 

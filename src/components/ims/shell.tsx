@@ -21,54 +21,55 @@ const NAV_GROUPS: SidebarGroup[] = [
     title: "Operations",
     items: [
       { label: "Dashboard", href: "/", icon: "bi-speedometer2" },
-      { label: "Issue / Return / Transfer", href: "/issues-returns", icon: "bi-arrow-left-right" },
-      { label: "Audit Logs", href: "/audit-logs", icon: "bi-journal-text" },
-      { label: "Reports", href: "/reports", icon: "bi-graph-up" },
     ],
   },
   {
     title: "Inventory",
     items: [
-      { label: "Inventory Receipt", href: "/inventory-receipts", icon: "bi-receipt" },
-      { label: "Item Master", href: "/items", icon: "bi-box-seam", planned: true },
-      { label: "Stock Balances", href: "/stock", icon: "bi-boxes", planned: true },
-      { label: "Controlled Stationery", href: "/controlled-stationery", icon: "bi-journal-check" },
+      { label: "Item Master", href: "/items", icon: "bi-box" },
+      { label: "Receipts (GRN)", href: "/inventory-receipts", icon: "bi-truck" },
+      { label: "Stock Balances", href: "/stock", icon: "bi-stack" },
+      { label: "Issue / Return / Transfer", href: "/issues-returns", icon: "bi-arrow-left-right" },
     ],
   },
   {
     title: "Assets",
     items: [
-      { label: "Fixed Assets", href: "/assets", icon: "bi-layers" },
-      { label: "Tag Print Queue", href: "/tag-print-log", icon: "bi-printer", planned: true },
-      { label: "Disposal", href: "/disposals", icon: "bi-trash" },
-      { label: "Depreciation", href: "/depreciation", icon: "bi-percent" },
+      { label: "Fixed Asset Register", href: "/assets", icon: "bi-tags" },
+      { label: "Tag Print Log", href: "/tag-print-log", icon: "bi-qr-code" },
     ],
   },
   {
     title: "Specialized",
     items: [
-      { label: "Project Inventory", href: "/projects", icon: "bi-folder2-open", planned: true },
-      { label: "Laboratory Inventory", href: "/lab", icon: "bi-flask", planned: true },
-      { label: "IT Assets", href: "/it-assets", icon: "bi-pc-display", planned: true },
-      { label: "Physical Verification", href: "/verification", icon: "bi-check2-square" },
+      { label: "Project Inventory", href: "/projects", icon: "bi-journal-text" },
+      { label: "Laboratory Inventory", href: "/lab", icon: "bi-eyedropper" },
+      { label: "IT Assets", href: "/it-assets", icon: "bi-pc-display-horizontal" },
+      { label: "Controlled Stationery", href: "/controlled-stationery", icon: "bi-journal-check" },
     ],
   },
   {
     title: "Compliance",
     items: [
-      { label: "Write Off", href: "/disposals", icon: "bi-clipboard-check" },
-      { label: "Stock Movements", href: "/transfers", icon: "bi-diagram-3" },
+      { label: "Physical Verification", href: "/verification", icon: "bi-clipboard-check" },
+      { label: "Disposal / Write-Off", href: "/disposals", icon: "bi-trash3" },
+      { label: "Audit Log", href: "/audit-logs", icon: "bi-shield-check" },
     ],
   },
   {
-    title: "Admin",
-    items: [{ label: "Master Data", href: "/master-data", icon: "bi-database-gear" }],
+    title: "Reports & Docs",
+    items: [
+      { label: "Reports", href: "/reports", icon: "bi-bar-chart" },
+      { label: "Export History", href: "/export-history", icon: "bi-cloud-arrow-up" },
+    ],
   },
   {
-    title: "System",
+    title: "Administration",
     items: [
-      { label: "Import", href: "/import", icon: "bi-upload", planned: true },
-      { label: "Export History", href: "/export-history", icon: "bi-cloud-arrow-up", planned: true },
+      { label: "Master Data", href: "/master-data", icon: "bi-database-gear" },
+      { label: "ERP Import", href: "/import", icon: "bi-upload" },
+      { label: "Depreciation", href: "/depreciation", icon: "bi-percent" },
+      { label: "Stock Movements", href: "/transfers", icon: "bi-diagram-3" },
     ],
   },
 ];
@@ -76,101 +77,99 @@ const NAV_GROUPS: SidebarGroup[] = [
 export function ImsShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [department, setDepartment] = useState("Information Technology");
+  const [workspace, setWorkspace] = useState("Administration");
 
   const isActive = (href: string) => pathname === href;
 
-  const roleLabel = "Procurement Officer";
-  const userName = "IMS Operator";
+  const roleLabel = "Super Admin";
+  const userName = "admin";
 
   return (
-    <div className="min-vh-100 bg-body-tertiary text-body">
-      <header className="bg-white border-bottom px-3 py-2">
-        <div className="d-flex align-items-center justify-content-between gap-3">
-          <div className="d-flex align-items-center gap-2">
+    <div className="ims-shell min-vh-100 text-body">
+      <aside className={`ims-sidebar ${collapsed ? "is-collapsed" : ""}`}>
+        <Link className="ims-sidebar-brand text-decoration-none" href="/">
+          <i className="bi bi-buildings fs-3" />
+          <span className="ims-sidebar-brand-text">
+            <span className="fw-bold d-block lh-sm">UoH IMS</span>
+            <span className="d-block small">Inventory Management</span>
+          </span>
+        </Link>
+
+        <nav className="ims-sidebar-nav">
+          {NAV_GROUPS.map((group) => (
+            <div className="ims-nav-group" key={group.title}>
+              <div className="ims-nav-title">{group.title}</div>
+              <div className="list-group list-group-flush">
+                {group.items.map((item) => (
+                  <Link
+                    href={item.href}
+                    className={`ims-nav-link list-group-item list-group-item-action border-0 d-flex align-items-center gap-2 ${
+                      isActive(item.href) ? "active" : ""
+                    }`}
+                    key={item.label}
+                    title={item.label}
+                  >
+                    <i className={`bi ${item.icon}`} />
+                    <span className="ims-nav-label text-truncate">{item.label}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="ims-main">
+        <header className="ims-topbar">
+          <div className="d-flex align-items-center gap-3 flex-grow-1">
             <button
-              className="btn btn-sm btn-outline-secondary"
+              className="btn btn-outline-secondary ims-icon-button"
               type="button"
               onClick={() => setCollapsed((current) => !current)}
+              aria-label="Toggle navigation"
             >
               <i className="bi bi-list" />
             </button>
-            <Link className="d-flex align-items-center gap-2 text-decoration-none" href="/">
-              <i className="bi bi-box-seam text-primary fs-5" />
-              <span className="fw-semibold">UOH IMS</span>
-            </Link>
+            <div className="input-group ims-global-search">
+              <span className="input-group-text bg-white">
+                <i className="bi bi-search" />
+              </span>
+              <input className="form-control" placeholder="Search items, assets, tags, GRN..." />
+            </div>
           </div>
 
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <div className="small text-secondary">{userName}</div>
-            <span className="badge text-bg-light text-dark border">{roleLabel}</span>
-
+          <div className="d-flex align-items-center gap-2">
             <select
-              className="form-select form-select-sm"
-              style={{ width: 220 }}
-              value={department}
-              onChange={(event) => setDepartment(event.target.value)}
+              className="form-select ims-workspace-select"
+              value={workspace}
+              onChange={(event) => setWorkspace(event.target.value)}
+              aria-label="Workspace"
             >
-              <option>Information Technology</option>
-              <option>Finance</option>
-              <option>Academic</option>
-              <option>Research</option>
+              <option>Administration</option>
+              <option>Inventory</option>
+              <option>Procurement</option>
+              <option>Compliance</option>
             </select>
 
-            <button className="btn btn-sm btn-outline-secondary" type="button">
+            <button className="btn btn-outline-secondary ims-icon-button position-relative" type="button" aria-label="Notifications">
               <i className="bi bi-bell" />
+              <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">3</span>
             </button>
-            <button className="btn btn-sm btn-outline-secondary" type="button">
-              <i className="bi bi-search" />
+
+            <button className="ims-user-menu btn border-0 d-flex align-items-center gap-2" type="button">
+              <span className="ims-avatar">AD</span>
+              <span className="text-start lh-sm">
+                <span className="fw-semibold d-block">{userName}</span>
+                <span className="small text-secondary">{roleLabel}</span>
+              </span>
+              <i className="bi bi-caret-down-fill small" />
             </button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <div className="d-flex">
-        <aside
-          className="bg-white border-end"
-          style={{ width: collapsed ? 72 : 250, minHeight: "calc(100vh - 57px)" }}
-        >
-          <div className="p-2">
-            {NAV_GROUPS.map((group) => (
-              <div className="mb-2" key={group.title}>
-                <div className="small text-uppercase text-secondary fw-semibold px-2 py-1">{group.title}</div>
-                <div className="list-group list-group-flush">
-                  {group.items.map((item) =>
-                    item.planned ? (
-                      <div
-                        className="list-group-item list-group-item-action border-0 px-2 py-2 d-flex align-items-center gap-2 opacity-75"
-                        key={item.label}
-                      >
-                        <i className={`bi ${item.icon} text-secondary`} />
-                        <span className="small text-truncate" title={item.label}>
-                          {item.label}
-                          <span className="badge text-bg-warning ms-1">Planned</span>
-                        </span>
-                      </div>
-                    ) : (
-                      <Link
-                        href={item.href}
-                        className={`list-group-item list-group-item-action border-0 px-2 py-2 d-flex align-items-center gap-2 ${
-                          isActive(item.href) ? "active text-bg-primary text-white" : ""
-                        }`}
-                        key={item.label}
-                      >
-                        <i className={`bi ${item.icon}`} />
-                        <span className="small text-truncate">{item.label}</span>
-                      </Link>
-                    ),
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </aside>
-
-        <main className="flex-grow-1">
+        <div className="ims-content">
           {children}
-        </main>
+        </div>
       </div>
     </div>
   );

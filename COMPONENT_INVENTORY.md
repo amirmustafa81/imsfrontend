@@ -14,8 +14,9 @@ Use this inventory as default for future screens unless an explicit reason requi
   - `actions?: ReactNode`
   - `breadcrumbs?: { label: string; to?: string }[]`
 - **Output**
-  - `mb-3 d-flex flex-wrap justify-content-between align-items-end gap-2 border-bottom pb-2`
-  - Optional bootstrap breadcrumb row when `breadcrumbs` exists
+  - `ims-page-header mb-3 d-flex flex-wrap justify-content-between align-items-end gap-2 border-bottom pb-3`
+  - Optional `ims-breadcrumb` row when `breadcrumbs` exists
+  - `h1.h2` title plus secondary subtitle
 - **Use for**
   - All top-of-page headings and actions.
 - **Examples**
@@ -46,7 +47,7 @@ Use this inventory as default for future screens unless an explicit reason requi
   - Normalizes input via internal map (`Draft`, `Posted`, `Missing`, etc.) then maps to
     bootstrap `badge` class colors.
 - **Output**
-  - `<span className="badge {tone}">` where tone comes from the status map
+  - `<span className="badge rounded-pill {tone}">` where tone comes from the status map
 - **Current statuses covered**
   - Draft, Posted, In Store, Issued, In Use, Under Repair, Missing/Under Investigation,
     Damaged, Obsolete, Disposed, Written Off, Partially Accepted, Cancelled, Found, Active,
@@ -82,8 +83,8 @@ Use this inventory as default for future screens unless an explicit reason requi
   - `children: ReactNode`
   - `onReset?: () => void`
 - **Output**
-  - `card border-0 shadow-sm mb-3`
-  - child grid row: `row g-2 align-items-end`
+  - `card border-0 shadow-sm mb-3 ims-filter-card`
+  - child grid row: `row g-3 align-items-end`
   - optional reset button: `btn btn-sm btn-outline-secondary`
 - **Use for**
   - Search/filter rows above list tables across all IMS modules.
@@ -94,12 +95,14 @@ Use this inventory as default for future screens unless an explicit reason requi
   - `columns: { key: string; header: string; render?: (row) => ReactNode; className?: string }[]`
   - `rows: T[]`
   - `empty?: string`
+  - `rowClassName?: (row, index) => string`
 - **Output**
-  - `card border-0 shadow-sm`
+  - `card border-0 shadow-sm ims-table-card`
   - `table-responsive` wrapper
-  - `table table-sm table-hover mb-0 align-middle` with `table-light` head
+  - `table table-sm table-hover mb-0 align-middle ims-data-table`
 - **Behavior**
   - Uses `columns.render(row)` when present, otherwise prints `row[column.key]`.
+  - Applies optional row class for selected/reference rows.
   - Empty list shows centered message in a full-width row.
 - **Use for**
   - All list/grid data views where row actions or status rendering is needed.
@@ -160,10 +163,10 @@ Use this inventory as default for future screens unless an explicit reason requi
 
 ## Current screen usage
 
-- `PageHeader`: widely used in dashboard and report-like pages (`assets`, `depreciation`, `master-data`, `reports`, `audit-logs`, phase-two placeholders)
+- `PageHeader`: widely used in dashboard and report-like pages (`items`, `assets`, `depreciation`, `master-data`, `reports`, `audit-logs`, phase-two placeholders)
 - `KpiCard`: dashboard (`/`), `Kpi` style summaries.
-- `StatusBadge`: `assets`, `depreciation`, `reports`
-- `FilterBar`: `assets`, `depreciation`, `audit-logs`, `master-data`, `reports`
-- `DataTable`: `assets`, `depreciation`, `audit-logs`, `master-data`, `reports`, dashboard
-- `EmptyState`, `PhaseTwoStub`: `/export-history`, `/import`, `/it-assets`, `/items`, `/lab`, `/projects`, `/stock`, `/tag-print-log`
-- `Timeline`, `ApprovalReferenceFields`, `FileAttachmentList`, `ExportButtons`: reusable but currently consumed primarily by `reports` and form screens as needed.
+- `StatusBadge`: `items`, `assets`, `depreciation`, `reports`, transaction and verification screens
+- `FilterBar`: `items`, `assets`, `depreciation`, `audit-logs`, `master-data`, `reports`, transaction screens
+- `DataTable`: `items`, `assets`, `depreciation`, `audit-logs`, `master-data`, `reports`, dashboard, transaction screens
+- `EmptyState`, `PhaseTwoStub`: `/export-history`, `/import`, `/it-assets`, `/lab`, `/projects`, `/stock`, `/tag-print-log`
+- `Timeline`, `ApprovalReferenceFields`, `FileAttachmentList`, `ExportButtons`: consumed by audit, transaction, receipt, disposal, and report screens as applicable.

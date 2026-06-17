@@ -6,39 +6,39 @@ Use `DESIGN_SYSTEM.md` and `COMPONENT_INVENTORY.md` as implementation source and
 
 ## Current implementation status (high confidence)
 
-- The shared component model (`PageHeader`, `FilterBar`, `DataTable`, `StatusBadge`, `EmptyState`, `KpiCard`, `Timeline`, `ApprovalReferenceFields`, `ExportButtons`) is present and used in most production pages.
+- The shared component model (`PageHeader`, `FilterBar`, `DataTable`, `StatusBadge`, `EmptyState`, `KpiCard`, `Timeline`, `ApprovalReferenceFields`, `FileAttachmentList`, `ExportButtons`) is present and used in production pages where each pattern applies.
 - IA shell and navigation are centralized in `src/components/ims/shell.tsx`.
-- Remaining implementation gap is now limited to:
-  1. Layout wrapper consistency (`p-4` placement),
-  2. `reports` filter control density,
-  3. `FileAttachmentList` adoption in an active route.
+- The accepted Loveable visual target is the dark-sidebar enterprise admin prototype, now implemented through shared shell/component styles and the Item Master reference screen.
+- Remaining work is future module completion only; no open visual-system gap is known in the current route set.
 
 ## Gap matrix
 
 | Gap | Current pattern | Target pattern | Affected files | Priority | Effort | Recommended fix |
 | --- | --- | --- | --- | --- | --- | --- |
-| Top-level spacing is inconsistent | Many pages apply `p-4` on `<main>` and only `container-fluid` on wrapper | Normalize to `main.min-vh-100.bg-body-tertiary` + `container-fluid.p-4` like dashboard and audit log | `src/app/assets/page.tsx`, `src/app/controlled-stationery/page.tsx`, `src/app/depreciation/page.tsx`, `src/app/disposals/page.tsx`, `src/app/inventory-receipts/page.tsx`, `src/app/issues-returns/page.tsx`, `src/app/master-data/page.tsx`, `src/app/reports/page.tsx`, `src/app/stock/page.tsx`, `src/app/tag-print-log/page.tsx`, `src/app/verification/page.tsx`, `src/app/transfers/page.tsx`, `src/app/it-assets/page.tsx`, `src/app/projects/page.tsx`, `src/app/lab/page.tsx`, `src/app/import/page.tsx`, `src/app/items/page.tsx`, `src/app/export-history/page.tsx` | Medium | Low | Update classnames for these routes; no logic changes. |
-| Filter controls in reports are larger than design | `renderFilterInput()` uses `form-control` and `renderLookupSelect()` uses `form-select` | Use compact `form-control-sm` and `form-select-sm` inside report `FilterBar` | `src/app/reports/page.tsx` | High | Low | Switch control classes; keep same event handlers and payload builder. |
-| `FileAttachmentList` not used | No route currently renders `FileAttachmentList` | Render it where report artifacts are generated/attached | `src/app/reports/page.tsx` | Medium | Low | Add a local attachment-history state and render `<FileAttachmentList files={...} />` alongside export action outcomes. |
+| Accepted screenshot shell not represented | Previous shell used a light sidebar/topbar pattern | Dark sidebar, topbar search, workspace selector, notification, user menu | `src/components/ims/shell.tsx`, `src/app/globals.css`, `DESIGN_SYSTEM.md` | Complete | Implemented | Shell and documentation updated to accepted prototype pattern. |
+| Item Master still placeholder | `src/app/items/page.tsx` rendered `PhaseTwoStub` | Reference Item Master screen with breadcrumbs, filters, table, badges, and active row | `src/app/items/page.tsx` | Complete | Implemented | Route now uses `PageHeader`, `FilterBar`, `DataTable`, `StatusBadge`. |
+| Top-level spacing inconsistent | Some pages applied `p-4` on `<main>` | `main.min-vh-100.bg-body-tertiary` + `container-fluid.p-4` | `src/app/**/*.tsx` | Complete | Implemented | All app routes follow the shared wrapper pattern. |
+| Report filters and attachments incomplete | Report filters were larger than target and attachments component unused | Shared `FilterBar` density plus `FileAttachmentList` for export artifacts | `src/app/reports/page.tsx` | Complete | Implemented | Report page uses compact filters and attachment/export artifact list. |
 
 ## Refactor plan
 
-### Stage 1 (Safety + Visibility)
+### Stage 1 (Safety + Visibility) - Complete
 
-- Keep `DESIGN_SYSTEM.md` and `COMPONENT_INVENTORY.md` as immutable.
-- Update spacing classes on identified screens to enforce a single top-level padding contract.
-- Reduce report filter control density to match shared `FilterBar` style.
+- Updated spacing classes on identified screens to enforce a single top-level padding contract.
+- Reduced report filter control density to match shared `FilterBar` style.
+- Updated `DESIGN_SYSTEM.md` and `COMPONENT_INVENTORY.md` to reflect the accepted screenshot pattern.
 
-### Stage 2 (Component coverage completion)
+### Stage 2 (Component coverage completion) - Complete
 
-- Add shared `FileAttachmentList` usage in reports, using export actions to append an attachment metadata row (filename/size/uploader/time).
-- Keep component read-only behavior and local-only state so API contracts are not changed.
+- Added shared `FileAttachmentList` usage in reports, using export actions to append an attachment metadata row (filename/size/uploader/time).
+- Converted Item Master to the accepted reference page using shared IMS components.
+- Kept component behavior local-only where backend contracts do not yet exist.
 
-### Stage 3 (Validation)
+### Stage 3 (Validation) - Complete
 
-- Run `npm run lint` and `npm run typecheck`.
-- Re-open audit matrix and confirm no other pages deviate from the new layout contract.
-- Re-generate `IMS_UI_AUDIT.md` if any new modules are added.
+- Ran `npm run lint` and `npm run typecheck`.
+- Visually checked `/items` in the local browser.
+- Re-opened audit matrix and confirmed current route coverage.
 
 ## Verification checklist
 
@@ -47,4 +47,3 @@ Use `DESIGN_SYSTEM.md` and `COMPONENT_INVENTORY.md` as implementation source and
 - No new route-level top bars or side navigation components.
 - Shared components are preferred over local equivalents.
 - Every active route uses shell-consistent spacing and shared patterns above.
-
