@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey =
   | "departments"
@@ -110,14 +110,11 @@ const statusOptions: ReceiptStatus[] = [
   "cancelled",
 ];
 
-const statusColors: Record<ReceiptStatus, string> = {
-  draft: "text-bg-secondary",
-  submitted: "text-bg-warning",
-  accepted: "text-bg-primary",
-  partially_accepted: "text-bg-info",
-  rejected: "text-bg-danger",
-  posted: "text-bg-success",
-  cancelled: "text-bg-dark",
+type ApprovalReferenceState = {
+  ref: string;
+  authority: string;
+  date: string;
+  remarks: string;
 };
 
 const emptyItem: ReceiptItemInput = {
@@ -173,6 +170,12 @@ export default function InventoryReceiptsPage() {
   const [storeFilter, setStoreFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [form, setForm] = useState<ReceiptForm>(defaultForm);
+  const [approvalReference, setApprovalReference] = useState<ApprovalReferenceState>({
+    ref: defaultForm.manual_approval_ref,
+    authority: defaultForm.manual_approved_by,
+    date: defaultForm.manual_approval_date,
+    remarks: "",
+  });
   const [items, setItems] = useState<ReceiptItemInput[]>([emptyItem]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -291,6 +294,16 @@ export default function InventoryReceiptsPage() {
     setForm((current) => ({
       ...current,
       [key]: value,
+    }));
+  };
+
+  const setApprovalReferenceValue = (next: ApprovalReferenceState) => {
+    setApprovalReference(next);
+    setForm((current) => ({
+      ...current,
+      manual_approval_ref: next.ref,
+      manual_approval_date: next.date,
+      manual_approved_by: next.authority,
     }));
   };
 
@@ -417,7 +430,14 @@ export default function InventoryReceiptsPage() {
       await api.post("/inventory-receipts", payload, authHeaders);
       setMessage("Receipt created successfully.");
       setError("");
-      setForm({ ...defaultForm, receipt_date: form.receipt_date, receipt_type: form.receipt_type });
+      const nextForm = { ...defaultForm, receipt_date: form.receipt_date, receipt_type: form.receipt_type };
+      setForm(nextForm);
+      setApprovalReference({
+        ref: nextForm.manual_approval_ref,
+        authority: nextForm.manual_approved_by,
+        date: nextForm.manual_approval_date,
+        remarks: "",
+      });
       setItems([{ ...emptyItem }]);
       await refreshRows();
     } catch {
@@ -475,42 +495,42 @@ export default function InventoryReceiptsPage() {
   return (
     <main className="min-vh-100 bg-body-tertiary p-4">
       <div className="container-fluid">
-        <Link href="/" className="btn btn-link px-0 mb-3">
-          <i className="bi bi-arrow-left me-2" />
-          Dashboard
-        </Link>
+        <PageHeader
+          title="Receipts / GRN"
+          subtitle="Create and post goods receipts"
+          actions={
+            <div className="d-flex gap-2">
+              <input
+                type="password"
+                className="form-control form-control-sm"
+                placeholder="Paste API token"
+                value={tmpToken}
+                onChange={(event) => setTmpToken(event.target.value)}
+              />
+              <button className="btn btn-sm btn-outline-primary" type="button" onClick={submitToken}>
+                Save Token
+              </button>
+            </div>
+          }
+        />
+
+        {(message || error) && (
+          <div className="mb-4">
+            {message && <div className="alert alert-success py-2">{message}</div>}
+            {error && <div className="alert alert-danger py-2">{error}</div>}
+          </div>
+        )}
 
         <div className="row g-4">
           <section className="col-12 col-xl-5">
             <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white">
-                <div className="d-flex justify-content-between align-items-center">
-                  <h2 className="h5 mb-0">Create Receipt</h2>
-                  <span className="badge text-bg-primary">Post optional in same step</span>
-                </div>
-              </div>
-              <div className="card-body p-4">
-                <form className="row g-3" onSubmit={saveReceipt}>
-                  <div className="col-12">
-                    <label className="form-label">Token</label>
-                    <div className="d-flex gap-2">
-                      <input
-                        type="password"
-                        className="form-control"
-                        placeholder="Paste API token"
-                        value={tmpToken}
-                        onChange={(event) => setTmpToken(event.target.value)}
-                      />
-                      <button className="btn btn-outline-primary" type="button" onClick={submitToken}>
-                        Save Token
-                      </button>
-                    </div>
-                  </div>
-
+              <div className="card-body">
+                <h2 className="h5 mb-3">Create Receipt</h2>
+                <form className="row g-2" onSubmit={saveReceipt}>
                   <div className="col-12 col-md-6">
-                    <label className="form-label">Receipt No.</label>
+                    <label className="form-label small">Receipt No.</label>
                     <input
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={form.receipt_no}
                       onChange={(event) => setFormValue("receipt_no", event.target.value)}
                       required
@@ -518,9 +538,9 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label">Receipt Type</label>
+                    <label className="form-label small">Receipt Type</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={form.receipt_type}
                       onChange={(event) => setFormValue("receipt_type", event.target.value)}
                     >
@@ -533,9 +553,9 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label">Receipt Date</label>
+                    <label className="form-label small">Receipt Date</label>
                     <input
-                      className="form-control"
+                      className="form-control form-control-sm"
                       type="date"
                       value={form.receipt_date}
                       onChange={(event) => setFormValue("receipt_date", event.target.value)}
@@ -544,24 +564,24 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label">Status</label>
+                    <label className="form-label small">Status</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={form.status}
                       onChange={(event) => setFormValue("status", event.target.value as ReceiptStatus)}
                     >
                       {statusOptions.map((status) => (
                         <option key={status} value={status}>
-                          {status.replace("_", " ").replace(/\\b\\w/g, (match) => match.toUpperCase())}
+                          {status.replace("_", " ").replace(/\b\w/g, (match) => match.toUpperCase())}
                         </option>
                       ))}
                     </select>
                   </div>
 
                   <div className="col-12">
-                    <label className="form-label">Store</label>
+                    <label className="form-label small">Store</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={form.store_id}
                       onChange={(event) => setFormValue("store_id", event.target.value)}
                       required
@@ -576,9 +596,9 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12">
-                    <label className="form-label">Department</label>
+                    <label className="form-label small">Department</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={form.department_id}
                       onChange={(event) => setFormValue("department_id", event.target.value)}
                       required
@@ -593,9 +613,9 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label">Supplier</label>
+                    <label className="form-label small">Supplier</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={form.supplier_id}
                       onChange={(event) => setFormValue("supplier_id", event.target.value)}
                     >
@@ -609,9 +629,9 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label">Funding Source</label>
+                    <label className="form-label small">Funding Source</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={form.funding_source_id}
                       onChange={(event) => setFormValue("funding_source_id", event.target.value)}
                     >
@@ -625,9 +645,9 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label">Project</label>
+                    <label className="form-label small">Project</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={form.project_id}
                       onChange={(event) => setFormValue("project_id", event.target.value)}
                     >
@@ -641,64 +661,43 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label">PO Reference</label>
+                    <label className="form-label small">PO Reference</label>
                     <input
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={form.po_reference}
                       onChange={(event) => setFormValue("po_reference", event.target.value)}
                     />
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label">Invoice No</label>
+                    <label className="form-label small">Invoice No</label>
                     <input
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={form.invoice_no}
                       onChange={(event) => setFormValue("invoice_no", event.target.value)}
                     />
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label">Challan No</label>
+                    <label className="form-label small">Challan No</label>
                     <input
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={form.challan_no}
                       onChange={(event) => setFormValue("challan_no", event.target.value)}
                     />
                   </div>
 
                   <div className="col-12">
-                    <label className="form-label">Manual Approval Reference</label>
-                    <input
-                      className="form-control"
-                      value={form.manual_approval_ref}
-                      onChange={(event) => setFormValue("manual_approval_ref", event.target.value)}
-                    />
-                  </div>
-
-                  <div className="col-12 col-md-6">
-                    <label className="form-label">Approval Date</label>
-                    <input
-                      className="form-control"
-                      type="date"
-                      value={form.manual_approval_date}
-                      onChange={(event) => setFormValue("manual_approval_date", event.target.value)}
-                    />
-                  </div>
-
-                  <div className="col-12 col-md-6">
-                    <label className="form-label">Approved By</label>
-                    <input
-                      className="form-control"
-                      value={form.manual_approved_by}
-                      onChange={(event) => setFormValue("manual_approved_by", event.target.value)}
+                    <ApprovalReferenceFields
+                      value={approvalReference}
+                      onChange={setApprovalReferenceValue}
                     />
                   </div>
 
                   <div className="col-12">
-                    <label className="form-label">Remarks</label>
+                    <label className="form-label small">Remarks</label>
                     <textarea
-                      className="form-control"
+                      className="form-control form-control-sm"
                       rows={2}
                       value={form.remarks}
                       onChange={(event) => setFormValue("remarks", event.target.value)}
@@ -717,11 +716,11 @@ export default function InventoryReceiptsPage() {
 
                   {items.map((item, index) => (
                     <div key={index} className="col-12 border rounded p-3 bg-light">
-                      <div className="row g-3">
+                      <div className="row g-2">
                         <div className="col-12 col-md-6">
-                          <label className="form-label">Item</label>
+                          <label className="form-label small">Item</label>
                           <select
-                            className="form-select"
+                            className="form-select form-select-sm"
                             value={item.item_id}
                             onChange={(event) => setItemValue(index, "item_id", event.target.value)}
                             required
@@ -736,18 +735,18 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-6">
-                          <label className="form-label">Description</label>
+                          <label className="form-label small">Description</label>
                           <input
-                            className="form-control"
+                            className="form-control form-control-sm"
                             value={item.description}
                             onChange={(event) => setItemValue(index, "description", event.target.value)}
                           />
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label">Qty Received</label>
+                          <label className="form-label small">Qty Received</label>
                           <input
-                            className="form-control"
+                            className="form-control form-control-sm"
                             type="number"
                             value={item.quantity_received}
                             step="0.001"
@@ -757,9 +756,9 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label">Qty Accepted</label>
+                          <label className="form-label small">Qty Accepted</label>
                           <input
-                            className="form-control"
+                            className="form-control form-control-sm"
                             type="number"
                             value={item.quantity_accepted}
                             step="0.001"
@@ -769,9 +768,9 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label">Qty Rejected</label>
+                          <label className="form-label small">Qty Rejected</label>
                           <input
-                            className="form-control"
+                            className="form-control form-control-sm"
                             type="number"
                             value={item.quantity_rejected}
                             step="0.001"
@@ -781,9 +780,9 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label">Unit Cost</label>
+                          <label className="form-label small">Unit Cost</label>
                           <input
-                            className="form-control"
+                            className="form-control form-control-sm"
                             type="number"
                             value={item.unit_cost}
                             step="0.01"
@@ -793,9 +792,9 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label">Total Cost</label>
+                          <label className="form-label small">Total Cost</label>
                           <input
-                            className="form-control"
+                            className="form-control form-control-sm"
                             type="number"
                             value={item.total_cost}
                             step="0.01"
@@ -805,18 +804,18 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label">Batch No</label>
+                          <label className="form-label small">Batch No</label>
                           <input
-                            className="form-control"
+                            className="form-control form-control-sm"
                             value={item.batch_no}
                             onChange={(event) => setItemValue(index, "batch_no", event.target.value)}
                           />
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label">Expiry</label>
+                          <label className="form-label small">Expiry</label>
                           <input
-                            className="form-control"
+                            className="form-control form-control-sm"
                             type="date"
                             value={item.expiry_date}
                             onChange={(event) => setItemValue(index, "expiry_date", event.target.value)}
@@ -824,9 +823,9 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label">Inspection Status</label>
+                          <label className="form-label small">Inspection Status</label>
                           <select
-                            className="form-select"
+                            className="form-select form-select-sm"
                             value={item.inspection_status}
                             onChange={(event) => setItemValue(index, "inspection_status", event.target.value)}
                           >
@@ -838,9 +837,9 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12">
-                          <label className="form-label">Inspection Remarks</label>
+                          <label className="form-label small">Inspection Remarks</label>
                           <textarea
-                            className="form-control"
+                            className="form-control form-control-sm"
                             rows={2}
                             value={item.inspection_remarks}
                             onChange={(event) => setItemValue(index, "inspection_remarks", event.target.value)}
@@ -887,41 +886,43 @@ export default function InventoryReceiptsPage() {
 
           <section className="col-12 col-xl-7">
             <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white">
-                <h2 className="h5 mb-0">Receipt List</h2>
-              </div>
-              <div className="card-body p-4">
-                <div className="row g-3 mb-3">
+              <div className="card-body">
+                <h2 className="h5 mb-3">Receipt List</h2>
+
+                <FilterBar onReset={() => {
+                  setSearch("");
+                  setStatusFilter("");
+                  setStoreFilter("");
+                  setDepartmentFilter("");
+                }}>
                   <div className="col-12 col-md-4">
-                    <label className="form-label">Search</label>
+                    <label className="form-label small">Search</label>
                     <input
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder="Receipt no / PO / invoice / challan"
                     />
                   </div>
-
-                  <div className="col-12 col-md-4">
-                    <label className="form-label">Status</label>
+                  <div className="col-12 col-md-2">
+                    <label className="form-label small">Status</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={statusFilter}
                       onChange={(event) => setStatusFilter(event.target.value)}
                     >
                       <option value="">All</option>
                       {statusOptions.map((status) => (
                         <option key={status} value={status}>
-                          {status.replace("_", " ")}
+                          {status.replace("_", " ").replace(/\b\w/g, (match) => match.toUpperCase())}
                         </option>
                       ))}
                     </select>
                   </div>
-
-                  <div className="col-12 col-md-4">
-                    <label className="form-label">Store</label>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small">Store</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={storeFilter}
                       onChange={(event) => setStoreFilter(event.target.value)}
                     >
@@ -933,11 +934,10 @@ export default function InventoryReceiptsPage() {
                       ))}
                     </select>
                   </div>
-
-                  <div className="col-12 col-md-6">
-                    <label className="form-label">Department</label>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small">Department</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={departmentFilter}
                       onChange={(event) => setDepartmentFilter(event.target.value)}
                     >
@@ -949,139 +949,128 @@ export default function InventoryReceiptsPage() {
                       ))}
                     </select>
                   </div>
+                </FilterBar>
 
-                  <div className="col-12 col-md-6 d-flex align-items-end">
-                    <button className="btn btn-outline-secondary" type="button" onClick={refreshRows}>
-                      <i className="bi bi-arrow-repeat me-1" />
-                      Refresh
-                    </button>
-                  </div>
-                </div>
-
-                {message && <div className="alert alert-success py-2">{message}</div>}
-                {error && <div className="alert alert-danger py-2">{error}</div>}
-
-                <div className="table-responsive">
-                  <table className="table table-sm align-middle">
-                    <thead>
-                      <tr>
-                        <th>Receipt</th>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Store</th>
-                        <th>Dept</th>
-                        <th>Status</th>
-                        <th className="text-end">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((receipt) => (
-                        <>
-                          <tr key={receipt.id}>
-                            <td>
-                              <div className="fw-medium">{receipt.receipt_no}</div>
+                {rows.length > 0 ? (
+                  <>
+                    <DataTable
+                      empty="No receipts found. Use the form to create one."
+                      columns={[
+                        {
+                          key: "receipt",
+                          header: "Receipt",
+                          render: (row: Receipt) => (
+                            <div>
+                              <div className="fw-medium">{row.receipt_no}</div>
                               <div className="small text-secondary">
-                                PO: {receipt.po_reference ?? "-"} | Invoice: {receipt.invoice_no ?? "-"} | Challan:{" "}
-                                {receipt.challan_no ?? "-"}
+                                PO: {row.po_reference ?? "-"} | Invoice: {row.invoice_no ?? "-"} | Challan:{" "}
+                                {row.challan_no ?? "-"}
                               </div>
-                            </td>
-                            <td>{String(receipt.receipt_date).split("T")[0]}</td>
-                            <td>{receipt.receipt_type}</td>
-                            <td>{lookupLabel("stores", receipt.store_id)}</td>
-                            <td>{lookupLabel("departments", receipt.department_id)}</td>
-                            <td>
-                              <span className={`badge ${statusColors[receipt.status] ?? "text-bg-secondary"}`}>
-                                {receipt.status}
-                              </span>
-                            </td>
-                            <td className="text-end">
-                              <div className="btn-group btn-group-sm">
+                            </div>
+                          ),
+                        },
+                        { key: "date", header: "Date", render: (row) => <span>{String(row.receipt_date).split("T")[0]}</span> },
+                        { key: "type", header: "Type", render: (row) => <span>{row.receipt_type}</span> },
+                        { key: "store", header: "Store", render: (row) => <span>{lookupLabel("stores", row.store_id)}</span> },
+                        { key: "dept", header: "Dept", render: (row) => <span>{lookupLabel("departments", row.department_id)}</span> },
+                        { key: "status", header: "Status", render: (row) => <StatusBadge status={row.status} /> },
+                        {
+                          key: "actions",
+                          header: "Actions",
+                          className: "text-end",
+                          render: (row) => (
+                            <div className="btn-group btn-group-sm">
+                              <button
+                                className="btn btn-outline-primary"
+                                type="button"
+                                onClick={async () => {
+                                  if (expandedId === row.id) {
+                                    setExpandedId(null);
+                                    return;
+                                  }
+                                  await loadReceiptItems(row.id);
+                                }}
+                              >
+                                {expandedLoading[row.id] ? "Loading" : expandedId === row.id ? "Hide Items" : "Items"}
+                              </button>
+                              {row.status !== "posted" ? (
                                 <button
-                                  className="btn btn-outline-primary"
+                                  className="btn btn-outline-success"
                                   type="button"
-                                  onClick={() => loadReceiptItems(receipt.id)}
+                                  onClick={() => postReceipt(row.id)}
                                 >
-                                  {expandedLoading[receipt.id] ? "Loading" : expandedId === receipt.id ? "Hide Items" : "Items"}
+                                  Post
                                 </button>
+                              ) : null}
+                              {(row.status === "draft" || row.status === "cancelled") ? (
+                                <button
+                                  className="btn btn-outline-danger"
+                                  type="button"
+                                  onClick={() => deleteReceipt(row.id)}
+                                >
+                                  Delete
+                                </button>
+                              ) : null}
+                            </div>
+                          ),
+                        },
+                      ]}
+                      rows={rows as never}
+                    />
 
-                                {receipt.status !== "posted" && (
-                                  <button
-                                    className="btn btn-outline-success"
-                                    type="button"
-                                    onClick={() => postReceipt(receipt.id)}
-                                  >
-                                    Post
-                                  </button>
-                                )}
-
-                                {(receipt.status === "draft" || receipt.status === "cancelled") && (
-                                  <button
-                                    className="btn btn-outline-danger"
-                                    type="button"
-                                    onClick={() => deleteReceipt(receipt.id)}
-                                  >
-                                    Delete
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                          {expandedId === receipt.id && expandedItems[receipt.id] && (
-                            <tr>
-                              <td colSpan={7}>
-                                <div className="bg-light rounded p-2 small">
-                                  <strong>Items:</strong>
-                                  <table className="table table-sm mt-2 mb-0">
-                                    <thead>
-                                      <tr>
-                                        <th>Item</th>
-                                        <th>Qty Rec</th>
-                                        <th>Accepted</th>
-                                        <th>Rejected</th>
-                                        <th>Unit Cost</th>
-                                        <th>Total Cost</th>
-                                        <th>Inspection</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {expandedItems[receipt.id].length === 0 ? (
-                                        <tr>
-                                          <td colSpan={7} className="text-secondary">
-                                            No items found.
-                                          </td>
-                                        </tr>
-                                      ) : (
-                                        expandedItems[receipt.id].map((receiptItem) => (
-                                          <tr key={receiptItem.id}>
-                                            <td>{lookupLabel("items", receiptItem.item_id)}</td>
-                                            <td>{receiptItem.quantity_received}</td>
-                                            <td>{receiptItem.quantity_accepted}</td>
-                                            <td>{receiptItem.quantity_rejected}</td>
-                                            <td>{receiptItem.unit_cost ?? "-"}</td>
-                                            <td>{receiptItem.total_cost ?? "-"}</td>
-                                            <td>{receiptItem.inspection_status}</td>
-                                          </tr>
-                                        ))
-                                      )}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </>
-                      ))}
-
-                      {rows.length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="text-secondary">
-                            No receipts found. Use the form to create one.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                    {expandedId && expandedItems[expandedId] ? (
+                      <div className="mt-3">
+                        <h3 className="h6 mb-2">Items for #{expandedId}</h3>
+                        {expandedLoading[expandedId] ? (
+                          <div className="text-secondary">Loading items...</div>
+                        ) : expandedItems[expandedId].length === 0 ? (
+                          <EmptyState
+                            icon="bi-box-seam"
+                            title="No items on selected receipt"
+                            message="Receipt details are not available yet."
+                          />
+                        ) : (
+                          <div className="card border-0 shadow-sm">
+                            <div className="table-responsive">
+                              <table className="table table-sm table-hover mb-0 align-middle">
+                                <thead className="table-light">
+                                  <tr>
+                                    <th>Item</th>
+                                    <th>Qty Rec</th>
+                                    <th>Accepted</th>
+                                    <th>Rejected</th>
+                                    <th>Unit Cost</th>
+                                    <th>Total Cost</th>
+                                    <th>Inspection</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {expandedItems[expandedId].map((receiptItem) => (
+                                    <tr key={receiptItem.id}>
+                                      <td>{lookupLabel("items", receiptItem.item_id)}</td>
+                                      <td>{receiptItem.quantity_received}</td>
+                                      <td>{receiptItem.quantity_accepted}</td>
+                                      <td>{receiptItem.quantity_rejected}</td>
+                                      <td>{receiptItem.unit_cost ?? "-"}</td>
+                                      <td>{receiptItem.total_cost ?? "-"}</td>
+                                      <td>{receiptItem.inspection_status}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <EmptyState
+                    title="No receipts found"
+                    message="No receipts match the selected filters."
+                    icon="bi-receipt"
+                  />
+                )}
               </div>
             </div>
           </section>
