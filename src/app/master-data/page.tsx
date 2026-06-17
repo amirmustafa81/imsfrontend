@@ -256,6 +256,7 @@ export default function MasterDataPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [token] = useState(storedToken);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [lookups, setLookups] = useState<Record<ResourceKey, RowData[]>>({
     departments: [],
     buildings: [],
@@ -426,12 +427,12 @@ export default function MasterDataPage() {
         setMessage("Record created successfully");
       }
 
-      const response = await api.get(`/master-data/${definition.endpoint}`, {
-        ...authHeaders,
-        params: {
-          search: search.trim() || undefined,
-          status: statusFilter || undefined,
-        },
+    const response = await api.get(`/master-data/${definition.endpoint}`, {
+      ...authHeaders,
+      params: {
+        search: search.trim() || undefined,
+        status: statusFilter || undefined,
+      },
       });
 
       const nextRows = response.data?.data;
@@ -439,6 +440,7 @@ export default function MasterDataPage() {
       setError("");
       setEditingId(null);
       setForm(initialFormFor(definition.fields));
+      setDialogOpen(false);
     } catch {
       setError("Could not save record. Check required fields and values.");
     }
@@ -473,6 +475,21 @@ export default function MasterDataPage() {
 
     setEditingId(typeof row.id === "number" ? row.id : Number(row.id));
     setForm(next);
+    setDialogOpen(true);
+  };
+
+  const openCreateDialog = () => {
+    setEditingId(null);
+    setForm(initialFormFor(definition.fields));
+    setError("");
+    setMessage("");
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditingId(null);
+    setForm(initialFormFor(definition.fields));
   };
 
   const deactivateRecord = async (row: RowData) => {
@@ -627,7 +644,12 @@ export default function MasterDataPage() {
         <PageHeader
           title="Master Data Console"
           subtitle="Create, edit, and deactivate master records used across IMS modules."
-          
+          actions={
+            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+              <i className="bi bi-plus-lg me-1" />
+              Create Record
+            </button>
+          }
         />
 
         {(error || message || !token) && (
@@ -647,10 +669,11 @@ export default function MasterDataPage() {
                   key={key}
                   type="button"
                   className={`btn btn-sm ${activeResource === key ? "btn-primary" : "btn-outline-primary"}`}
-                  onClick={() => {
+              onClick={() => {
                     setActiveResource(key);
                     setEditingId(null);
                     setForm(initialFormFor(resources[key].fields));
+                    setDialogOpen(false);
                   }}
                 >
                   {item.label}
@@ -686,51 +709,56 @@ export default function MasterDataPage() {
           </FilterBar>
         </div>
 
-        <div className="row g-4">
-          <div className="col-12 col-xl-7">
-            <DataTable columns={tableColumns as never} rows={(token ? rows : []) as never} empty="No records found." />
-          </div>
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <h2 className="h6 fw-semibold mb-0">Record list</h2>
+          <span className="small text-secondary">{rows.length} record{rows.length === 1 ? "" : "s"}</span>
+        </div>
 
-          <div className="col-12 col-xl-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body">
-                <h2 className="h5">{editingId ? "Edit" : "Add New"} {definition.label}</h2>
-                <form onSubmit={submitRecord}>
-                  <div className="row g-3">
-                    {definition.fields.map((field) => (
-                      <div
-                        key={field.key}
-                        className={field.type === "textarea" || field.type === "text" ? "col-12" : "col-12 col-md-6"}
-                      >
-                        <label className="form-label">
-                          {field.label}
-                          {field.required ? <span className="text-danger"> *</span> : null}
-                        </label>
-                        {renderInput(field)}
-                      </div>
-                    ))}
+        <DataTable columns={tableColumns as never} rows={(token ? rows : []) as never} empty="No records found." />
+
+        {dialogOpen ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable" style={{ width: "min(52vw, 980px)", maxWidth: "min(52vw, 980px)" }}>
+                <form className="modal-content border-0 shadow-lg" onSubmit={submitRecord}>
+                  <div className="modal-header px-4 py-3">
+                    <div>
+                      <h5 className="modal-title mb-1">{editingId ? "Edit" : "Create"} {definition.label}</h5>
+                      <div className="small text-secondary">Create or edit master data record.</div>
+                    </div>
+                    <button className="btn-close" type="button" aria-label="Close" onClick={closeDialog} />
                   </div>
-
-                  <div className="d-flex gap-2 mt-3">
-                    <button className="btn btn-primary" type="submit" disabled={!token}>
-                      {editingId ? "Update Record" : "Save Record"}
+                  <div className="modal-body px-4 py-4">
+                    <div className="row g-3">
+                      {definition.fields.map((field) => (
+                        <div
+                          key={field.key}
+                          className={field.type === "textarea" || field.type === "text" ? "col-12" : "col-12 col-md-6"}
+                        >
+                          <label className="form-label small">
+                            {field.label}
+                            {field.required ? <span className="text-danger"> *</span> : null}
+                          </label>
+                          {renderInput(field)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="modal-footer px-4 py-3">
+                    <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
+                      Cancel
                     </button>
-                    <button
-                      className="btn btn-outline-secondary"
-                      type="button"
-                      onClick={() => {
-                        setEditingId(null);
-                        setForm(initialFormFor(definition.fields));
-                      }}
-                    >
-                      Reset
+                    <button className="btn btn-primary" type="submit" disabled={!token}>
+                      <i className={`bi ${editingId ? "bi-save" : "bi-plus-circle"} me-1`} />
+                      {editingId ? "Update Record" : "Save Record"}
                     </button>
                   </div>
                 </form>
               </div>
             </div>
-          </div>
-        </div>
+            <div className="modal-backdrop fade show" onClick={closeDialog} />
+          </>
+        ) : null}
       </div>
     </main>
   );
