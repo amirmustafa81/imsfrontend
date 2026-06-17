@@ -8,6 +8,7 @@ type ReportRow = {
   id: number;
   batch_no: string;
   item_name: string;
+  status?: string;
 };
 
 const mockedApi = vi.hoisted(() => ({
