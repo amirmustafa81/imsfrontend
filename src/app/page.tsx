@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DataTable, KpiCard, PageHeader, StatusBadge } from "@/components/ims";
+import { api } from "@/lib/api";
 
 type NextStep = [string, string, string];
 
 type KpiStat = {
   label: string;
-  value: string;
+  value: number;
   icon: string;
   tone: "primary" | "success" | "warning" | "info";
 };
@@ -19,10 +21,10 @@ type ApiMetric = {
 };
 
 const stats: KpiStat[] = [
-  { label: "Fixed Assets", value: "0", icon: "bi-upc-scan", tone: "primary" },
-  { label: "Stock Items", value: "0", icon: "bi-boxes", tone: "success" },
-  { label: "Low Stock", value: "0", icon: "bi-exclamation-triangle", tone: "warning" },
-  { label: "Pending Verification", value: "0", icon: "bi-clipboard-check", tone: "info" },
+  { label: "Fixed Assets", value: 0, icon: "bi-upc-scan", tone: "primary" },
+  { label: "Stock Items", value: 0, icon: "bi-boxes", tone: "success" },
+  { label: "Low Stock", value: 0, icon: "bi-exclamation-triangle", tone: "warning" },
+  { label: "Pending Verification", value: 0, icon: "bi-clipboard-check", tone: "info" },
 ];
 
 const nextSteps: NextStep[] = [
@@ -32,6 +34,68 @@ const nextSteps: NextStep[] = [
 ];
 
 export default function Home() {
+  const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
+  const [token] = useState(initialToken);
+  const [statsRows, setStatsRows] = useState(stats);
+  const [loading, setLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState("");
+
+  const authHeaders = useMemo(
+    () => ({
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    }),
+    [token],
+  );
+
+  const loadDashboardStats = useCallback(async () => {
+    if (!token) {
+      setDashboardError("Save the API token to load dashboard metrics.");
+      return;
+    }
+
+    setLoading(true);
+    setDashboardError("");
+
+    try {
+      const [fixedAssetResponse, stockResponse, lowStockResponse, verificationResponse] = await Promise.all([
+        api.get<{ data: unknown[] }>("/assets", authHeaders),
+        api.get<{ data: unknown[] }>("/reports/stock-balance", authHeaders),
+        api.get<{ data: unknown[] }>("/reports/low-stock", authHeaders),
+        api.get<{ data: Array<{ status: string }> }>("/physical-verifications", authHeaders),
+      ]);
+
+      const fixedAssets = Array.isArray(fixedAssetResponse.data?.data) ? fixedAssetResponse.data.data.length : 0;
+      const stockItems = Array.isArray(stockResponse.data?.data) ? stockResponse.data.data.length : 0;
+      const lowStock = Array.isArray(lowStockResponse.data?.data) ? lowStockResponse.data.data.length : 0;
+      const verifications = Array.isArray(verificationResponse.data?.data) ? verificationResponse.data.data : [];
+      const pendingVerification = verifications.filter((verification) => {
+        const status = verification.status?.toLowerCase();
+        return status !== "completed" && status !== "cancelled";
+      }).length;
+
+      setStatsRows([
+        { label: "Fixed Assets", value: fixedAssets, icon: "bi-upc-scan", tone: "primary" },
+        { label: "Stock Items", value: stockItems, icon: "bi-boxes", tone: "success" },
+        { label: "Low Stock", value: lowStock, icon: "bi-exclamation-triangle", tone: "warning" },
+        {
+          label: "Pending Verification",
+          value: pendingVerification,
+          icon: "bi-clipboard-check",
+          tone: "info",
+        },
+      ]);
+    } catch {
+      setDashboardError("Unable to load dashboard counts from backend. Verify token and permissions.");
+      setStatsRows(stats);
+    } finally {
+      setLoading(false);
+    }
+  }, [authHeaders, token]);
+
+  useEffect(() => {
+    void loadDashboardStats();
+  }, [loadDashboardStats]);
+
   const tableRows = nextSteps.map(([area, status, step], index): ApiMetric & { id: number } => ({
     id: index,
     area,
@@ -64,12 +128,15 @@ export default function Home() {
         />
 
         <div className="row g-3 mb-4">
-          {stats.map((stat) => (
+          {statsRows.map((stat) => (
             <div className="col-12 col-md-6 col-xl-3" key={stat.label}>
               <KpiCard icon={stat.icon} label={stat.label} value={stat.value} tone={stat.tone} />
             </div>
           ))}
         </div>
+
+        {dashboardError ? <div className="alert alert-danger">{dashboardError}</div> : null}
+        {loading ? <div className="text-secondary small mb-3">Loading latest dashboard metrics...</div> : null}
 
         <div className="row g-4">
           <div className="col-12 col-xl-7">
