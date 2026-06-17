@@ -602,7 +602,7 @@ export default function MasterDataPage() {
           className="form-control"
           type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
           value={String(value)}
-          placeholder={field.type === "select" ? "" : getFieldPlaceholder(field)}
+          placeholder={getFieldPlaceholder(field)}
           onChange={(event) =>
             field.type === "number"
               ? setNumericOrBlank(field.key, event.target.value)
