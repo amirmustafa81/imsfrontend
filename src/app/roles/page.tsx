@@ -42,6 +42,7 @@ export default function RolesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
 
   const loadRows = useCallback(async () => {
     if (!token) return;
@@ -69,16 +70,36 @@ export default function RolesPage() {
   const closeDialog = () => {
     setDialogOpen(false);
     setForm(emptyForm);
+    setEditingRoleId(null);
   };
 
   const openCreateDialog = () => {
     setForm(emptyForm);
     setDialogOpen(true);
+    setEditingRoleId(null);
     setError("");
     setMessage("");
   };
 
-  const createRole = async (event: FormEvent<HTMLFormElement>) => {
+  const openEditDialog = (role: Role) => {
+    if (role.is_system_role) {
+      setError("System roles cannot be edited through this screen.");
+      return;
+    }
+
+    setForm({
+      name: role.name,
+      description: role.description ?? "",
+      is_system_role: role.is_system_role,
+      permission_ids: role.permissions?.map((permission) => String(permission.id)) ?? [],
+    });
+    setEditingRoleId(role.id);
+    setDialogOpen(true);
+    setError("");
+    setMessage("");
+  };
+
+  const saveRole = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) {
       setError("Authentication token required.");
@@ -90,22 +111,25 @@ export default function RolesPage() {
     }
     try {
       setSaving(true);
-      await api.post(
-        "/roles",
-        {
-          name: form.name.trim(),
-          description: form.description.trim() || null,
-          is_system_role: form.is_system_role,
-          permission_ids: form.permission_ids.map((id) => Number(id)),
-        },
-        headers,
-      );
-      setMessage("Role created.");
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        is_system_role: form.is_system_role,
+        permission_ids: form.permission_ids.map((id) => Number(id)),
+      };
+
+      if (editingRoleId === null) {
+        await api.post("/roles", payload, headers);
+        setMessage("Role created.");
+      } else {
+        await api.put(`/roles/${editingRoleId}`, payload, headers);
+        setMessage("Role updated.");
+      }
       setError("");
       closeDialog();
       await loadRows();
     } catch {
-      setError("Unable to create role.");
+      setError(editingRoleId === null ? "Unable to create role." : "Unable to update role.");
     } finally {
       setSaving(false);
     }
@@ -139,15 +163,26 @@ export default function RolesPage() {
       key: "action",
       header: "Action",
       render: (row: Role) => (
-        <button
-          className="btn btn-sm btn-outline-danger"
-          type="button"
-          onClick={() => deleteRole(row.id)}
-          disabled={row.is_system_role}
-        >
-          <i className="bi bi-trash me-1" />
-          Delete
-        </button>
+        <>
+          <button
+            className="btn btn-sm btn-outline-danger"
+            type="button"
+            onClick={() => deleteRole(row.id)}
+            disabled={row.is_system_role}
+          >
+            <i className="bi bi-trash me-1" />
+            Delete
+          </button>
+          <button
+            className="btn btn-sm btn-outline-primary ms-2"
+            type="button"
+            onClick={() => openEditDialog(row)}
+            disabled={row.is_system_role}
+          >
+            <i className="bi bi-pencil me-1" />
+            Edit
+          </button>
+        </>
       ),
     },
   ];
@@ -215,10 +250,10 @@ export default function RolesPage() {
               className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
               style={{ width: "min(42vw, 820px)", maxWidth: "min(42vw, 820px)" }}
             >
-              <form className="modal-content border-0 shadow-lg" onSubmit={createRole}>
+              <form className="modal-content border-0 shadow-lg" onSubmit={saveRole}>
                 <div className="modal-header px-4 py-3">
                   <div>
-                    <h5 className="modal-title mb-1">Create Role</h5>
+                    <h5 className="modal-title mb-1">{editingRoleId === null ? "Create Role" : "Edit Role"}</h5>
                     <div className="small text-secondary">Define role identity and the permission set assigned to it.</div>
                   </div>
                   <button className="btn-close" type="button" aria-label="Close" onClick={closeDialog} />
@@ -226,7 +261,9 @@ export default function RolesPage() {
                 <div className="modal-body px-4 py-4">
                   <div className="row g-4">
                     <div className="col-12 col-md-7">
-                      <label className="form-label small" htmlFor="role-name">Role Name</label>
+                      <label className="form-label small" htmlFor="role-name">
+                        Role Name
+                      </label>
                       <input
                         id="role-name"
                         className="form-control"
@@ -249,7 +286,9 @@ export default function RolesPage() {
                       </div>
                     </div>
                     <div className="col-12">
-                      <label className="form-label small" htmlFor="role-description">Description</label>
+                      <label className="form-label small" htmlFor="role-description">
+                        Description
+                      </label>
                       <textarea
                         id="role-description"
                         className="form-control"
@@ -304,12 +343,12 @@ export default function RolesPage() {
                   </div>
                 </div>
                 <div className="modal-footer px-4 py-3">
-                  <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
-                    Cancel
-                  </button>
+                      <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
+                        Cancel
+                      </button>
                   <button className="btn btn-primary" type="submit" disabled={saving}>
-                    <i className="bi bi-plus-circle me-1" />
-                    {saving ? "Creating..." : "Create Role"}
+                    <i className={`bi ${editingRoleId === null ? "bi-plus-circle" : "bi-save"} me-1`} />
+                    {saving ? (editingRoleId === null ? "Creating..." : "Saving...") : editingRoleId === null ? "Create Role" : "Save Role"}
                   </button>
                 </div>
               </form>
