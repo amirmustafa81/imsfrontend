@@ -16,6 +16,7 @@ const modules = [
   { label: "Disposal", href: "/disposals", icon: "bi-trash" },
   { label: "Controlled Stationery", href: "/controlled-stationery", icon: "bi-journal-check" },
   { label: "Depreciation", href: "/depreciation", icon: "bi-graph-down-arrow" },
+  { label: "Audit Logs", href: "/audit-logs", icon: "bi-journal-text" },
   { label: "Master Data", href: "/master-data", icon: "bi-database-gear" },
   { label: "Reports", href: "/reports", icon: "bi-file-earmark-bar-graph" },
 ];
