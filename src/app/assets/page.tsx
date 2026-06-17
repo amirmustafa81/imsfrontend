@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -252,7 +253,15 @@ export default function AssetsPage() {
   };
 
   const tableColumns = [
-    { key: "asset_id", header: "Asset ID", render: (row: AssetRow) => <>{row.asset_id ?? "-"}</> },
+    {
+      key: "asset_id",
+      header: "Asset ID",
+      render: (row: AssetRow) => (
+        <Link className="link-primary text-decoration-none fw-medium" href={`/assets/${row.id}`}>
+          {row.asset_id ?? "-"}
+        </Link>
+      ),
+    },
     { key: "printable_tag_id", header: "Printable Tag", render: (row: AssetRow) => <>{row.printable_tag_id ?? "-"}</> },
     {
       key: "serial",
