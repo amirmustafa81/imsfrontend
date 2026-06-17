@@ -1,92 +1,244 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
-type ItemRow = Record<string, unknown> & {
+type ItemType =
+  | "consumable"
+  | "fixed_asset"
+  | "repairable"
+  | "controlled_item"
+  | "project_inventory"
+  | "sample_prototype"
+  | "software_license";
+
+type ItemRow = {
   id: number;
-  code: string;
+  item_code: string;
   name: string;
-  category: string;
-  uom: string;
-  type: "Fixed Asset" | "Consumable" | "Software License" | "Controlled Item";
-  min: number;
-  serial: boolean;
-  tag: boolean;
-  status: "Active";
+  item_type: ItemType;
+  category_id: number;
+  unit_id: number;
+  minimum_stock_level: string | number | null;
+  requires_serial_tracking: boolean | number | string;
+  requires_qr_tag: boolean | number | string;
+  status: "active" | "inactive" | string;
 };
 
-const itemRows: ItemRow[] = [
-  { id: 1, code: "IT-LAP-001", name: "Dell Latitude 5440", category: "Computer Hardware", uom: "Each", type: "Fixed Asset", min: 2, serial: true, tag: true, status: "Active" },
-  { id: 2, code: "IT-PRT-002", name: "HP LaserJet Pro M404", category: "Computer Hardware", uom: "Each", type: "Fixed Asset", min: 1, serial: true, tag: true, status: "Active" },
-  { id: 3, code: "FUR-CHR-010", name: "Executive Chair", category: "Furniture", uom: "Each", type: "Fixed Asset", min: 5, serial: false, tag: true, status: "Active" },
-  { id: 4, code: "STA-A4-001", name: "A4 Paper Ream", category: "Stationery", uom: "Ream", type: "Consumable", min: 50, serial: false, tag: false, status: "Active" },
-  { id: 5, code: "STA-PEN-003", name: "Ball Point Pen (Blue)", category: "Stationery", uom: "Pack", type: "Consumable", min: 30, serial: false, tag: false, status: "Active" },
-  { id: 6, code: "LAB-BKR-001", name: "Glass Beaker 250ml", category: "Lab Equipment", uom: "Each", type: "Consumable", min: 20, serial: false, tag: false, status: "Active" },
-  { id: 7, code: "LAB-MIC-002", name: "Olympus Microscope CX23", category: "Lab Equipment", uom: "Each", type: "Fixed Asset", min: 1, serial: true, tag: true, status: "Active" },
-  { id: 8, code: "NET-SW-001", name: "Cisco Catalyst 2960 Switch", category: "Networking", uom: "Each", type: "Fixed Asset", min: 1, serial: true, tag: true, status: "Active" },
-  { id: 9, code: "SW-OFC-365", name: "Microsoft 365 Education", category: "Software License", uom: "License", type: "Software License", min: 10, serial: true, tag: false, status: "Active" },
-  { id: 10, code: "CS-ANS-001", name: "Examination Answer Book", category: "Controlled Stationery", uom: "Book", type: "Controlled Item", min: 200, serial: true, tag: false, status: "Active" },
-  { id: 11, code: "CS-DEG-001", name: "Degree Certificate Form", category: "Controlled Stationery", uom: "Sheet", type: "Controlled Item", min: 100, serial: true, tag: false, status: "Active" },
+type Lookup = {
+  id: number;
+  code?: string;
+  name?: string;
+};
+
+type LookupMap = Record<"asset-categories" | "units-of-measure", Lookup[]>;
+
+const itemTypeOptions = [
+  { value: "", label: "All Types" },
+  { value: "consumable", label: "Consumable" },
+  { value: "fixed_asset", label: "Fixed Asset" },
+  { value: "repairable", label: "Repairable" },
+  { value: "controlled_item", label: "Controlled Item" },
+  { value: "project_inventory", label: "Project Inventory" },
+  { value: "sample_prototype", label: "Sample/Prototype" },
+  { value: "software_license", label: "Software License" },
 ];
 
-const typeOptions = ["Fixed Asset", "Consumable", "Software License", "Controlled Item"];
+const statusOptions = [
+  { value: "", label: "All Status" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+const itemTypeLabelMap: Record<ItemType, string> = {
+  consumable: "Consumable",
+  fixed_asset: "Fixed Asset",
+  repairable: "Repairable",
+  controlled_item: "Controlled Item",
+  project_inventory: "Project Inventory",
+  sample_prototype: "Sample/Prototype",
+  software_license: "Software License",
+};
+
+const toBoolean = (value: boolean | number | string | null | undefined): boolean =>
+  value === true || value === 1 || value === "1" || value === "true";
+
+const formatLookup = (lookupRows: Lookup[], id: number | null) => {
+  if (!id) return "-";
+  const row = lookupRows.find((rowItem) => rowItem.id === id);
+  if (!row) return `#${id}`;
+  return `${row.code ?? ""}${row.code && row.name ? " - " : ""}${row.name ?? ""}`.trim() || `#${id}`;
+};
+
+const toNumericString = (value: string | number | null | undefined): string => {
+  if (value === null || value === undefined || value === "") return "0";
+
+  const numberValue = typeof value === "string" ? Number(value) : value;
+  if (Number.isNaN(numberValue)) return "0";
+  return String(numberValue);
+};
 
 export default function ItemsPage() {
+  const [token, setToken] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const [tempToken, setTempToken] = useState(token);
+  const [rows, setRows] = useState<ItemRow[]>([]);
+  const [lookups, setLookups] = useState<LookupMap>({
+    "asset-categories": [],
+    "units-of-measure": [],
+  });
   const [search, setSearch] = useState("");
-  const [type, setType] = useState("");
-  const [status, setStatus] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("Load data to begin.");
 
-  const rows = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  const authHeaders = useMemo(
+    () => ({
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    }),
+    [token],
+  );
 
-    return itemRows.filter((item) => {
-      const matchesSearch = query.length === 0 || `${item.code} ${item.name}`.toLowerCase().includes(query);
-      const matchesType = type.length === 0 || item.type === type;
-      const matchesStatus = status.length === 0 || item.status === status;
+  const loadLookups = useCallback(async () => {
+    if (!token) {
+      return;
+    }
 
-      return matchesSearch && matchesType && matchesStatus;
-    });
-  }, [search, status, type]);
+    try {
+      const keys: Array<[LookupMap extends Record<infer K, unknown> ? K & string : never, string]> = [
+        ["asset-categories", "asset-categories"],
+        ["units-of-measure", "units-of-measure"],
+      ];
+
+      const next = { ...lookups };
+
+      await Promise.all(
+        keys.map(async ([key, path]) => {
+          const response = await api.get<{ data: Lookup[] }>(`/master-data/${path}`, authHeaders);
+          const payload = response.data?.data;
+          if (Array.isArray(payload)) {
+            next[key] = payload;
+          }
+        }),
+      );
+
+      setLookups(next);
+      setError("");
+    } catch {
+      setError("Unable to load item lookups. Verify token and backend connectivity.");
+    }
+  }, [authHeaders, token, lookups]);
+
+  const loadRows = useCallback(async () => {
+    if (!token) {
+      return;
+    }
+
+    setError("");
+    setMessage("");
+    setLoading(true);
+
+    try {
+      const response = await api.get<{ data: ItemRow[] }>("/master-data/items", {
+        ...authHeaders,
+        params: {
+          ...(search.trim() ? { search: search.trim() } : {}),
+          ...(statusFilter ? { status: statusFilter } : {}),
+        },
+      });
+
+      const payload = response.data?.data;
+      setRows(Array.isArray(payload) ? payload : []);
+      setMessage("Items loaded.");
+    } catch {
+      setRows([]);
+      setError("Unable to load items. Verify token and backend connectivity.");
+      setMessage("");
+    } finally {
+      setLoading(false);
+    }
+  }, [authHeaders, search, statusFilter, token]);
+
+  useEffect(() => {
+    const reload = async () => {
+      await loadRows();
+    };
+
+    void reload();
+  }, [loadRows]);
+
+  useEffect(() => {
+    const reloadLookups = async () => {
+      await loadLookups();
+    };
+
+    void reloadLookups();
+  }, [loadLookups]);
+
+  const submitToken = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    localStorage.setItem("ims_api_token", tempToken);
+    setToken(tempToken);
+    setMessage("Token saved. Loading item master...");
+  };
 
   const resetFilters = () => {
     setSearch("");
-    setType("");
-    setStatus("");
+    setTypeFilter("");
+    setStatusFilter("");
   };
 
+  const filteredRows = useMemo(() => {
+    const normalizedType = typeFilter.trim();
+    if (!normalizedType) {
+      return rows;
+    }
+
+    return rows.filter((row) => row.item_type === normalizedType);
+  }, [rows, typeFilter]);
+
   const columns = [
-    {
-      key: "code",
-      header: "Code",
-      render: (row: ItemRow) => (
-        <a className="ims-code-link" href={`#${row.code}`}>
-          {row.code}
-        </a>
-      ),
-    },
+    { key: "item_code", header: "Code" },
     { key: "name", header: "Name" },
-    { key: "category", header: "Category" },
-    { key: "uom", header: "UoM" },
     {
-      key: "type",
-      header: "Type",
-      render: (row: ItemRow) => <span className="badge text-bg-light border text-dark">{row.type}</span>,
+      key: "category_id",
+      header: "Category",
+      render: (row: ItemRow) => formatLookup(lookups["asset-categories"], row.category_id),
     },
-    { key: "min", header: "Min", className: "text-end" },
     {
-      key: "serial",
+      key: "unit_id",
+      header: "UoM",
+      render: (row: ItemRow) => formatLookup(lookups["units-of-measure"], row.unit_id),
+    },
+    {
+      key: "item_type",
+      header: "Type",
+      render: (row: ItemRow) => <span className="badge text-bg-light border text-dark">{itemTypeLabelMap[row.item_type]}</span>,
+    },
+    { key: "minimum_stock_level", header: "Min", className: "text-end", render: (row: ItemRow) => toNumericString(row.minimum_stock_level) },
+    {
+      key: "requires_serial_tracking",
       header: "Serial",
       className: "text-center",
       render: (row: ItemRow) =>
-        row.serial ? <i className="bi bi-check-lg text-success" aria-label="Serial tracked" /> : <span className="text-secondary">&mdash;</span>,
+        toBoolean(row.requires_serial_tracking) ? (
+          <i className="bi bi-check-lg text-success" aria-label="Serial tracked" />
+        ) : (
+          <span className="text-secondary">&mdash;</span>
+        ),
     },
     {
-      key: "tag",
+      key: "requires_qr_tag",
       header: "Tag",
       className: "text-center",
       render: (row: ItemRow) =>
-        row.tag ? <i className="bi bi-qr-code text-primary" aria-label="Tag enabled" /> : <span className="text-secondary">&mdash;</span>,
+        toBoolean(row.requires_qr_tag) ? (
+          <i className="bi bi-qr-code text-primary" aria-label="Tag required" />
+        ) : (
+          <span className="text-secondary">&mdash;</span>
+        ),
     },
     {
       key: "status",
@@ -100,13 +252,26 @@ export default function ItemsPage() {
       <div className="container-fluid p-4">
         <PageHeader
           title="Item Master"
-          subtitle="Consumables, fixed assets, controlled items, licenses, project inventory"
+          subtitle="Consumables, fixed assets, controlled items, licenses, and project inventory"
           breadcrumbs={[{ label: "Inventory" }, { label: "Items" }]}
           actions={
-            <button className="btn btn-primary" type="button">
-              <i className="bi bi-plus-lg me-2" />
-              New Item
-            </button>
+            <form className="d-flex gap-2 align-items-end" onSubmit={submitToken}>
+              <div className="input-group input-group-sm">
+                <span className="input-group-text">
+                  <i className="bi bi-key" />
+                </span>
+                <input
+                  className="form-control"
+                  placeholder="Bearer token"
+                  value={tempToken}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTempToken(event.target.value)}
+                  type="password"
+                />
+              </div>
+              <button className="btn btn-sm btn-outline-primary" type="submit">
+                Save token
+              </button>
+            </form>
           }
         />
 
@@ -122,28 +287,36 @@ export default function ItemsPage() {
           </div>
           <div className="col-12 col-lg-3">
             <label className="form-label fw-semibold">Type</label>
-            <select className="form-select" value={type} onChange={(event) => setType(event.target.value)}>
-              <option value="">All</option>
-              {typeOptions.map((option) => (
-                <option key={option}>{option}</option>
+            <select className="form-select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+              {itemTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
               ))}
             </select>
           </div>
           <div className="col-12 col-lg-3">
             <label className="form-label fw-semibold">Status</label>
-            <select className="form-select" value={status} onChange={(event) => setStatus(event.target.value)}>
-              <option value="">All</option>
-              <option>Active</option>
+            <select className="form-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
         </FilterBar>
 
-        <DataTable
-          columns={columns}
-          rows={rows}
-          empty="No items found."
-          rowClassName={(row) => (row.code === "LAB-MIC-002" ? "table-active" : "")}
-        />
+        {error ? <div className="alert alert-danger">{error}</div> : null}
+        {!token ? <div className="alert alert-info">Save token to load live items.</div> : null}
+        {message ? <div className="alert alert-light border-0">{message}</div> : null}
+
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <h2 className="h6 fw-semibold mb-0">Item master list</h2>
+          {loading ? <span className="small text-secondary">Loading…</span> : null}
+        </div>
+
+        <DataTable columns={columns} rows={filteredRows} empty="No items found." />
       </div>
     </main>
   );
