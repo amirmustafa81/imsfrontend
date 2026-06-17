@@ -381,6 +381,27 @@ describe("IssuesReturnsPage adjustment flow", () => {
     });
   });
 
+  test("resets adjustment to default increase scope when re-selecting adjustment", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+    await user.selectOptions(getSelectValue(/to store/i), "11");
+
+    await user.click(screen.getByText(/decrease stock/i));
+    expect(screen.getByText(/decrease stock/i)).toBeInTheDocument();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "issue");
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    expect(screen.getByText(/increase stock/i)).toBeInTheDocument();
+    expect(screen.getByText(/decrease stock/i)).toBeInTheDocument();
+
+    expect(getSelectValue(/to department/i)).toHaveValue("");
+    expect(getSelectValue(/to store/i)).toHaveValue("");
+    expect(getControlForLabel(/from department/i)).not.toBeInTheDocument();
+  });
+
   test("shows save failure message when server rejects adjustment post", async () => {
     const { user } = await renderPage();
 
