@@ -297,7 +297,7 @@ export default function MasterDataPage() {
           query.search = search.trim();
         }
 
-        const response = await api.get(`/master-data/${active.endpoint}`, {
+        const response = await api.get(`/master-data/${definition.endpoint}`, {
           ...authHeaders,
           params: query,
         });
@@ -316,7 +316,7 @@ export default function MasterDataPage() {
     };
 
     void reload();
-  }, [activeResource, authHeaders, search, statusFilter, token]);
+  }, [activeResource, definition.endpoint, authHeaders, search, statusFilter, token]);
 
   useEffect(() => {
     if (!token) return;
