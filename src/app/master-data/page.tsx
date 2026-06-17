@@ -244,6 +244,42 @@ const toDateInput = (value: unknown): string => {
   return String(value);
 };
 
+const getFieldPlaceholder = (field: FieldDef): string => {
+  const examples: Record<string, string> = {
+    code: "e.g. CSE, BLK-01",
+    name: "e.g. Civil Engineering",
+    erp_department_id: "e.g. DEPT-1001",
+    department_type: "e.g. Academic",
+    floor: "e.g. 1",
+    store_type: "e.g. Central, Departmental",
+    parent_category_id: "Select a parent category if any",
+    useful_life_years: "e.g. 5",
+    capitalization_threshold: "e.g. 5000",
+    is_sensitive_controlled: "e.g. Yes / No",
+    requires_serial_tracking: "e.g. Yes / No",
+    requires_qr_tag: "e.g. Yes / No",
+    sponsor_type: "e.g. Government",
+    ntn: "e.g. 1234567-8",
+    contact_person: "e.g. Ali Khan",
+    phone: "e.g. +92 300 0000000",
+    address: "Enter full address",
+    project_code: "e.g. HEC-NRPU-2026",
+    title: "e.g. Applied AI in Health",
+    sponsor: "e.g. HEC",
+    cost_center_code: "e.g. CC-001",
+  };
+
+  if (examples[field.key]) {
+    return examples[field.key];
+  }
+
+  if (field.type === "textarea") {
+    return `Enter ${field.label.toLowerCase()} details`;
+  }
+
+  return "";
+};
+
 export default function MasterDataPage() {
   const storedToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
 
@@ -516,6 +552,7 @@ export default function MasterDataPage() {
           className="form-control"
           rows={3}
           value={typeof value === "boolean" ? (value ? "1" : "0") : String(value)}
+          placeholder={getFieldPlaceholder(field)}
           onChange={(event) => setFieldValue(field.key, event.target.value)}
         />
       );
@@ -560,16 +597,17 @@ export default function MasterDataPage() {
       );
     }
 
-    return (
-      <input
-        className="form-control"
-        type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-        value={String(value)}
-        onChange={(event) =>
-          field.type === "number"
-            ? setNumericOrBlank(field.key, event.target.value)
-            : setFieldValue(field.key, event.target.value)
-        }
+      return (
+        <input
+          className="form-control"
+          type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+          value={String(value)}
+          placeholder={field.type === "select" ? "" : getFieldPlaceholder(field)}
+          onChange={(event) =>
+            field.type === "number"
+              ? setNumericOrBlank(field.key, event.target.value)
+              : setFieldValue(field.key, event.target.value)
+          }
       />
     );
   };
