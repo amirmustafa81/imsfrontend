@@ -273,6 +273,22 @@ describe("IssuesReturnsPage adjustment flow", () => {
     expect(mockedApi.post).not.toHaveBeenCalled();
   });
 
+  test("prevents save for adjustment increase when destination store is missing", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/please complete to store id for adjustment/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
   test("prevents save for adjustment decrease when source scope is missing", async () => {
     const { user } = await renderPage();
 
@@ -284,6 +300,23 @@ describe("IssuesReturnsPage adjustment flow", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/please complete from department id for adjustment/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
+  test("prevents save for adjustment decrease when source store is missing", async () => {
+    const { user } = await renderPage();
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await user.click(screen.getByText(/decrease stock/i));
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getSelectValue(/from department/i), "2");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/please complete from store id for adjustment/i)).toBeInTheDocument();
     });
 
     expect(mockedApi.post).not.toHaveBeenCalled();
