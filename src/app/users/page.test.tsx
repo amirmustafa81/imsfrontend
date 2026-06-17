@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import UsersPage from "./page";
@@ -101,12 +101,14 @@ describe("UsersPage", () => {
       expect(screen.getByText("Areeba Khan")).toBeInTheDocument();
     });
 
+    await user.click(screen.getByRole("button", { name: /Create user/i }));
     await user.type(screen.getByLabelText(/Name/i), "Bilal Ahmed");
     await user.type(screen.getByLabelText(/^Email$/i), "bilal@example.com");
     await user.type(screen.getByLabelText(/^Password$/i), "Secret123");
     await user.selectOptions(screen.getByLabelText(/Department/i), "2");
     await user.selectOptions(screen.getByLabelText(/Roles/i), "1");
-    await user.click(screen.getByRole("button", { name: /Create user/i }));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: /^Create User$/i }));
 
     await waitFor(() => {
       expect(mockedApi.post).toHaveBeenCalledWith(
@@ -131,11 +133,14 @@ describe("UsersPage", () => {
     });
 
     await user.click(screen.getByRole("button", { name: /Edit user/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Save Changes/i })).toBeInTheDocument();
+    });
 
     const nameInput = screen.getByLabelText(/Name/i);
     await user.clear(nameInput);
     await user.type(nameInput, "Areeba Noor");
-    await user.click(screen.getByRole("button", { name: /Save changes/i }));
+    await user.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
       expect(mockedApi.put).toHaveBeenCalledWith(

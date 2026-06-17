@@ -60,6 +60,7 @@ export default function UsersPage() {
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -118,6 +119,18 @@ export default function UsersPage() {
     setForm(emptyForm);
   };
 
+  const closeDialog = () => {
+    setDialogOpen(false);
+    resetForm();
+  };
+
+  const openCreateDialog = () => {
+    resetForm();
+    setDialogOpen(true);
+    setError("");
+    setMessage("");
+  };
+
   const startEdit = (user: UserRow) => {
     setEditingUserId(user.id);
     setForm({
@@ -132,6 +145,7 @@ export default function UsersPage() {
       status: user.status,
       role_ids: (user.roles ?? []).map((role) => String(role.id)),
     });
+    setDialogOpen(true);
     setError("");
     setMessage("");
   };
@@ -177,7 +191,7 @@ export default function UsersPage() {
         setMessage("User updated successfully.");
       }
       setError("");
-      resetForm();
+      closeDialog();
       await loadRows();
     } catch (saveError: unknown) {
       const apiMessage =
@@ -237,168 +251,183 @@ export default function UsersPage() {
           title="Users"
           subtitle="Create users, update access details, and assign roles."
           actions={
-            <form className="d-flex gap-2" onSubmit={submitToken}>
-              <div className="input-group input-group-sm">
-                <span className="input-group-text">
-                  <i className="bi bi-key" />
-                </span>
-                <input
-                  className="form-control"
-                  value={tmpToken}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => setTmpToken(event.target.value)}
-                />
-              </div>
-              <button className="btn btn-sm btn-outline-primary" type="submit">
-                Save token
+            <>
+              <button className="btn btn-primary" type="button" onClick={openCreateDialog}>
+                <i className="bi bi-plus-lg me-1" />
+                Create User
               </button>
-            </form>
+              <form className="d-flex gap-2 align-items-end" onSubmit={submitToken}>
+                <div className="input-group input-group-sm">
+                  <span className="input-group-text">
+                    <i className="bi bi-key" />
+                  </span>
+                  <input
+                    className="form-control"
+                    value={tmpToken}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => setTmpToken(event.target.value)}
+                    type="password"
+                  />
+                </div>
+                <button className="btn btn-sm btn-outline-primary" type="submit">
+                  Save token
+                </button>
+              </form>
+            </>
           }
         />
         {message ? <div className="alert alert-success">{message}</div> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}
-
-        <div className="row g-4 mb-4">
-          <div className="col-12 col-xl-4">
-            <form className="card border-0 shadow-sm" onSubmit={saveUser}>
-              <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-                <span>{editingUserId === null ? "Create User" : `Edit User #${editingUserId}`}</span>
-                {editingUserId !== null ? (
-                  <button className="btn btn-sm btn-outline-secondary" type="button" onClick={resetForm}>
-                    Cancel edit
-                  </button>
-                ) : null}
-              </div>
-              <div className="card-body row g-3">
-                <div className="col-12">
-                  <label className="form-label small" htmlFor="user-name">Name</label>
-                  <input id="user-name" className="form-control form-control-sm" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
-                </div>
-                <div className="col-12">
-                  <label className="form-label small" htmlFor="user-email">Email</label>
-                  <input id="user-email" className="form-control form-control-sm" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
-                </div>
-                <div className="col-12">
-                  <label className="form-label small" htmlFor="user-password">{editingUserId === null ? "Password" : "Reset Password"}</label>
-                  <input id="user-password" className="form-control form-control-sm" type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder={editingUserId === null ? "Minimum 8 characters" : "Leave blank to keep current password"} />
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small" htmlFor="user-employee-code">Employee Code</label>
-                  <input id="user-employee-code" className="form-control form-control-sm" value={form.employee_code} onChange={(event) => setForm((current) => ({ ...current, employee_code: event.target.value }))} />
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small" htmlFor="user-phone">Phone</label>
-                  <input id="user-phone" className="form-control form-control-sm" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
-                </div>
-                <div className="col-12">
-                  <label className="form-label small" htmlFor="user-designation">Designation</label>
-                  <input id="user-designation" className="form-control form-control-sm" value={form.designation} onChange={(event) => setForm((current) => ({ ...current, designation: event.target.value }))} />
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small" htmlFor="user-department">Department</label>
-                  <select id="user-department" className="form-select form-select-sm" value={form.department_id} onChange={(event) => setForm((current) => ({ ...current, department_id: event.target.value }))}>
-                    <option value="">Select department</option>
-                    {departments.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small" htmlFor="user-access-scope">Access Scope</label>
-                  <select id="user-access-scope" className="form-select form-select-sm" value={form.access_scope} onChange={(event) => setForm((current) => ({ ...current, access_scope: event.target.value as UserForm["access_scope"] }))}>
-                    <option value="department">Department</option>
-                    <option value="university">University-wide</option>
-                  </select>
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small" htmlFor="user-status">Status</label>
-                  <select id="user-status" className="form-select form-select-sm" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as UserForm["status"] }))}>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
-                </div>
-                <div className="col-12">
-                  <label className="form-label small" htmlFor="user-roles">Roles</label>
-                  <select
-                    id="user-roles"
-                    multiple
-                    className="form-select"
-                    size={6}
-                    value={form.role_ids}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        role_ids: Array.from(event.target.selectedOptions).map((option) => option.value),
-                      }))
-                    }
-                  >
-                    {roles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="form-text">Hold Command/Ctrl to select multiple roles.</div>
-                </div>
-                <div className="col-12 d-flex gap-2">
-                  <button className="btn btn-sm btn-primary" type="submit" disabled={saving}>
-                    <i className={`bi ${editingUserId === null ? "bi-person-plus" : "bi-save"} me-1`} />
-                    {saving ? "Saving..." : editingUserId === null ? "Create user" : "Save changes"}
-                  </button>
-                  <button className="btn btn-sm btn-outline-secondary" type="button" onClick={resetForm}>
-                    Reset
-                  </button>
-                </div>
-              </div>
-            </form>
+        <FilterBar onReset={() => setFilters({ search: "", status: "", accessScope: "", department: "" })}>
+          <div className="col-12 col-lg-4">
+            <label className="form-label fw-semibold">Search</label>
+            <input className="form-control" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} />
           </div>
-
-          <div className="col-12 col-xl-8">
-            <FilterBar onReset={() => setFilters({ search: "", status: "", accessScope: "", department: "" })}>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Search</label>
-                <input className="form-control form-control-sm" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} />
-              </div>
-              <div className="col-12 col-md-3">
-                <label className="form-label small mb-1">Status</label>
-                <select className="form-select form-select-sm" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
-                  <option value="">All</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="suspended">Suspended</option>
-                </select>
-              </div>
-              <div className="col-12 col-md-3">
-                <label className="form-label small mb-1">Access Scope</label>
-                <select className="form-select form-select-sm" value={filters.accessScope} onChange={(event) => setFilters((current) => ({ ...current, accessScope: event.target.value }))}>
-                  <option value="">All</option>
-                  <option value="department">Department</option>
-                  <option value="university">University-wide</option>
-                </select>
-              </div>
-              <div className="col-12 col-md-2">
-                <label className="form-label small mb-1">Department</label>
-                <select className="form-select form-select-sm" value={filters.department} onChange={(event) => setFilters((current) => ({ ...current, department: event.target.value }))}>
-                  <option value="">All</option>
-                  {departments.map((department) => (
-                    <option key={department.id} value={department.id}>
-                      {department.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </FilterBar>
-
-            {rows.length === 0 ? (
-              <EmptyState title="No users found" message="Create the first user or adjust the selected filters." />
-            ) : (
-              <DataTable columns={columns} rows={rows} />
-            )}
+          <div className="col-12 col-lg-3">
+            <label className="form-label fw-semibold">Status</label>
+            <select className="form-select" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
+              <option value="">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="suspended">Suspended</option>
+            </select>
           </div>
+          <div className="col-12 col-lg-3">
+            <label className="form-label fw-semibold">Access Scope</label>
+            <select className="form-select" value={filters.accessScope} onChange={(event) => setFilters((current) => ({ ...current, accessScope: event.target.value }))}>
+              <option value="">All</option>
+              <option value="department">Department</option>
+              <option value="university">University-wide</option>
+            </select>
+          </div>
+          <div className="col-12 col-lg-2">
+            <label className="form-label fw-semibold">Department</label>
+            <select className="form-select" value={filters.department} onChange={(event) => setFilters((current) => ({ ...current, department: event.target.value }))}>
+              <option value="">All</option>
+              {departments.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </FilterBar>
+
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <h2 className="h6 fw-semibold mb-0">User list</h2>
+          <span className="small text-secondary">{rows.length} record{rows.length === 1 ? "" : "s"}</span>
         </div>
+
+        {rows.length === 0 ? (
+          <EmptyState title="No users found" message="Create the first user or adjust the selected filters." />
+        ) : (
+          <DataTable columns={columns} rows={rows} />
+        )}
       </div>
+
+      {dialogOpen ? (
+        <>
+          <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+            <div className="modal-dialog modal-lg modal-dialog-scrollable">
+              <form className="modal-content border-0 shadow" onSubmit={saveUser}>
+                <div className="modal-header">
+                  <div>
+                    <h5 className="modal-title mb-1">{editingUserId === null ? "Create User" : `Edit User #${editingUserId}`}</h5>
+                    <div className="small text-secondary">Manage identity, department scope, and assigned roles.</div>
+                  </div>
+                  <button className="btn-close" type="button" aria-label="Close" onClick={closeDialog} />
+                </div>
+                <div className="modal-body">
+                  <div className="row g-3">
+                    <div className="col-12">
+                      <label className="form-label small" htmlFor="user-name">Name</label>
+                      <input id="user-name" className="form-control" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small" htmlFor="user-email">Email</label>
+                      <input id="user-email" className="form-control" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small" htmlFor="user-password">{editingUserId === null ? "Password" : "Reset Password"}</label>
+                      <input id="user-password" className="form-control" type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder={editingUserId === null ? "Minimum 8 characters" : "Leave blank to keep current password"} />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <label className="form-label small" htmlFor="user-employee-code">Employee Code</label>
+                      <input id="user-employee-code" className="form-control" value={form.employee_code} onChange={(event) => setForm((current) => ({ ...current, employee_code: event.target.value }))} />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <label className="form-label small" htmlFor="user-phone">Phone</label>
+                      <input id="user-phone" className="form-control" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small" htmlFor="user-designation">Designation</label>
+                      <input id="user-designation" className="form-control" value={form.designation} onChange={(event) => setForm((current) => ({ ...current, designation: event.target.value }))} />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <label className="form-label small" htmlFor="user-department">Department</label>
+                      <select id="user-department" className="form-select" value={form.department_id} onChange={(event) => setForm((current) => ({ ...current, department_id: event.target.value }))}>
+                        <option value="">Select department</option>
+                        {departments.map((department) => (
+                          <option key={department.id} value={department.id}>
+                            {department.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <label className="form-label small" htmlFor="user-access-scope">Access Scope</label>
+                      <select id="user-access-scope" className="form-select" value={form.access_scope} onChange={(event) => setForm((current) => ({ ...current, access_scope: event.target.value as UserForm["access_scope"] }))}>
+                        <option value="department">Department</option>
+                        <option value="university">University-wide</option>
+                      </select>
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <label className="form-label small" htmlFor="user-status">Status</label>
+                      <select id="user-status" className="form-select" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as UserForm["status"] }))}>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="suspended">Suspended</option>
+                      </select>
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small" htmlFor="user-roles">Roles</label>
+                      <select
+                        id="user-roles"
+                        multiple
+                        className="form-select"
+                        size={6}
+                        value={form.role_ids}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            role_ids: Array.from(event.target.selectedOptions).map((option) => option.value),
+                          }))
+                        }
+                      >
+                        {roles.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="form-text">Hold Command/Ctrl to select multiple roles.</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
+                    Cancel
+                  </button>
+                  <button className="btn btn-primary" type="submit" disabled={saving}>
+                    <i className={`bi ${editingUserId === null ? "bi-person-plus" : "bi-save"} me-1`} />
+                    {saving ? "Saving..." : editingUserId === null ? "Create User" : "Save Changes"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div className="modal-backdrop fade show" onClick={closeDialog} />
+        </>
+      ) : null}
     </main>
   );
 }
