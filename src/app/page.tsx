@@ -119,6 +119,19 @@ const METRIC_TONES: Record<string, string> = {
   success: "success",
 };
 
+const DEFAULT_METRICS: DashboardMetric[] = [
+  { label: "Fixed Assets", value: "0", hint: "0 in use", icon: "bi-tags", tone: "primary" },
+  { label: "Stock Items", value: "0", hint: "distinct SKUs", icon: "bi-box-seam", tone: "info" },
+  { label: "Low Stock Alerts", value: "0", hint: "below reorder level", icon: "bi-exclamation-triangle", tone: "warning" },
+  { label: "Pending Approvals", value: "0", hint: "awaiting manual ref", icon: "bi-clipboard2-check", tone: "secondary" },
+  { label: "Missing / Damaged", value: "0", hint: "under investigation", icon: "bi-patch-question", tone: "danger" },
+  { label: "Recent Receipts", value: "0", hint: "last 30 days", icon: "bi-truck", tone: "success" },
+  { label: "Issues / Returns", value: "0", hint: "recent movements", icon: "bi-arrow-left-right", tone: "info" },
+  { label: "Controlled Stationery Alerts", value: "0", hint: "active tracked batches", icon: "bi-shield-exclamation", tone: "danger" },
+  { label: "Verification Progress", value: "0%", hint: "current cycle", icon: "bi-clipboard-check", tone: "primary" },
+  { label: "Under Repair", value: "0", hint: "assets in workshop", icon: "bi-wrench", tone: "warning" },
+];
+
 const dateFormatter = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",
   month: "2-digit",
@@ -178,7 +191,7 @@ export default function Home() {
   const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
   const [loading, setLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState("");
-  const [metrics, setMetrics] = useState<DashboardMetric[]>([]);
+  const [metrics, setMetrics] = useState<DashboardMetric[]>(DEFAULT_METRICS);
   const [departmentCounts, setDepartmentCounts] = useState<DepartmentCount[]>([]);
   const [lowStockRows, setLowStockRows] = useState<LowStockTableRow[]>([]);
   const [recentReceiptRows, setRecentReceiptRows] = useState<ReceiptTableRow[]>([]);
@@ -187,6 +200,7 @@ export default function Home() {
   useEffect(() => {
     if (!token) {
       setDashboardError("Dashboard metrics need a valid API token in local storage.");
+      setMetrics(DEFAULT_METRICS);
       return;
     }
 
@@ -433,7 +447,7 @@ export default function Home() {
         }
 
         setDashboardError("Unable to load dashboard data from backend. Verify token, API base URL, and permissions.");
-        setMetrics([]);
+        setMetrics(DEFAULT_METRICS);
         setDepartmentCounts([]);
         setLowStockRows([]);
         setRecentReceiptRows([]);
