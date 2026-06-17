@@ -336,4 +336,23 @@ describe("IssuesReturnsPage adjustment flow", () => {
       expect(getSelectValue(/from store/i)).toHaveValue("");
     });
   });
+
+  test("shows save failure message when server rejects adjustment post", async () => {
+    const { user } = await renderPage();
+
+    mockedApi.post.mockRejectedValue(new Error("overdrawn stock"));
+
+    await user.selectOptions(getComboboxByLabel(/voucher type/i), "adjustment");
+    await fillRequiredCommonFields(user);
+    await user.selectOptions(getSelectValue(/to department/i), "2");
+    await user.selectOptions(getSelectValue(/to store/i), "11");
+
+    await user.click(screen.getByRole("button", { name: /save transaction/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/failed to save transaction/i)).toBeInTheDocument();
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledTimes(1);
+  });
 });
