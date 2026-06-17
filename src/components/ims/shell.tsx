@@ -53,6 +53,9 @@ const NAV_GROUPS: SidebarGroup[] = [
     items: [
       { label: "Physical Verification", href: "/verification", icon: "bi-clipboard-check" },
       { label: "Disposal / Write-Off", href: "/disposals", icon: "bi-trash3" },
+      { label: "Asset Investigations", href: "/asset-investigations", icon: "bi-search", planned: true },
+      { label: "Maintenance Records", href: "/maintenance-records", icon: "bi-tools", planned: true },
+      { label: "Asset Movements", href: "/asset-movements", icon: "bi-arrow-up-right-circle" },
       { label: "Audit Log", href: "/audit-logs", icon: "bi-shield-check" },
     ],
   },
@@ -61,6 +64,8 @@ const NAV_GROUPS: SidebarGroup[] = [
     items: [
       { label: "Reports", href: "/reports", icon: "bi-bar-chart" },
       { label: "Export History", href: "/export-history", icon: "bi-cloud-arrow-up" },
+      { label: "Documents", href: "/documents", icon: "bi-folder2-open" },
+      { label: "ERP Sync Logs", href: "/erp-sync-logs", icon: "bi-arrow-repeat" },
     ],
   },
   {
@@ -70,6 +75,10 @@ const NAV_GROUPS: SidebarGroup[] = [
       { label: "ERP Import", href: "/import", icon: "bi-upload" },
       { label: "Depreciation", href: "/depreciation", icon: "bi-percent" },
       { label: "Stock Movements", href: "/transfers", icon: "bi-diagram-3" },
+      { label: "System Settings", href: "/system-settings", icon: "bi-gear" },
+      { label: "User Delegations", href: "/user-delegations", icon: "bi-person-check" },
+      { label: "Users", href: "/users", icon: "bi-people" },
+      { label: "Roles", href: "/roles", icon: "bi-shield-lock" },
     ],
   },
 ];
