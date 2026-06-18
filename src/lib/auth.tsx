@@ -38,8 +38,22 @@ type AuthContextValue = {
   hasPermission: (permission: string | string[]) => boolean;
 };
 
-export const isAuthBypassEnabled =
-  process.env.NEXT_PUBLIC_DISABLE_AUTH === "true" || process.env.NEXT_PUBLIC_DISABLE_AUTH === "1";
+const resolveAuthBypass = () => {
+  const value = process.env.NEXT_PUBLIC_DISABLE_AUTH;
+
+  if (value === undefined || value === "") {
+    return true;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (["false", "0", "off", "no"].includes(normalized)) {
+    return false;
+  }
+
+  return ["true", "1", "on", "yes"].includes(normalized);
+};
+
+export const isAuthBypassEnabled = resolveAuthBypass();
 
 const DEMO_USER: AuthUser = {
   id: 0,
