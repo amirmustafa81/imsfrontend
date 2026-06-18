@@ -37,6 +37,26 @@ type AuthContextValue = {
   refreshUser: () => Promise<void>;
 };
 
+const isAuthBypassEnabled =
+  process.env.NEXT_PUBLIC_DISABLE_AUTH === "true" || process.env.NEXT_PUBLIC_DISABLE_AUTH === "1";
+
+const DEMO_USER: AuthUser = {
+  id: 0,
+  name: "IMS Demo User",
+  email: "demo@local",
+  employee_code: "DEMO-001",
+  designation: "System User",
+  access_scope: "university",
+  status: "active",
+  roles: [
+    {
+      id: 1,
+      name: "Administrator",
+    },
+  ],
+  permissions: ["*"],
+};
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -44,7 +64,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const activateDemoSession = useCallback(() => {
+    setToken("demo-token");
+    setUser(DEMO_USER);
+    setLoading(false);
+  }, []);
+
   const refreshUser = useCallback(async () => {
+    if (isAuthBypassEnabled) {
+      activateDemoSession();
+      return;
+    }
+
     const currentToken = getStoredToken();
 
     if (!currentToken) {
@@ -66,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activateDemoSession]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -75,16 +106,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (payload: LoginPayload) => {
+      if (isAuthBypassEnabled) {
+        activateDemoSession();
+        return;
+      }
+
       const response = await api.post<{ token: string; user: AuthUser }>("/auth/login", payload);
       setStoredToken(response.data.token);
       setToken(response.data.token);
       setUser(response.data.user);
       await refreshUser();
     },
-    [refreshUser],
+    [activateDemoSession, refreshUser],
   );
 
   const logout = useCallback(async () => {
+    if (isAuthBypassEnabled) {
+      activateDemoSession();
+      return;
+    }
+
     try {
       await api.post("/auth/logout");
     } catch {
@@ -94,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken("");
       setUser(null);
     }
-  }, []);
+  }, [activateDemoSession]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
