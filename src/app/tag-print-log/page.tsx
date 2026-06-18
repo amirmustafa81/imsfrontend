@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
@@ -44,10 +45,12 @@ const printFormatOptions = [
 
 export default function TagPrintLogPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
 
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const [rows, setRows] = useState<TagPrintLog[]>([]);
   const [search, setSearch] = useState("");
+  const [assetFilterId, setAssetFilterId] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState<TagPrintForm>({
@@ -57,6 +60,10 @@ export default function TagPrintLogPage() {
     remarks: "",
   });
   const [message, setMessage] = useState("");
+
+  const prefillAssetId = useMemo(() => Number(searchParams.get("asset_id") ?? ""), [searchParams]);
+  const prefillAssetCode = searchParams.get("asset_code") || "";
+  const prefillSuggestedTag = searchParams.get("suggested_tag") || "";
 
   const loadLookups = useCallback(async () => {
     if (authLoading || !isAuthenticated) {
@@ -80,9 +87,16 @@ export default function TagPrintLogPage() {
     setError("");
 
     try {
-      const response = await api.get<{ data: TagPrintLog[] }>("/asset-tag-print-logs", {
-        params: search.trim() ? { searchable_tag_id: search.trim() } : undefined,
-      });
+      const response = await api.get<{ data: TagPrintLog[] }>(
+        "/asset-tag-print-logs",
+        {
+          params: assetFilterId
+            ? { asset_id: assetFilterId }
+            : search.trim()
+              ? { searchable_tag_id: search.trim() }
+              : undefined,
+        },
+      );
       setRows(response.data.data ?? []);
     } catch {
       setRows([]);
@@ -90,12 +104,51 @@ export default function TagPrintLogPage() {
     } finally {
       setLoading(false);
     }
-  }, [authLoading, isAuthenticated, search]);
+  }, [assetFilterId, authLoading, isAuthenticated, search]);
+
+  const applyPrefillFromQuery = useCallback(() => {
+    if (prefillAssetId > 0) {
+      const matchedAsset = assets.find((asset) => asset.id === prefillAssetId);
+
+      setForm((current) => {
+        const nextAssetId = matchedAsset?.id ? String(matchedAsset.id) : current.asset_id;
+        const nextPrintableTagId = prefillSuggestedTag || current.printable_tag_id;
+
+        return {
+          ...current,
+          asset_id: nextAssetId,
+          printable_tag_id: nextPrintableTagId,
+          remarks: current.remarks || (matchedAsset ? `Tag print entry for ${matchedAsset.asset_id}` : current.remarks),
+        };
+      });
+
+      if (prefillAssetId > 0) {
+        setAssetFilterId(prefillAssetId);
+      }
+
+      return;
+    }
+
+    if (!form.asset_id && prefillAssetCode) {
+      const matchedAsset = assets.find((asset) => asset.asset_id === prefillAssetCode);
+      if (matchedAsset) {
+        setForm((current) => ({
+          ...current,
+          asset_id: String(matchedAsset.id),
+        }));
+      }
+    }
+  }, [assets, form.asset_id, prefillAssetCode, prefillAssetId, prefillSuggestedTag]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadLookups();
   }, [loadLookups]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    applyPrefillFromQuery();
+  }, [applyPrefillFromQuery]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -174,6 +227,7 @@ export default function TagPrintLogPage() {
                       className="form-select form-select-sm"
                       value={form.asset_id}
                       onChange={(event) => setField("asset_id", event.target.value)}
+                      required
                     >
                       <option value="">Choose asset</option>
                       {assets.map((asset) => (
@@ -226,7 +280,10 @@ export default function TagPrintLogPage() {
           </div>
 
           <div className="col-12 col-xl-7">
-            <FilterBar onReset={() => setSearch("") }>
+            <FilterBar onReset={() => {
+              setSearch("");
+              setAssetFilterId(0);
+            }}>
               <div className="col-12 col-lg-8">
                 <label className="form-label small mb-1">Search</label>
                 <input
@@ -237,6 +294,7 @@ export default function TagPrintLogPage() {
                 />
               </div>
             </FilterBar>
+            {assetFilterId ? <div className="text-secondary small mb-2">Showing logs for selected asset ID: {assetFilterId}</div> : null}
 
             <DataTable
               columns={[

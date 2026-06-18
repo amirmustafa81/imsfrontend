@@ -292,6 +292,23 @@ export default function AssetsPage() {
     { key: "condition_status", header: "Condition", render: (row: AssetRow) => <>{row.condition_status ?? "-"}</> },
     { key: "created_at", header: "Created", render: (row: AssetRow) => <small>{toDateDisplay(row.created_at)}</small> },
     { key: "model", header: "Model", render: (row: AssetRow) => <>{row.model ?? "-"}</> },
+    {
+      key: "actions",
+      header: "Tag Actions",
+      render: (row: AssetRow) => {
+        const generatedTag = row.printable_tag_id || `${row.asset_id || `FA-${row.id}`}-TAG`;
+
+        return (
+          <Link
+            className="btn btn-sm btn-outline-primary"
+            href={`/tag-print-log?asset_id=${row.id}&asset_code=${encodeURIComponent(row.asset_id ?? "")}&suggested_tag=${encodeURIComponent(generatedTag)}`}
+          >
+            <i className="bi bi-qr-code me-1" />
+            Generate / Print Tag
+          </Link>
+        );
+      },
+    },
   ];
 
   return (
