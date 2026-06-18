@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type Lookup = {
@@ -48,14 +49,7 @@ const reportColumns = [
 ];
 
 export default function StockPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
   const [reportType, setReportType] = useState<"stock_balance" | "low_stock">("stock_balance");
 
@@ -85,15 +79,15 @@ export default function StockPage() {
   }, []);
 
   const loadLookups = useCallback(async () => {
-    if (!token) {
+    if (authLoading || !isAuthenticated) {
       return;
     }
 
     try {
       const [departmentsResponse, storesResponse, projectsResponse] = await Promise.all([
-        api.get("/master-data/departments", authHeaders),
-        api.get("/master-data/stores", authHeaders),
-        api.get("/master-data/research-projects", authHeaders),
+        api.get("/master-data/departments"),
+        api.get("/master-data/stores"),
+        api.get("/master-data/research-projects"),
       ]);
 
       setDepartments(departmentsResponse.data);
@@ -102,10 +96,10 @@ export default function StockPage() {
     } catch {
       setError("Unable to load lookup data. Please check token and backend connectivity.");
     }
-  }, [authHeaders, token]);
+  }, [authLoading, isAuthenticated]);
 
   const loadReportRows = useCallback(async () => {
-    if (!token) {
+    if (authLoading || !isAuthenticated) {
       return;
     }
 
@@ -128,7 +122,6 @@ export default function StockPage() {
       }
 
       const response = await api.get<{ data: StockRow[] }>(`/reports/${reportType}`, {
-        ...authHeaders,
         params,
       });
 
@@ -139,7 +132,7 @@ export default function StockPage() {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, filter, reportType, token]);
+  }, [authLoading, filter, reportType, isAuthenticated]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -163,8 +156,14 @@ export default function StockPage() {
         <PageHeader
           title="Stock Balances"
           subtitle="Monitor stock balance, low-stock warnings, and report-level filters."
-          
         />
+
+        {!isAuthenticated && !authLoading ? (
+          <div className="alert alert-info mb-3">
+            <i className="bi bi-shield-lock me-2" />
+            Log in to load stock report data.
+          </div>
+        ) : null}
 
         <div className="row g-2 mb-3">
           <div className="col-12 col-xl-4">
