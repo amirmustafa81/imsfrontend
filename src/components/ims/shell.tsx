@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import { isAuthBypassEnabled, useAuth } from "@/lib/auth";
 
 type SidebarItem = {
   label: string;
@@ -104,7 +104,7 @@ export function ImsShell({ children }: { children: ReactNode }) {
     .toUpperCase() || "U";
 
   useEffect(() => {
-    if (!loading && !isAuthenticated && !isLoginPage) {
+    if (!isAuthBypassEnabled && !loading && !isAuthenticated && !isLoginPage) {
       router.replace("/login");
     }
   }, [isAuthenticated, isLoginPage, loading, router]);
@@ -113,7 +113,7 @@ export function ImsShell({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  if (loading || !isAuthenticated) {
+  if (!isAuthBypassEnabled && (loading || !isAuthenticated)) {
     return (
       <main className="min-vh-100 d-flex align-items-center justify-content-center bg-body-tertiary">
         <div className="text-center">

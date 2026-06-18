@@ -38,7 +38,7 @@ type AuthContextValue = {
   hasPermission: (permission: string | string[]) => boolean;
 };
 
-const isAuthBypassEnabled =
+export const isAuthBypassEnabled =
   process.env.NEXT_PUBLIC_DISABLE_AUTH === "true" || process.env.NEXT_PUBLIC_DISABLE_AUTH === "1";
 
 const DEMO_USER: AuthUser = {
@@ -81,9 +81,9 @@ const permissionAllows = (grantedPermission: string, requiredPermission: string)
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState("");
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(() => (isAuthBypassEnabled ? "demo-token" : ""));
+  const [user, setUser] = useState<AuthUser | null>(() => (isAuthBypassEnabled ? DEMO_USER : null));
+  const [loading, setLoading] = useState(!isAuthBypassEnabled);
 
   const activateDemoSession = useCallback(() => {
     setToken("demo-token");
