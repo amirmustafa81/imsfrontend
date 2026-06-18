@@ -151,7 +151,7 @@ const labelFromAsset = (asset: FixedAsset | RowData): string => {
 export default function DisposalsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const authHeaders = useMemo(() => ({}), [authReady]);
+  const authHeaders = useMemo(() => ({}), []);
   const [disposals, setDisposals] = useState<Disposal[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({ fixedAssets: [] });
   const [filter, setFilter] = useState<FilterState>(initialFilters);

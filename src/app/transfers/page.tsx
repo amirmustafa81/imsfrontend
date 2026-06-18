@@ -101,7 +101,7 @@ const numberOrNull = (value: string): number | null => {
 export default function TransfersPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const authHeaders = useMemo(() => ({}), [authReady]);
+  const authHeaders = useMemo(() => ({}), []);
   const [rows, setRows] = useState<Transfer[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],

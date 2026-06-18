@@ -83,7 +83,7 @@ const toNumericString = (value: string | number | null | undefined): string => {
 export default function ItemsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const authHeaders = useMemo(() => ({}), [authReady]);
+  const authHeaders = useMemo(() => ({}), []);
   const [rows, setRows] = useState<ItemRow[]>([]);
   const [lookups, setLookups] = useState<LookupMap>({
     "asset-categories": [],

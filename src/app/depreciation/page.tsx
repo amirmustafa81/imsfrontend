@@ -79,7 +79,7 @@ export default function DepreciationPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("Load depreciation report to begin.");
 
-  const authHeaders = useMemo(() => ({}), [authReady]);
+  const authHeaders = useMemo(() => ({}), []);
 
   const loadRows = useCallback(async () => {
     if (!authReady) return;

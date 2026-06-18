@@ -33,7 +33,7 @@ type Department = {
 export default function LabInventoryPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const authHeaders = useMemo(() => ({}), [authReady]);
+  const authHeaders = useMemo(() => ({}), []);
 
   const [search, setSearch] = useState("");
   const [departmentId, setDepartmentId] = useState("");

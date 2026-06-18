@@ -34,7 +34,7 @@ const entityTypes = [
 export default function DocumentsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const headers = useMemo(() => ({}), [authReady]);
+  const headers = useMemo(() => ({}), []);
 
   const [rows, setRows] = useState<DocRow[]>([]);
   const [form, setForm] = useState<UploadForm>(emptyForm);

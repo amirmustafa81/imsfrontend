@@ -17,7 +17,7 @@ type Setting = {
 export default function SystemSettingsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const headers = useMemo(() => ({}), [authReady]);
+  const headers = useMemo(() => ({}), []);
 
   const [rows, setRows] = useState<Setting[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);

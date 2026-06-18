@@ -51,7 +51,7 @@ const emptyForm: UserForm = {
 export default function UsersPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const headers = useMemo(() => ({}), [authReady]);
+  const headers = useMemo(() => ({}), []);
 
   const [rows, setRows] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);

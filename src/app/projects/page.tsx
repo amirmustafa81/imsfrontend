@@ -38,7 +38,7 @@ const statusOptions = [
 export default function ProjectsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const authHeaders = useMemo(() => ({}), [authReady]);
+  const authHeaders = useMemo(() => ({}), []);
 
   const [projects, setProjects] = useState<Lookup[]>([]);
   const [projectId, setProjectId] = useState("");

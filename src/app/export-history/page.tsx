@@ -31,7 +31,7 @@ const syncTypeOptions = [
 export default function ExportHistoryPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const authHeaders = useMemo(() => ({}), [authReady]);
+  const authHeaders = useMemo(() => ({}), []);
 
   const [syncType, setSyncType] = useState("");
   const [status, setStatus] = useState("");

@@ -203,7 +203,7 @@ export default function ControlledStationeryPage() {
   const [serialActions, setSerialActions] = useState<Record<number, SerialActionPayload>>({});
   const [serialActionBusy, setSerialActionBusy] = useState<Record<number, boolean>>({});
 
-  const authHeaders = useMemo(() => ({}), [authReady]);
+  const authHeaders = useMemo(() => ({}), []);
 
   const loadLookups = useCallback(async () => {
     const next = {

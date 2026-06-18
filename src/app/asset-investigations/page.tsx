@@ -48,7 +48,7 @@ const emptyForm: FormState = {
 export default function AssetInvestigationsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const headers = useMemo(() => ({}), [authReady]);
+  const headers = useMemo(() => ({}), []);
 
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [rows, setRows] = useState<Investigation[]>([]);

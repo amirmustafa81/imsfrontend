@@ -66,7 +66,7 @@ const tableColumns = [
 export default function AuditLogsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const authHeaders = useMemo(() => ({}), [authReady]);
+  const authHeaders = useMemo(() => ({}), []);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [filter, setFilter] = useState<FilterState>(initialFilter);
   const [message, setMessage] = useState("Load audit logs to continue.");

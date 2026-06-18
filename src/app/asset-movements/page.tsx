@@ -57,7 +57,7 @@ const emptyForm: FormState = {
 export default function AssetMovementsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const headers = useMemo(() => ({}), [authReady]);
+  const headers = useMemo(() => ({}), []);
 
   const [assets, setAssets] = useState<AssetLookup[]>([]);
   const [departments, setDepartments] = useState<Lookup[]>([]);

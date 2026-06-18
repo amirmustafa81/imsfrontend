@@ -51,7 +51,7 @@ const emptyForm: FormState = {
 export default function MaintenanceRecordsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const headers = useMemo(() => ({}), [authReady]);
+  const headers = useMemo(() => ({}), []);
 
   const [assets, setAssets] = useState<Lookup[]>([]);
   const [vendors, setVendors] = useState<Lookup[]>([]);

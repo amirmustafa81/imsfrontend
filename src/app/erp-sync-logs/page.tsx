@@ -46,7 +46,7 @@ const emptyForm: SyncLogForm = {
 export default function ErpSyncLogsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const headers = useMemo(() => ({}), [authReady]);
+  const headers = useMemo(() => ({}), []);
 
   const [rows, setRows] = useState<SyncLog[]>([]);
   const [form, setForm] = useState<SyncLogForm>(emptyForm);
