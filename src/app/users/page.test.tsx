@@ -22,6 +22,7 @@ vi.mock("@/lib/auth", () => ({
   useAuth: () => ({
     isAuthenticated: true,
     loading: false,
+    hasPermission: () => true,
   }),
 }));
 

@@ -36,8 +36,11 @@ const emptyForm: RoleForm = {
 };
 
 export default function RolesPage() {
-  const { isAuthenticated, loading } = useAuth();
+  const { hasPermission, isAuthenticated, loading } = useAuth();
   const authReady = useMemo(() => isAuthenticated && !loading, [isAuthenticated, loading]);
+  const canCreateRole = hasPermission(["roles.create", "roles.manage", "roles.write"]);
+  const canUpdateRole = hasPermission(["roles.update", "roles.manage", "roles.write"]);
+  const canDeleteRole = hasPermission(["roles.delete", "roles.manage", "roles.write"]);
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -233,36 +236,42 @@ export default function RolesPage() {
       header: "Action",
       render: (row: Role) => {
         const deleteDisabled = row.is_system_role || (row.users_count ?? 0) > 0;
+        const canEditRole = canUpdateRole && !row.is_system_role;
+        const canDelete = canDeleteRole && !deleteDisabled;
 
         return (
           <div className="d-flex flex-wrap gap-2">
             {row.is_system_role ? <span className="badge text-bg-secondary align-self-center">Protected</span> : null}
-            <button
-              className="btn btn-sm btn-outline-primary"
-              type="button"
-              onClick={() => openEditDialog(row)}
-              disabled={row.is_system_role}
-              title={row.is_system_role ? "System roles are protected" : "Edit role and permissions"}
-            >
-              <i className="bi bi-pencil me-1" />
-              Edit
-            </button>
-            <button
-              className="btn btn-sm btn-outline-danger"
-              type="button"
-              onClick={() => deleteRole(row)}
-              disabled={deleteDisabled}
-              title={
-                row.is_system_role
-                  ? "System roles are protected"
-                  : deleteDisabled
-                    ? "Assigned roles cannot be deleted"
-                    : "Delete role"
-              }
-            >
-              <i className="bi bi-trash me-1" />
-              Delete
-            </button>
+            {canUpdateRole ? (
+              <button
+                className="btn btn-sm btn-outline-primary"
+                type="button"
+                onClick={() => openEditDialog(row)}
+                disabled={!canEditRole}
+                title={row.is_system_role ? "System roles are protected" : "Edit role and permissions"}
+              >
+                <i className="bi bi-pencil me-1" />
+                Edit
+              </button>
+            ) : null}
+            {canDeleteRole ? (
+              <button
+                className="btn btn-sm btn-outline-danger"
+                type="button"
+                onClick={() => deleteRole(row)}
+                disabled={!canDelete}
+                title={
+                  row.is_system_role
+                    ? "System roles are protected"
+                    : (row.users_count ?? 0) > 0
+                      ? "Assigned roles cannot be deleted"
+                      : "Delete role"
+                }
+              >
+                <i className="bi bi-trash me-1" />
+                Delete
+              </button>
+            ) : null}
           </div>
         );
       },
@@ -276,10 +285,14 @@ export default function RolesPage() {
           title="Roles & Permissions"
           subtitle="Create custom roles, maintain permission sets, and keep system roles protected."
           actions={
-            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
-              <i className="bi bi-plus-lg me-1" />
-              Create Role
-            </button>
+            canCreateRole ? (
+              <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+                <i className="bi bi-plus-lg me-1" />
+                Create Role
+              </button>
+            ) : (
+              <span className="small text-secondary">Read-only role mode</span>
+            )
           }
         />
 

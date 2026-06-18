@@ -35,6 +35,7 @@ type AuthContextValue = {
   login: (payload: LoginPayload) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  hasPermission: (permission: string | string[]) => boolean;
 };
 
 const isAuthBypassEnabled =
@@ -58,6 +59,26 @@ const DEMO_USER: AuthUser = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+const normalizePermissionInput = (value: string) => value.trim().toLowerCase().replace(/:/g, ".");
+const permissionAllows = (grantedPermission: string, requiredPermission: string) => {
+  const normalizedGranted = normalizePermissionInput(grantedPermission);
+  const normalizedRequired = normalizePermissionInput(requiredPermission);
+
+  if (normalizedGranted === "*") {
+    return true;
+  }
+
+  if (normalizedGranted === normalizedRequired) {
+    return true;
+  }
+
+  if (normalizedGranted.endsWith(".*") && normalizedRequired.startsWith(normalizedGranted.slice(0, -2))) {
+    return true;
+  }
+
+  return false;
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState("");
@@ -137,6 +158,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [activateDemoSession]);
 
+  const hasPermission = useCallback(
+    (permission: string | string[]) => {
+      const userPermissions = user?.permissions ?? [];
+
+      if (userPermissions.includes("*")) {
+        return true;
+      }
+
+      const requiredPermissions = Array.isArray(permission) ? permission : [permission];
+      const normalizedUserPermissions = userPermissions.map(normalizePermissionInput);
+
+      for (const required of requiredPermissions) {
+        const normalizedRequired = normalizePermissionInput(required);
+        if (normalizedUserPermissions.some((granted) => permissionAllows(granted, normalizedRequired))) {
+          return true;
+        }
+      }
+
+      return false;
+    },
+    [user],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       token,
@@ -146,8 +190,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       refreshUser,
+      hasPermission,
     }),
-    [loading, login, logout, refreshUser, token, user],
+    [loading, login, logout, refreshUser, token, user, hasPermission],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

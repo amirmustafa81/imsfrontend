@@ -49,8 +49,10 @@ const emptyForm: UserForm = {
 };
 
 export default function UsersPage() {
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { hasPermission, isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
+  const canCreateUser = hasPermission(["users.create", "users.manage", "users.write", "users.update"]);
+  const canUpdateUser = hasPermission(["users.update", "users.manage", "users.write"]);
   const headers = useMemo(() => ({}), []);
 
   const [rows, setRows] = useState<UserRow[]>([]);
@@ -237,12 +239,15 @@ export default function UsersPage() {
     {
       key: "action",
       header: "Action",
-      render: (row: UserRow) => (
-        <button className="btn btn-sm btn-outline-primary" type="button" onClick={() => startEdit(row)}>
-          <i className="bi bi-pencil-square me-1" />
-          Edit user
-        </button>
-      ),
+      render: (row: UserRow) =>
+        canUpdateUser ? (
+          <button className="btn btn-sm btn-outline-primary" type="button" onClick={() => startEdit(row)}>
+            <i className="bi bi-pencil-square me-1" />
+            Edit user
+          </button>
+        ) : (
+          <span className="small text-secondary">Read-only</span>
+        ),
     },
   ];
 
@@ -253,10 +258,14 @@ export default function UsersPage() {
           title="Users"
           subtitle="Create users, update access details, and assign roles."
           actions={
-            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
-              <i className="bi bi-plus-lg me-1" />
-              Create User
-            </button>
+            canCreateUser ? (
+              <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+                <i className="bi bi-plus-lg me-1" />
+                Create User
+              </button>
+            ) : (
+              <span className="small text-secondary">Read-only user mode</span>
+            )
           }
         />
         {message ? <div className="alert alert-success">{message}</div> : null}
