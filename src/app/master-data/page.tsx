@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { DataTable, FilterBar, PageHeader } from "@/components/ims";
+import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type ResourceKey =
   | "departments"
@@ -633,9 +633,13 @@ export default function MasterDataPage() {
                   ? "rooms"
                   : column === "funding_source_id"
                     ? "funding-sources"
-                    : "asset-categories";
+                : "asset-categories";
 
           return <>{getLookupLabel(source, row[column])}</>;
+        }
+
+        if (column === "status") {
+          return <StatusBadge status={String(row[column] ?? "inactive")} />;
         }
 
         return <>{displayValue(row[column])}</>;
