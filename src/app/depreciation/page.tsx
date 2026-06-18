@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "items" | "research-projects";
@@ -62,7 +63,8 @@ const initialLookups: Record<LookupKey, RowData[]> = {
 };
 
 export default function DepreciationPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
   const [rows, setRows] = useState<DepreciationRow[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>(initialLookups);
 
@@ -77,15 +79,10 @@ export default function DepreciationPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("Load depreciation report to begin.");
 
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  const authHeaders = useMemo(() => ({}), [authReady]);
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     try {
       const params: Record<string, string> = {};
@@ -113,7 +110,7 @@ export default function DepreciationPage() {
       setMessage("");
     }
   }, [
-    token,
+    authReady,
     search,
     statusFilter,
     departmentFilter,
@@ -125,7 +122,7 @@ export default function DepreciationPage() {
   ]);
 
   const loadLookups = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     const next = {
       ...initialLookups,
@@ -138,8 +135,8 @@ export default function DepreciationPage() {
     ] as const;
 
     await Promise.all(
-      loadable.map(async ({ key, path }) => {
-        const response = await api.get(`/master-data/${path}`, { ...authHeaders });
+    loadable.map(async ({ key, path }) => {
+      const response = await api.get(`/master-data/${path}`, { ...authHeaders });
         const payload = response.data?.data;
         if (Array.isArray(payload)) {
           next[key] = payload;
@@ -148,7 +145,7 @@ export default function DepreciationPage() {
     );
 
     setLookups(next);
-  }, [token, authHeaders]);
+  }, [authReady, authHeaders]);
 
   useEffect(() => {
     const reload = async () => {

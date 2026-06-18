@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type AssetLookup = {
@@ -30,13 +31,9 @@ type Department = {
 };
 
 export default function LabInventoryPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const authHeaders = useMemo(() => ({}), [authReady]);
 
   const [search, setSearch] = useState("");
   const [departmentId, setDepartmentId] = useState("");
@@ -77,7 +74,7 @@ export default function LabInventoryPage() {
   );
 
   const loadLookups = useCallback(async () => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
@@ -87,10 +84,10 @@ export default function LabInventoryPage() {
     } catch {
       setError("Unable to load departments. Verify token and connection.");
     }
-  }, [authHeaders, token]);
+  }, [authHeaders, authReady]);
 
   const loadRows = useCallback(async () => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
@@ -113,7 +110,7 @@ export default function LabInventoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, departmentId, search, token]);
+  }, [authHeaders, departmentId, search, authReady]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

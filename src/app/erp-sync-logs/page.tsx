@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader } from "@/components/ims";
 
 type SyncLog = {
@@ -43,9 +44,9 @@ const emptyForm: SyncLogForm = {
 };
 
 export default function ErpSyncLogsPage() {
-  const storedToken = useMemo(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""), []);
-  const [token] = useState(storedToken);
-  const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const headers = useMemo(() => ({}), [authReady]);
 
   const [rows, setRows] = useState<SyncLog[]>([]);
   const [form, setForm] = useState<SyncLogForm>(emptyForm);
@@ -54,7 +55,7 @@ export default function ErpSyncLogsPage() {
   const [error, setError] = useState("");
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     const params: Record<string, string> = {};
     if (filters.status) params.status = filters.status;
@@ -70,7 +71,7 @@ export default function ErpSyncLogsPage() {
       setRows([]);
       setError("Unable to load sync logs.");
     }
-  }, [token, headers, filters.status, filters.sync_type, filters.fromDate, filters.toDate]);
+  }, [authReady, headers, filters.status, filters.sync_type, filters.fromDate, filters.toDate]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -79,7 +80,7 @@ export default function ErpSyncLogsPage() {
 
   const saveLog = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

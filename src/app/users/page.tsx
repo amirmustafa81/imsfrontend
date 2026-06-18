@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type Permission = { id: number; name: string };
@@ -48,9 +49,9 @@ const emptyForm: UserForm = {
 };
 
 export default function UsersPage() {
-  const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token] = useState(initialToken);
-  const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const headers = useMemo(() => ({}), [authReady]);
 
   const [rows, setRows] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -64,7 +65,7 @@ export default function UsersPage() {
   const [message, setMessage] = useState("");
 
   const loadLookups = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     try {
       const [rolesResponse, deptResponse] = await Promise.all([
         api.get<{ data: Role[] }>("/roles", headers),
@@ -76,10 +77,10 @@ export default function UsersPage() {
       setRoles([]);
       setDepartments([]);
     }
-  }, [headers, token]);
+  }, [headers, authReady]);
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     const params: Record<string, string> = {};
     if (filters.search.trim()) params.search = filters.search.trim();
@@ -95,7 +96,7 @@ export default function UsersPage() {
       setRows([]);
       setError("Unable to load users.");
     }
-  }, [headers, token, filters.search, filters.status, filters.accessScope, filters.department]);
+  }, [headers, authReady, filters.search, filters.status, filters.accessScope, filters.department]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -154,7 +155,7 @@ export default function UsersPage() {
   const saveUser = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

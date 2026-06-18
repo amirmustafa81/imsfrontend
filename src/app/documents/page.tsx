@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader } from "@/components/ims";
 
 type DocRow = {
@@ -31,9 +32,9 @@ const entityTypes = [
 ];
 
 export default function DocumentsPage() {
-  const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token] = useState(initialToken);
-  const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const headers = useMemo(() => ({}), [authReady]);
 
   const [rows, setRows] = useState<DocRow[]>([]);
   const [form, setForm] = useState<UploadForm>(emptyForm);
@@ -42,7 +43,7 @@ export default function DocumentsPage() {
   const [message, setMessage] = useState("");
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     const params: Record<string, string> = {};
     if (filters.entity_type.trim()) params.entity_type = filters.entity_type.trim();
     if (filters.document_type.trim()) params.document_type = filters.document_type.trim();
@@ -56,7 +57,7 @@ export default function DocumentsPage() {
       setRows([]);
       setError("Unable to load documents.");
     }
-  }, [headers, token, filters.entity_type, filters.document_type, filters.entity_id]);
+  }, [headers, authReady, filters.entity_type, filters.document_type, filters.entity_id]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -65,7 +66,7 @@ export default function DocumentsPage() {
 
   const upload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

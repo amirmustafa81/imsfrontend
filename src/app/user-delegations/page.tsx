@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type User = { id: number; name: string; email: string };
@@ -50,9 +51,9 @@ const emptyForm: FormState = {
 };
 
 export default function UserDelegationsPage() {
-  const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token] = useState(initialToken);
-  const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const headers = useMemo(() => ({}), [authReady]);
 
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -63,7 +64,7 @@ export default function UserDelegationsPage() {
   const [error, setError] = useState("");
 
   const loadLookups = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     try {
       const [userResponse, deptResponse] = await Promise.all([
         api.get<{ data: User[] }>("/users", headers),
@@ -75,10 +76,10 @@ export default function UserDelegationsPage() {
       setUsers([]);
       setDepartments([]);
     }
-  }, [headers, token]);
+  }, [headers, authReady]);
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     const params: Record<string, string> = {};
     if (filters.status) params.status = filters.status;
     if (filters.authority_type) params.authority_type = filters.authority_type;
@@ -92,7 +93,7 @@ export default function UserDelegationsPage() {
       setRows([]);
       setError("Unable to load delegations.");
     }
-  }, [headers, token, filters.status, filters.authority_type, filters.delegatedTo]);
+  }, [headers, authReady, filters.status, filters.authority_type, filters.delegatedTo]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -105,7 +106,7 @@ export default function UserDelegationsPage() {
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

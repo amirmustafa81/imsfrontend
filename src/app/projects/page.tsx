@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type Lookup = {
@@ -35,13 +36,9 @@ const statusOptions = [
 ];
 
 export default function ProjectsPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const authHeaders = useMemo(() => ({}), [authReady]);
 
   const [projects, setProjects] = useState<Lookup[]>([]);
   const [projectId, setProjectId] = useState("");
@@ -52,7 +49,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(false);
 
   const loadLookups = useCallback(async () => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
@@ -62,10 +59,10 @@ export default function ProjectsPage() {
     } catch {
       setError("Unable to load projects. Verify token and backend connectivity.");
     }
-  }, [authHeaders, token]);
+  }, [authHeaders, authReady]);
 
   const loadRows = useCallback(async () => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
@@ -89,7 +86,7 @@ export default function ProjectsPage() {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, projectId, search, status, token]);
+  }, [authHeaders, projectId, search, status, authReady]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -183,7 +180,7 @@ export default function ProjectsPage() {
           empty="No project-linked assets found."
         />
 
-        {!token ? <div className="alert alert-info mt-3 mb-0">Authentication token required to load live data.</div> : null}
+        {!authReady ? <div className="alert alert-info mt-3 mb-0">Authentication token required to load live data.</div> : null}
       </div>
     </main>
   );

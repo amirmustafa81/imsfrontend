@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "stores" | "items" | "funding-sources" | "research-projects";
@@ -98,7 +99,9 @@ const numberOrNull = (value: string): number | null => {
 };
 
 export default function TransfersPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const authHeaders = useMemo(() => ({}), [authReady]);
   const [rows, setRows] = useState<Transfer[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
@@ -119,13 +122,6 @@ export default function TransfersPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
-
   const lookupLabel = (source: LookupKey, value: unknown) => {
     if (value === null || value === undefined || value === "") return "-";
 
@@ -138,7 +134,7 @@ export default function TransfersPage() {
   };
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     const params: Record<string, string> = {
       transaction_type: "transfer",
@@ -161,7 +157,7 @@ export default function TransfersPage() {
       setRows([]);
       setError("Unable to load transfer transactions.");
     }
-  }, [token, search, statusFilter, departmentFilter, storeFilter, authHeaders]);
+  }, [authReady, search, statusFilter, departmentFilter, storeFilter, authHeaders]);
 
   useEffect(() => {
     (async () => {
@@ -170,7 +166,7 @@ export default function TransfersPage() {
   }, [loadRows]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!authReady) return;
 
     const requiredLookups: LookupKey[] = [
       "departments",
@@ -209,7 +205,7 @@ export default function TransfersPage() {
     };
 
     void loadLookups();
-  }, [token, authHeaders]);
+  }, [authReady, authHeaders]);
 
   const setFormValue = (key: keyof TransferForm, value: string | boolean) => {
     setForm((current) => ({
@@ -241,7 +237,7 @@ export default function TransfersPage() {
   const saveTransfer = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

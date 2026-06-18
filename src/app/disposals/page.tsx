@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "fixedAssets";
@@ -148,9 +149,10 @@ const labelFromAsset = (asset: FixedAsset | RowData): string => {
 };
 
 export default function DisposalsPage() {
-  const [token] = useState(() =>
-    typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "",
-  );  const [disposals, setDisposals] = useState<Disposal[]>([]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const authHeaders = useMemo(() => ({}), [authReady]);
+  const [disposals, setDisposals] = useState<Disposal[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({ fixedAssets: [] });
   const [filter, setFilter] = useState<FilterState>(initialFilters);
   const [form, setForm] = useState<DisposalForm>(initialForm);
@@ -158,13 +160,6 @@ export default function DisposalsPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [message, setMessage] = useState("Load disposals to begin.");
   const [error, setError] = useState("");
-
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
 
   const filteredRows = useMemo(
     () =>
@@ -177,7 +172,7 @@ export default function DisposalsPage() {
   );
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     try {
       const params: Record<string, string> = {};
       if (filter.status) params.status = filter.status;
@@ -200,10 +195,10 @@ export default function DisposalsPage() {
       setDisposals([]);
       setError("Unable to load disposals. Verify token and backend connectivity.");
     }
-  }, [token, filter.status, filter.disposalType, filter.search, authHeaders]);
+  }, [authReady, filter.status, filter.disposalType, filter.search, authHeaders]);
 
   const loadLookups = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     try {
       const response = await api.get("/reports/fixed-assets", { ...authHeaders });
       const payload = response.data?.data;
@@ -215,7 +210,7 @@ export default function DisposalsPage() {
         fixedAssets: [],
       });
     }
-  }, [token, authHeaders]);
+  }, [authReady, authHeaders]);
 
   useEffect(() => {
     void (async () => {
@@ -259,7 +254,7 @@ export default function DisposalsPage() {
 
   const saveDisposal = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }
@@ -329,7 +324,7 @@ export default function DisposalsPage() {
   };
 
   const postDisposal = async (disposal: Disposal) => {
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }
@@ -346,7 +341,7 @@ export default function DisposalsPage() {
   const deleteDraft = async (disposal: Disposal) => {
     if (disposal.status !== "draft") return;
     if (!confirm("Delete this draft disposal?")) return;
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

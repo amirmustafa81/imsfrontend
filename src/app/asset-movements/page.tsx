@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type Lookup = { id: number; name: string };
@@ -54,9 +55,9 @@ const emptyForm: FormState = {
 };
 
 export default function AssetMovementsPage() {
-  const getToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token] = useState(getToken);
-  const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const headers = useMemo(() => ({}), [authReady]);
 
   const [assets, setAssets] = useState<AssetLookup[]>([]);
   const [departments, setDepartments] = useState<Lookup[]>([]);
@@ -68,7 +69,7 @@ export default function AssetMovementsPage() {
   const [error, setError] = useState("");
 
   const loadLookups = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     try {
       const [assetResponse, deptResponse, userResponse] = await Promise.all([
         api.get<{ data: AssetLookup[] }>("/assets", headers),
@@ -83,10 +84,10 @@ export default function AssetMovementsPage() {
       setDepartments([]);
       setUsers([]);
     }
-  }, [headers, token]);
+  }, [headers, authReady]);
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     const params: Record<string, string> = {};
     if (filters.search.trim()) params.search = filters.search.trim();
     if (filters.movementType) params.movement_type = filters.movementType;
@@ -100,7 +101,7 @@ export default function AssetMovementsPage() {
       setRows([]);
       setError("Unable to load movements.");
     }
-  }, [headers, token, filters.search, filters.movementType, filters.status]);
+  }, [headers, authReady, filters.search, filters.movementType, filters.status]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -114,7 +115,7 @@ export default function AssetMovementsPage() {
 
   const saveRecord = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "stores" | "items" | "research-projects";
@@ -169,7 +170,8 @@ const lookupLabel = (rows: RowData[], value: unknown, fallback?: string) => {
 };
 
 export default function ControlledStationeryPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
 
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
@@ -201,12 +203,7 @@ export default function ControlledStationeryPage() {
   const [serialActions, setSerialActions] = useState<Record<number, SerialActionPayload>>({});
   const [serialActionBusy, setSerialActionBusy] = useState<Record<number, boolean>>({});
 
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  const authHeaders = useMemo(() => ({}), [authReady]);
 
   const loadLookups = useCallback(async () => {
     const next = {
@@ -229,7 +226,7 @@ export default function ControlledStationeryPage() {
   }, [authHeaders]);
 
   const loadBatches = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     try {
       const params: Record<string, string> = {};
@@ -251,7 +248,7 @@ export default function ControlledStationeryPage() {
       setError("Unable to load controlled stationery batches.");
     }
   }, [
-    token,
+    authReady,
     batchSearch,
     batchStatusFilter,
     batchItemFilter,
@@ -261,7 +258,7 @@ export default function ControlledStationeryPage() {
   ]);
 
   const loadSerials = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     try {
       const params: Record<string, string> = {};
@@ -283,7 +280,7 @@ export default function ControlledStationeryPage() {
       setError("Unable to load controlled stationery serials.");
     }
   }, [
-    token,
+    authReady,
     serialSearch,
     serialStatusFilter,
     serialItemFilter,
@@ -293,7 +290,7 @@ export default function ControlledStationeryPage() {
   ]);
 
   useEffect(() => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
@@ -302,7 +299,7 @@ export default function ControlledStationeryPage() {
     };
 
     void loadAll();
-  }, [token, loadLookups, loadBatches, loadSerials]);
+  }, [authReady, loadLookups, loadBatches, loadSerials]);
 
   const setBatchFormValue = (key: keyof BatchForm, value: string | boolean) => {
     setBatchForm((current) => ({
@@ -353,7 +350,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
     setMessage("");
     setError("");
 
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }
@@ -452,7 +449,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
     setError("");
     setMessage("");
 
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

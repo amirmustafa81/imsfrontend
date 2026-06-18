@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type ItemType =
@@ -80,7 +81,9 @@ const toNumericString = (value: string | number | null | undefined): string => {
 };
 
 export default function ItemsPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const authHeaders = useMemo(() => ({}), [authReady]);
   const [rows, setRows] = useState<ItemRow[]>([]);
   const [lookups, setLookups] = useState<LookupMap>({
     "asset-categories": [],
@@ -93,15 +96,8 @@ export default function ItemsPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Load data to begin.");
 
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
-
   const loadLookups = useCallback(async () => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
@@ -128,10 +124,10 @@ export default function ItemsPage() {
     } catch {
       setError("Unable to load item lookups. Verify token and backend connectivity.");
     }
-  }, [authHeaders, token, lookups]);
+  }, [authHeaders, authReady, lookups]);
 
   const loadRows = useCallback(async () => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
@@ -158,7 +154,7 @@ export default function ItemsPage() {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, search, statusFilter, token]);
+  }, [authHeaders, search, statusFilter, authReady]);
 
   useEffect(() => {
     const reload = async () => {
@@ -282,7 +278,7 @@ export default function ItemsPage() {
         </FilterBar>
 
         {error ? <div className="alert alert-danger">{error}</div> : null}
-        {!token ? <div className="alert alert-info">Authentication token required to load live items.</div> : null}
+        {!authReady ? <div className="alert alert-info">Authentication token required to load live items.</div> : null}
         {message ? <div className="alert alert-light border-0">{message}</div> : null}
 
         <div className="d-flex justify-content-between align-items-center mb-2">

@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type AssetSummary = { id: number; asset_id: string; serial_number: string | null };
@@ -45,9 +46,9 @@ const emptyForm: FormState = {
 };
 
 export default function AssetInvestigationsPage() {
-  const getToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token] = useState(getToken);
-  const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const headers = useMemo(() => ({}), [authReady]);
 
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [rows, setRows] = useState<Investigation[]>([]);
@@ -57,17 +58,17 @@ export default function AssetInvestigationsPage() {
   const [error, setError] = useState("");
 
   const loadLookups = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     try {
       const response = await api.get<{ data: AssetSummary[] }>("/assets", headers);
       setAssets(response.data?.data ?? []);
     } catch {
       setAssets([]);
     }
-  }, [headers, token]);
+  }, [headers, authReady]);
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     const params: Record<string, string> = {};
     if (filters.search.trim()) params.search = filters.search.trim();
     if (filters.status) params.status = filters.status;
@@ -81,7 +82,7 @@ export default function AssetInvestigationsPage() {
       setRows([]);
       setError("Unable to load investigations.");
     }
-  }, [headers, token, filters.search, filters.status, filters.assetId]);
+  }, [headers, authReady, filters.search, filters.status, filters.assetId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -95,7 +96,7 @@ export default function AssetInvestigationsPage() {
 
   const saveRecord = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

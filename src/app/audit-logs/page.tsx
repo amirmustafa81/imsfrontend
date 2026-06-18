@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, Timeline } from "@/components/ims";
 
 type AuditLog = {
@@ -63,9 +64,10 @@ const tableColumns = [
 ] as const;
 
 export default function AuditLogsPage() {
-  const [token] = useState(() =>
-    typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "",
-  );  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const authHeaders = useMemo(() => ({}), [authReady]);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [filter, setFilter] = useState<FilterState>(initialFilter);
   const [message, setMessage] = useState("Load audit logs to continue.");
   const [error, setError] = useState("");
@@ -83,13 +85,6 @@ export default function AuditLogsPage() {
             : log.remarks ?? "",
         })),
     [logs],
-  );
-
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
   );
 
   const buildParams = useCallback((): Record<string, string> => {
@@ -127,7 +122,7 @@ export default function AuditLogsPage() {
   }, [filter]);
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     try {
       const params = buildParams();
@@ -140,7 +135,7 @@ export default function AuditLogsPage() {
       setLogs([]);
       setError("Unable to load audit logs. Verify token and API connection.");
     }
-  }, [authHeaders, buildParams, token]);
+  }, [authHeaders, buildParams, authReady]);
 
   useEffect(() => {
     void (async () => {

@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type Lookup = { id: number; code?: string; name?: string };
@@ -48,9 +49,9 @@ const emptyForm: FormState = {
 };
 
 export default function MaintenanceRecordsPage() {
-  const storedToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token] = useState(storedToken);
-  const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const headers = useMemo(() => ({}), [authReady]);
 
   const [assets, setAssets] = useState<Lookup[]>([]);
   const [vendors, setVendors] = useState<Lookup[]>([]);
@@ -61,7 +62,7 @@ export default function MaintenanceRecordsPage() {
   const [error, setError] = useState("");
 
   const loadLookups = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     try {
       const [assetResponse, vendorResponse] = await Promise.all([
         api.get<{ data: Array<{ id: number; asset_id: string; serial_number: string | null }>} >("/assets", headers),
@@ -73,10 +74,10 @@ export default function MaintenanceRecordsPage() {
       setAssets([]);
       setVendors([]);
     }
-  }, [headers, token]);
+  }, [headers, authReady]);
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     const params: Record<string, string> = {};
     if (filters.search.trim()) params.search = filters.search.trim();
     if (filters.status) params.status = filters.status;
@@ -90,7 +91,7 @@ export default function MaintenanceRecordsPage() {
       setRows([]);
       setError("Unable to load maintenance records.");
     }
-  }, [headers, token, filters.search, filters.status, filters.maintenance_type]);
+  }, [headers, authReady, filters.search, filters.status, filters.maintenance_type]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -106,7 +107,7 @@ export default function MaintenanceRecordsPage() {
 
   const saveRecord = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

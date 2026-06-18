@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, PageHeader } from "@/components/ims";
 
 type Setting = {
@@ -14,9 +15,9 @@ type Setting = {
 };
 
 export default function SystemSettingsPage() {
-  const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token] = useState(initialToken);
-  const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const headers = useMemo(() => ({}), [authReady]);
 
   const [rows, setRows] = useState<Setting[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -25,7 +26,7 @@ export default function SystemSettingsPage() {
   const [message, setMessage] = useState("");
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
     try {
       const response = await api.get<{ data: Setting[] }>("/system-settings", headers);
       const settings = response.data?.data ?? [];
@@ -40,7 +41,7 @@ export default function SystemSettingsPage() {
       setRows([]);
       setError("Unable to load settings.");
     }
-  }, [headers, token]);
+  }, [headers, authReady]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -48,7 +49,7 @@ export default function SystemSettingsPage() {
   }, [loadRows]);
 
   const updateSetting = async (setting: Setting) => {
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }

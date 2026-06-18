@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type SyncLog = {
@@ -28,13 +29,9 @@ const syncTypeOptions = [
 ];
 
 export default function ExportHistoryPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const authReady = isAuthenticated && !authLoading;
+  const authHeaders = useMemo(() => ({}), [authReady]);
 
   const [syncType, setSyncType] = useState("");
   const [status, setStatus] = useState("");
@@ -52,7 +49,7 @@ export default function ExportHistoryPage() {
   ];
 
   const loadRows = useCallback(async () => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
@@ -77,7 +74,7 @@ export default function ExportHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, fromDate, status, syncType, toDate, token]);
+  }, [authHeaders, fromDate, status, syncType, toDate, authReady]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
