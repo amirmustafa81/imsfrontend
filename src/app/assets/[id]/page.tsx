@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, PageHeader, StatusBadge } from "@/components/ims";
 
 type Relation = { id?: number; name?: string; asset_id?: string; serial_number?: string };
@@ -116,22 +117,14 @@ function movementResponseSearch(rows: AssetMovement[], query: string): AssetMove
 export default function AssetDetailPage() {
   const router = useRouter();
   const params = useParams<{ id?: string }>();
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
   const id = Number(params.id);
-  const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token] = useState(initialToken);
   const [asset, setAsset] = useState<AssetDetail | null>(null);
   const [movements, setMovements] = useState<AssetMovement[]>([]);
   const [message, setMessage] = useState("Loading asset details...");
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
 
   const clearAsset = () => {
     setAsset(null);
@@ -141,15 +134,15 @@ export default function AssetDetailPage() {
   };
 
   const loadAsset = useCallback(async () => {
-    if (!token || Number.isNaN(id) || id <= 0) {
+    if (authLoading || !isAuthenticated || Number.isNaN(id) || id <= 0) {
       setError("Unable to resolve this asset ID.");
       return;
     }
 
     try {
       const [assetResponse, movementResponse] = await Promise.all([
-        api.get<{ data: AssetDetail }>(`/assets/${id}`, authHeaders),
-        api.get<{ data: AssetMovement[] }>("/asset-movements", { ...authHeaders, params: { asset_id: id } }),
+        api.get<{ data: AssetDetail }>(`/assets/${id}`),
+        api.get<{ data: AssetMovement[] }>("/asset-movements", { params: { asset_id: id } }),
       ]);
 
       setAsset(assetResponse.data?.data ?? null);
@@ -160,7 +153,7 @@ export default function AssetDetailPage() {
       clearAsset();
       setError("Unable to load asset information. Check token and permission scope.");
     }
-  }, [authHeaders, id, token]);
+  }, [authLoading, id, isAuthenticated]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -187,7 +180,7 @@ export default function AssetDetailPage() {
     );
   }
 
-  if (!token) {
+  if (!isAuthenticated) {
     return (
       <main className="min-vh-100 bg-body-tertiary">
         <div className="container-fluid p-4">

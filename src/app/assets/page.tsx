@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey =
@@ -96,7 +97,7 @@ const toMoney = (value: number | null): string => {
 };
 
 export default function AssetsPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const { isAuthenticated } = useAuth();
   const [rows, setRows] = useState<AssetRow[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>(initialLookups);
 
@@ -117,12 +118,7 @@ export default function AssetsPage() {
   const [message, setMessage] = useState("Load assets to begin.");
   const [error, setError] = useState("");
 
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  const authReady = useMemo(() => isAuthenticated, [isAuthenticated]);
 
   const lookupLabel = (key: LookupKey, value: unknown, fallback = "-") => {
     if (value === null || value === undefined || value === "") return fallback;
@@ -134,7 +130,7 @@ export default function AssetsPage() {
   };
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     try {
       const params: Record<string, string> = {};
@@ -154,7 +150,6 @@ export default function AssetsPage() {
       if (dateToFilter) params.date_to = dateToFilter;
 
       const response = await api.get("/reports/fixed-assets", {
-        ...authHeaders,
         params,
       });
 
@@ -167,26 +162,10 @@ export default function AssetsPage() {
       setError("Unable to load fixed assets. Verify token and backend connectivity.");
       setMessage("");
     }
-  }, [
-    token,
-    search,
-    statusFilter,
-    departmentFilter,
-    itemFilter,
-    categoryFilter,
-    storeFilter,
-    buildingFilter,
-    roomFilter,
-    projectFilter,
-    fundingSourceFilter,
-    custodianFilter,
-    dateFromFilter,
-    dateToFilter,
-    authHeaders,
-  ]);
+  }, [authReady, search, statusFilter, departmentFilter, itemFilter, categoryFilter, storeFilter, buildingFilter, roomFilter, projectFilter, fundingSourceFilter, custodianFilter, dateFromFilter, dateToFilter]);
 
   const loadLookups = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     const next = {
       ...initialLookups,
@@ -205,7 +184,7 @@ export default function AssetsPage() {
 
     await Promise.all(
       loadable.map(async ({ key, path }) => {
-        const response = await api.get(`/master-data/${path}`, { ...authHeaders });
+        const response = await api.get(`/master-data/${path}`);
         const payload = response.data?.data;
         if (Array.isArray(payload)) {
           next[key] = payload;
@@ -214,7 +193,7 @@ export default function AssetsPage() {
     );
 
     setLookups(next);
-  }, [token, authHeaders]);
+  }, [authReady]);
 
   useEffect(() => {
     const reload = async () => {

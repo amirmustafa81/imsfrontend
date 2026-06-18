@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader, StatusBadge } from "@/components/ims";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 type AssetRow = {
   id: number;
@@ -188,11 +189,9 @@ const sortByNewest = <T,>(rows: T[], getter: (row: T) => string | null | undefin
   });
 
 export default function Home() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [dashboardError, setDashboardError] = useState(() =>
-    token ? "" : "Dashboard metrics need a valid API token in local storage.",
-  );
+  const [dashboardError, setDashboardError] = useState("");
   const [metrics, setMetrics] = useState<DashboardMetric[]>(DEFAULT_METRICS);
   const [departmentCounts, setDepartmentCounts] = useState<DepartmentCount[]>([]);
   const [lowStockRows, setLowStockRows] = useState<LowStockTableRow[]>([]);
@@ -201,7 +200,7 @@ export default function Home() {
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!token) {
+    if (!isAuthenticated || authLoading) {
       return;
     }
 
@@ -209,24 +208,18 @@ export default function Home() {
     setLoading(true);
     setDashboardError("");
 
-    const requestConfig = {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    };
-
     void Promise.allSettled([
-      api.get<{ data: AssetRow[] }>("/assets", requestConfig),
-      api.get<{ data: StockRow[] }>("/reports/stock-balance", requestConfig),
-      api.get<{ data: StockRow[] }>("/reports/low-stock", requestConfig),
-      api.get<{ data: VerificationRow[] }>("/physical-verifications", requestConfig),
-      api.get<{ data: MissingDamagedRow[] }>("/reports/missing-damaged-assets", requestConfig),
-      api.get<{ data: ReceiptReportRow[] }>("/reports/purchase-receipt", requestConfig),
-      api.get<{ data: InventoryTransactionRow[] }>("/inventory-transactions", requestConfig),
-      api.get<{ data: IssueReturnRow[] }>("/reports/issue-return", requestConfig),
-      api.get<{ data: AssetTransferRow[] }>("/reports/asset-transfer", requestConfig),
-      api.get<{ data: MaintenanceRow[] }>("/maintenance-records", requestConfig),
-      api.get<{ data: ControlledStationeryBatchRow[] }>("/controlled-stationery/batches", requestConfig),
+      api.get<{ data: AssetRow[] }>("/assets"),
+      api.get<{ data: StockRow[] }>("/reports/stock-balance"),
+      api.get<{ data: StockRow[] }>("/reports/low-stock"),
+      api.get<{ data: VerificationRow[] }>("/physical-verifications"),
+      api.get<{ data: MissingDamagedRow[] }>("/reports/missing-damaged-assets"),
+      api.get<{ data: ReceiptReportRow[] }>("/reports/purchase-receipt"),
+      api.get<{ data: InventoryTransactionRow[] }>("/inventory-transactions"),
+      api.get<{ data: IssueReturnRow[] }>("/reports/issue-return"),
+      api.get<{ data: AssetTransferRow[] }>("/reports/asset-transfer"),
+      api.get<{ data: MaintenanceRow[] }>("/maintenance-records"),
+      api.get<{ data: ControlledStationeryBatchRow[] }>("/controlled-stationery/batches"),
     ])
       .then((results) => {
           if (!active) {
@@ -467,7 +460,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [isAuthenticated, authLoading]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const maxDepartmentCount = Math.max(...departmentCounts.map((row) => row.count), 1);
@@ -479,6 +472,15 @@ export default function Home() {
           title="Dashboard"
           subtitle="Operational overview across stores, assets, and projects"
         />
+
+        {authLoading ? <div className="text-secondary small mb-3">Checking authentication…</div> : null}
+
+        {!isAuthenticated && !authLoading ? (
+          <div className="alert alert-info mb-3">
+            <i className="bi bi-shield-lock me-2" />
+            Please log in to load live KPI cards and dashboard metrics.
+          </div>
+        ) : null}
 
         {dashboardError ? <div className="alert alert-danger mb-3">{dashboardError}</div> : null}
         {loading ? <div className="text-secondary small mb-3">Refreshing live dashboard metrics...</div> : null}

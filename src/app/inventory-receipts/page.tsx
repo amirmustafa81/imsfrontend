@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey =
@@ -163,7 +164,7 @@ const defaultForm: ReceiptForm = {
 const toPayloadDate = (value: string): string | null => value.trim() ? value : null;
 
 export default function InventoryReceiptsPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const { isAuthenticated, loading } = useAuth();
   const [rows, setRows] = useState<Receipt[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
@@ -208,12 +209,7 @@ export default function InventoryReceiptsPage() {
     return `${(bytes / 1024).toFixed(1)} KB`;
   };
 
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  const authReady = useMemo(() => isAuthenticated && !loading, [isAuthenticated, loading]);
 
   const lookupLabel = (source: LookupKey, value: unknown) => {
     if (value === null || value === undefined || value === "") {
@@ -231,7 +227,7 @@ export default function InventoryReceiptsPage() {
   };
 
   useEffect(() => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
@@ -256,7 +252,6 @@ export default function InventoryReceiptsPage() {
         }
 
         const response = await api.get("/inventory-receipts", {
-          ...authHeaders,
           params,
         });
 
@@ -270,10 +265,10 @@ export default function InventoryReceiptsPage() {
     };
 
     void loadRows();
-  }, [search, statusFilter, storeFilter, departmentFilter, token, authHeaders]);
+  }, [search, statusFilter, storeFilter, departmentFilter, authReady]);
 
   useEffect(() => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
@@ -298,7 +293,7 @@ export default function InventoryReceiptsPage() {
       };
 
       for (const key of requiredLookups) {
-        const request = api.get(`/master-data/${key}`, { ...authHeaders }).then((res) => {
+        const request = api.get(`/master-data/${key}`).then((res) => {
           const payload = res.data?.data;
           if (Array.isArray(payload)) {
             copy[key] = payload;
@@ -313,7 +308,7 @@ export default function InventoryReceiptsPage() {
     };
 
     void loadLookups();
-  }, [token, authHeaders]);
+  }, [authReady]);
 
   const setFormValue = (key: keyof ReceiptForm, value: string | boolean) => {
     setForm((current) => ({
@@ -404,7 +399,7 @@ export default function InventoryReceiptsPage() {
   ];
 
   const refreshRows = async () => {
-    if (!token) return;
+    if (!authReady) return;
     try {
       const params: Record<string, string> = {};
 
@@ -413,10 +408,7 @@ export default function InventoryReceiptsPage() {
       if (storeFilter) params.store_id = storeFilter;
       if (departmentFilter) params.department_id = departmentFilter;
 
-      const response = await api.get("/inventory-receipts", {
-        ...authHeaders,
-        params,
-      });
+      const response = await api.get("/inventory-receipts", { params });
 
       const data = response.data?.data;
       setRows(Array.isArray(data) ? data : []);
@@ -427,9 +419,9 @@ export default function InventoryReceiptsPage() {
   };
 
   const postReceipt = async (receiptId: number) => {
-    if (!token) return;
+    if (!authReady) return;
 
-    await api.post(`/inventory-receipts/${receiptId}/post`, {}, { ...authHeaders });
+    await api.post(`/inventory-receipts/${receiptId}/post`, {});
   };
 
   const uploadReceiptAttachment = async (receiptId: number, file: File) => {
@@ -439,13 +431,13 @@ export default function InventoryReceiptsPage() {
     formData.append("document_type", "supporting");
     formData.append("file", file);
 
-    await api.post("/documents", formData, { ...authHeaders });
+    await api.post("/documents", formData);
   };
 
   const saveReceipt = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }
@@ -520,7 +512,7 @@ export default function InventoryReceiptsPage() {
 
     try {
       setIsPostingReceipt(true);
-      const receiptResponse = await api.post("/inventory-receipts", { ...payload, post_now: false }, authHeaders);
+      const receiptResponse = await api.post("/inventory-receipts", { ...payload, post_now: false });
       const receiptId = receiptResponse.data?.data?.id;
 
       if (!receiptId) {
@@ -560,7 +552,7 @@ export default function InventoryReceiptsPage() {
   };
 
   const postReceiptAndRefresh = async (receiptId: number) => {
-    if (!token) return;
+    if (!authReady) return;
 
     try {
       await postReceipt(receiptId);
@@ -579,7 +571,7 @@ export default function InventoryReceiptsPage() {
 
     try {
       setExpandedLoading((current) => ({ ...current, [receiptId]: true }));
-      const response = await api.get(`/inventory-receipts/${receiptId}`, { ...authHeaders });
+      const response = await api.get(`/inventory-receipts/${receiptId}`);
       const itemsData = response.data?.items;
       const normalized = Array.isArray(itemsData) ? itemsData : [];
       setExpandedItems((current) => ({ ...current, [receiptId]: normalized }));
@@ -592,12 +584,12 @@ export default function InventoryReceiptsPage() {
   };
 
   const deleteReceipt = async (receiptId: number) => {
-    if (!token) return;
+    if (!authReady) return;
 
     if (!window.confirm("Delete this receipt?")) return;
 
     try {
-      await api.delete(`/inventory-receipts/${receiptId}`, { ...authHeaders });
+      await api.delete(`/inventory-receipts/${receiptId}`);
       setMessage("Receipt deleted.");
       await refreshRows();
       setExpandedId((current) => (current === receiptId ? null : current));

@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey =
@@ -136,7 +137,8 @@ const numberOrNull = (value: string): number | null => {
 };
 
 export default function IssuesReturnsPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const { isAuthenticated, loading } = useAuth();
+  const authReady = useMemo(() => isAuthenticated && !loading, [isAuthenticated, loading]);
   const [rows, setRows] = useState<Transaction[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
@@ -159,12 +161,7 @@ export default function IssuesReturnsPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  
 
   const lookupLabel = (source: LookupKey, value: unknown) => {
     if (value === null || value === undefined || value === "") return "-";
@@ -177,7 +174,7 @@ export default function IssuesReturnsPage() {
   };
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     const params: Record<string, string> = {};
     if (search.trim()) params.search = search.trim();
@@ -187,10 +184,7 @@ export default function IssuesReturnsPage() {
     if (storeFilter) params.store_id = storeFilter;
 
     try {
-      const response = await api.get("/inventory-transactions", {
-        ...authHeaders,
-        params,
-      });
+      const response = await api.get("/inventory-transactions", { params });
       const data = response.data?.data;
       setRows(Array.isArray(data) ? data : []);
       setError("");
@@ -198,7 +192,7 @@ export default function IssuesReturnsPage() {
       setRows([]);
       setError("Unable to load transactions.");
     }
-  }, [token, search, statusFilter, typeFilter, departmentFilter, storeFilter, authHeaders]);
+  }, [authReady, search, statusFilter, typeFilter, departmentFilter, storeFilter]);
 
   useEffect(() => {
     (async () => {
@@ -207,7 +201,7 @@ export default function IssuesReturnsPage() {
   }, [loadRows]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!authReady) return;
 
     const requiredLookups: LookupKey[] = [
       "departments",
@@ -235,7 +229,7 @@ export default function IssuesReturnsPage() {
       );
 
       const requests = requiredLookups.map(async (key) => {
-        const response = await api.get(`/master-data/${key}`, { ...authHeaders });
+        const response = await api.get(`/master-data/${key}`);
         const payload = response.data?.data;
         if (Array.isArray(payload)) {
           next[key] = payload;
@@ -247,7 +241,7 @@ export default function IssuesReturnsPage() {
     };
 
     void loadLookups();
-  }, [token, authHeaders]);
+  }, [authReady]);
 
   const setFormValue = (key: keyof TransactionForm, value: string | boolean) => {
     if (key === "transaction_type" && typeof value === "string") {
@@ -378,7 +372,7 @@ export default function IssuesReturnsPage() {
   const saveTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }
@@ -434,7 +428,7 @@ export default function IssuesReturnsPage() {
     };
 
     try {
-      const response = await api.post("/inventory-transactions", payload, authHeaders);
+      const response = await api.post("/inventory-transactions", payload);
       if (response.data?.transaction) {
         setMessage(`Transaction saved with id ${response.data.transaction.id}`);
       } else if (response.data?.data?.id) {
@@ -458,9 +452,7 @@ export default function IssuesReturnsPage() {
 
     setExpandedLoading((prev) => ({ ...prev, [transactionId]: true }));
     try {
-      const response = await api.get(`/inventory-transactions/${transactionId}`, {
-        ...authHeaders,
-      });
+      const response = await api.get(`/inventory-transactions/${transactionId}`);
 
       const itemRows = response.data?.items;
       setExpandedItems((prev) => ({
@@ -488,7 +480,7 @@ export default function IssuesReturnsPage() {
 
   const postTransaction = async (id: number) => {
     try {
-      const response = await api.post(`/inventory-transactions/${id}/post`, {}, authHeaders);
+      const response = await api.post(`/inventory-transactions/${id}/post`, {});
       setMessage(response.data?.message ?? "Transaction posted.");
       setError("");
       await loadRows();
@@ -499,7 +491,7 @@ export default function IssuesReturnsPage() {
 
   const deleteTransaction = async (id: number) => {
     try {
-      await api.delete(`/inventory-transactions/${id}`, authHeaders);
+      await api.delete(`/inventory-transactions/${id}`);
       setMessage("Transaction deleted.");
       setError("");
       await loadRows();

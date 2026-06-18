@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type Permission = {
@@ -35,9 +36,8 @@ const emptyForm: RoleForm = {
 };
 
 export default function RolesPage() {
-  const initialToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
-  const [token] = useState(initialToken);
-  const headers = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
+  const { isAuthenticated, loading } = useAuth();
+  const authReady = useMemo(() => isAuthenticated && !loading, [isAuthenticated, loading]);
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -50,13 +50,13 @@ export default function RolesPage() {
   const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     try {
       const params = filters.search.trim() ? { search: filters.search.trim() } : undefined;
       const [roleResponse, permissionResponse] = await Promise.all([
-        api.get<{ data: Role[] }>("/roles", { ...headers, params }),
-        api.get<{ data: Permission[] }>("/permissions", headers),
+        api.get<{ data: Role[] }>("/roles", { params }),
+        api.get<{ data: Permission[] }>("/permissions"),
       ]);
 
       setRoles(roleResponse.data?.data ?? []);
@@ -67,7 +67,7 @@ export default function RolesPage() {
       setPermissions([]);
       setError("Unable to load RBAC lists.");
     }
-  }, [headers, token, filters.search]);
+  }, [authReady, filters.search]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -108,7 +108,7 @@ export default function RolesPage() {
   const saveRole = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!token) {
+    if (!authReady) {
       setError("Authentication token required.");
       return;
     }
@@ -127,10 +127,10 @@ export default function RolesPage() {
       };
 
       if (editingRoleId === null) {
-        await api.post("/roles", payload, headers);
+        await api.post("/roles", payload);
         setMessage("Role created.");
       } else {
-        await api.put(`/roles/${editingRoleId}`, payload, headers);
+        await api.put(`/roles/${editingRoleId}`, payload);
         setMessage("Role updated.");
       }
 
@@ -156,7 +156,7 @@ export default function RolesPage() {
     }
 
     try {
-      await api.delete(`/roles/${role.id}`, headers);
+      await api.delete(`/roles/${role.id}`);
       await loadRows();
       setMessage("Role deleted.");
       setError("");
