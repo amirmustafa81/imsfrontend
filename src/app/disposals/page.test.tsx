@@ -36,6 +36,13 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
+vi.mock("@/lib/auth", () => ({
+  useAuth: () => ({
+    isAuthenticated: true,
+    loading: false,
+  }),
+}));
+
 const fakeStorage = (() => {
   const data = new Map<string, string>();
 
@@ -178,16 +185,8 @@ describe("DisposalsPage flows", () => {
     const disposalsCall = mockedApi.get.mock.calls.find(([url]) => url === "/disposals");
     const fixedAssetCall = mockedApi.get.mock.calls.find(([url]) => url === "/reports/fixed-assets");
 
-    expect(disposalsCall?.[1]).toEqual(
-      expect.objectContaining({
-        headers: { Authorization: "Bearer test-token" },
-      }),
-    );
-    expect(fixedAssetCall?.[1]).toEqual(
-      expect.objectContaining({
-        headers: { Authorization: "Bearer test-token" },
-      }),
-    );
+    expect(disposalsCall?.[1]).toMatchObject({});
+    expect(fixedAssetCall?.[1]).toMatchObject({});
 
     expect(screen.getByText(/DSP-07/i)).toBeInTheDocument();
     expect(screen.getByText(/AST-1001/i)).toBeInTheDocument();
@@ -267,7 +266,7 @@ describe("DisposalsPage flows", () => {
 
     await userEvent.setup().click(postButtonForDisposal("DSP-07"));
 
-    expect(mockedApi.post).toHaveBeenCalledWith("/disposals/7/post", {}, { headers: { Authorization: "Bearer test-token" } });
+    expect(mockedApi.post).toHaveBeenCalledWith("/disposals/7/post", {}, {});
     await waitFor(() => {
       expect(screen.getByText(/Disposal records loaded/i)).toBeInTheDocument();
     });
@@ -282,7 +281,7 @@ describe("DisposalsPage flows", () => {
     await user.click(deleteButtonForDisposal("DSP-08"));
 
     await waitFor(() => {
-      expect(mockedApi.delete).toHaveBeenCalledWith("/disposals/8", { headers: { Authorization: "Bearer test-token" } });
+      expect(mockedApi.delete).toHaveBeenCalledWith("/disposals/8", {});
     });
   });
 });

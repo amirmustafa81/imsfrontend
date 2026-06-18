@@ -18,6 +18,13 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
+vi.mock("@/lib/auth", () => ({
+  useAuth: () => ({
+    isAuthenticated: true,
+    loading: false,
+  }),
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
