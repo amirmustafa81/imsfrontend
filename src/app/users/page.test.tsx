@@ -106,7 +106,7 @@ describe("UsersPage", () => {
     await user.type(screen.getByLabelText(/^Email$/i), "bilal@example.com");
     await user.type(screen.getByLabelText(/^Password$/i), "Secret123");
     await user.selectOptions(screen.getByLabelText(/Department/i), "2");
-    await user.selectOptions(screen.getByLabelText(/Roles/i), "1");
+    await user.click(screen.getByLabelText("Store Admin"));
     const dialog = screen.getByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: /^Create User$/i }));
 

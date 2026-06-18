@@ -10,6 +10,11 @@ type LookupResponse = {
   };
 };
 
+const mockAuthState = {
+  isAuthenticated: true,
+  loading: false,
+};
+
 const mockedApi = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -22,6 +27,10 @@ vi.mock("@/lib/api", () => ({
     post: mockedApi.post,
     delete: mockedApi.delete,
   },
+}));
+
+vi.mock("@/lib/auth", () => ({
+  useAuth: () => mockAuthState,
 }));
 
 vi.mock("next/link", () => ({
@@ -109,6 +118,7 @@ beforeEach(() => {
 
   fakeStorage.clear();
   localStorage.setItem("ims_api_token", "test-token");
+  mockAuthState.isAuthenticated = true;
   seedLookupRequests();
 });
 
@@ -116,6 +126,7 @@ afterEach(() => {
   mockedApi.get.mockReset();
   mockedApi.post.mockReset();
   mockedApi.delete.mockReset();
+  mockAuthState.isAuthenticated = true;
   fakeStorage.clear();
 });
 
@@ -192,9 +203,11 @@ const fillRequiredCommonFields = async (user: ReturnType<typeof userEvent.setup>
 const setToken = (token: string | null) => {
   if (token === null) {
     localStorage.removeItem("ims_api_token");
+    mockAuthState.isAuthenticated = false;
     return;
   }
 
+  mockAuthState.isAuthenticated = true;
   localStorage.setItem("ims_api_token", token);
 };
 
@@ -590,7 +603,7 @@ describe("IssuesReturnsPage adjustment flow", () => {
     await user.click(screen.getByRole("button", { name: /save transaction/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/save token first/i)).toBeInTheDocument();
+      expect(screen.getByText(/authentication token required/i)).toBeInTheDocument();
     });
 
     expect(mockedApi.post).not.toHaveBeenCalled();
