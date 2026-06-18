@@ -163,6 +163,9 @@ export default function AssetDetailPage() {
 
   const movementRows = useMemo(() => movementResponseSearch(movements, search), [movements, search]);
 
+  const generatedTagId = asset?.printable_tag_id || (asset?.asset_id ? `${asset.asset_id}-TAG` : `FA-${asset?.id ?? 0}`);
+  const tagPrintQuery = asset ? `asset_id=${asset.id}&asset_code=${encodeURIComponent(asset.asset_id)}&suggested_tag=${encodeURIComponent(generatedTagId)}` : "";
+
   if (Number.isNaN(id) || id <= 0) {
     return (
       <main className="min-vh-100 bg-body-tertiary">
@@ -202,10 +205,16 @@ export default function AssetDetailPage() {
           title={asset ? `${asset.asset_id} / ${asset.item?.name ?? "Asset"}` : "Asset Detail"}
           subtitle="Track fixed asset identity, location, cost, and movement history."
           actions={
-            <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => router.push("/assets")}>
-              <i className="bi bi-arrow-left me-1" />
-              Back
-            </button>
+            <div className="d-flex gap-2">
+              <Link href={`/tag-print-log?${tagPrintQuery}`} className="btn btn-outline-primary btn-sm">
+                <i className="bi bi-qr-code me-1" />
+                Generate / Print Tag
+              </Link>
+              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => router.push("/assets")}>
+                <i className="bi bi-arrow-left me-1" />
+                Back
+              </button>
+            </div>
           }
         />
 
