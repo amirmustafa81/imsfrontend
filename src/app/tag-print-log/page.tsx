@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type AssetOption = {
@@ -42,13 +43,7 @@ const printFormatOptions = [
 ];
 
 export default function TagPrintLogPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const [rows, setRows] = useState<TagPrintLog[]>([]);
@@ -64,20 +59,20 @@ export default function TagPrintLogPage() {
   const [message, setMessage] = useState("");
 
   const loadLookups = useCallback(async () => {
-    if (!token) {
+    if (authLoading || !isAuthenticated) {
       return;
     }
 
     try {
-      const response = await api.get<{ data: AssetOption[] }>("/assets", authHeaders);
+      const response = await api.get<{ data: AssetOption[] }>("/assets");
       setAssets(response.data.data ?? []);
     } catch {
       setError("Unable to load asset list for tagging.");
     }
-  }, [authHeaders, token]);
+  }, [authLoading, isAuthenticated]);
 
   const loadRows = useCallback(async () => {
-    if (!token) {
+    if (authLoading || !isAuthenticated) {
       return;
     }
 
@@ -86,7 +81,6 @@ export default function TagPrintLogPage() {
 
     try {
       const response = await api.get<{ data: TagPrintLog[] }>("/asset-tag-print-logs", {
-        ...authHeaders,
         params: search.trim() ? { searchable_tag_id: search.trim() } : undefined,
       });
       setRows(response.data.data ?? []);
@@ -96,7 +90,7 @@ export default function TagPrintLogPage() {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, search, token]);
+  }, [authLoading, isAuthenticated, search]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -115,8 +109,8 @@ export default function TagPrintLogPage() {
   const saveLog = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!token) {
-      setError("Authentication token required.");
+    if (authLoading || !isAuthenticated) {
+      setError("Please log in before saving print logs.");
       return;
     }
 
@@ -124,7 +118,7 @@ export default function TagPrintLogPage() {
     setMessage("");
 
     try {
-      await api.post("/asset-tag-print-logs", form, authHeaders);
+      await api.post("/asset-tag-print-logs", form);
       await loadRows();
       setMessage("Tag print log saved.");
       setForm({
@@ -139,13 +133,13 @@ export default function TagPrintLogPage() {
   };
 
   const deleteLog = async (logId: number) => {
-    if (!token) {
-      setError("Authentication token required.");
+    if (authLoading || !isAuthenticated) {
+      setError("Please log in before deleting print logs.");
       return;
     }
 
     try {
-      await api.delete(`/asset-tag-print-logs/${logId}`, authHeaders);
+      await api.delete(`/asset-tag-print-logs/${logId}`);
       await loadRows();
       setMessage("Tag print log removed.");
     } catch {
@@ -159,8 +153,14 @@ export default function TagPrintLogPage() {
         <PageHeader
           title="Tag Print Log"
           subtitle="Record tag printing actions per asset and export traceability."
-          
         />
+
+        {!isAuthenticated && !authLoading ? (
+          <div className="alert alert-info mb-3">
+            <i className="bi bi-shield-lock me-2" />
+            Log in to load assets and manage tag print history.
+          </div>
+        ) : null}
 
         <div className="row g-4 mb-4">
           <div className="col-12 col-xl-5">

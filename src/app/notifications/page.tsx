@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader } from "@/components/ims";
 
 type NotificationRow = {
@@ -24,8 +25,7 @@ type FilterValues = {
 };
 
 export default function NotificationsPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const authHeaders = useMemo(() => ({ headers: token ? { Authorization: `Bearer ${token}` } : undefined }), [token]);
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const [filters, setFilters] = useState<FilterValues>({ search: "", is_read: "", notification_type: "" });
@@ -33,7 +33,7 @@ export default function NotificationsPage() {
   const [error, setError] = useState("");
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (authLoading || !isAuthenticated) return;
 
     const params: Record<string, string> = {};
     if (filters.search.trim()) params.search = filters.search.trim();
@@ -42,7 +42,6 @@ export default function NotificationsPage() {
 
     try {
       const response = await api.get<{ data: NotificationRow[] }>("/notifications", {
-        ...authHeaders,
         params,
       });
       setRows(response.data?.data ?? []);
@@ -51,17 +50,17 @@ export default function NotificationsPage() {
       setRows([]);
       setError("Unable to load notifications.");
     }
-  }, [authHeaders, token, filters.search, filters.is_read, filters.notification_type]);
+  }, [authLoading, filters.is_read, filters.notification_type, filters.search, isAuthenticated]);
 
   const loadUnread = useCallback(async () => {
-    if (!token) return;
+    if (authLoading || !isAuthenticated) return;
     try {
-      const response = await api.get<{ unread_count: number }>("/notifications/unread-count", authHeaders);
+      const response = await api.get<{ unread_count: number }>("/notifications/unread-count");
       setUnreadCount(Number(response.data?.unread_count ?? 0));
     } catch {
       setUnreadCount(0);
     }
-  }, [authHeaders, token]);
+  }, [authLoading, isAuthenticated]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -74,8 +73,13 @@ export default function NotificationsPage() {
   };
 
   const markRead = async (id: number) => {
+    if (authLoading || !isAuthenticated) {
+      setError("Please log in to mark notification as read.");
+      return;
+    }
+
     try {
-      await api.post(`/notifications/${id}/read`, {}, authHeaders);
+      await api.post(`/notifications/${id}/read`, {});
       await loadRows();
       await loadUnread();
     } catch {
@@ -84,8 +88,13 @@ export default function NotificationsPage() {
   };
 
   const markAllRead = async () => {
+    if (authLoading || !isAuthenticated) {
+      setError("Please log in before marking all notifications as read.");
+      return;
+    }
+
     try {
-      await api.post("/notifications/read-all", {}, authHeaders);
+      await api.post("/notifications/read-all", {});
       await loadRows();
       await loadUnread();
     } catch {
@@ -127,6 +136,13 @@ export default function NotificationsPage() {
           subtitle={`Unread: ${unreadCount}`}
           
         />
+
+        {!isAuthenticated && !authLoading ? (
+          <div className="alert alert-info mb-3">
+            <i className="bi bi-shield-lock me-2" />
+            Log in to load in-app notifications and update read status.
+          </div>
+        ) : null}
 
         {error ? <div className="alert alert-danger">{error}</div> : null}
 
