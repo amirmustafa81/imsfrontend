@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader } from "@/components/ims";
 
 type ResourceKey =
@@ -281,7 +282,8 @@ const getFieldPlaceholder = (field: FieldDef): string => {
 };
 
 export default function MasterDataPage() {
-  const storedToken = () => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? "");
+  const { isAuthenticated, loading } = useAuth();
+  const authReady = isAuthenticated && !loading;
 
   const [activeResource, setActiveResource] = useState<ResourceKey>("departments");
   const [rows, setRows] = useState<RowData[]>([]);
@@ -291,7 +293,6 @@ export default function MasterDataPage() {
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [token] = useState(storedToken);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [lookups, setLookups] = useState<Record<ResourceKey, RowData[]>>({
     departments: [],
@@ -308,16 +309,9 @@ export default function MasterDataPage() {
   const definition = resources[activeResource];
   const configColumns = definition.tableColumns;
 
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
-
   useEffect(() => {
     const loadRows = async () => {
-      if (!token) {
+      if (!authReady) {
         setRows([]);
         return;
       }
@@ -333,10 +327,7 @@ export default function MasterDataPage() {
           query.search = search.trim();
         }
 
-        const response = await api.get(`/master-data/${definition.endpoint}`, {
-          ...authHeaders,
-          params: query,
-        });
+        const response = await api.get(`/master-data/${definition.endpoint}`, { params: query });
 
         const data = response.data?.data;
         setRows(Array.isArray(data) ? data : []);
@@ -352,10 +343,10 @@ export default function MasterDataPage() {
     };
 
     void reload();
-  }, [activeResource, definition.endpoint, authHeaders, search, statusFilter, token]);
+  }, [activeResource, definition.endpoint, authReady, search, statusFilter]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!authReady) return;
 
     const loadLookup = async () => {
       const required: ResourceKey[] = ["departments", "buildings", "rooms", "asset-categories", "funding-sources"];
@@ -375,7 +366,7 @@ export default function MasterDataPage() {
       for (const resource of required) {
         updates.push(
           api
-            .get(`/master-data/${resource}`, { headers: authHeaders.headers })
+            .get(`/master-data/${resource}`)
             .then((response) => {
               const rows = response.data?.data;
               if (Array.isArray(rows)) {
@@ -393,7 +384,7 @@ export default function MasterDataPage() {
     };
 
     void loadLookup();
-  }, [token, authHeaders]);
+  }, [authReady]);
 
   const getLookupLabel = (source: ResourceKey, value: unknown) => {
     if (value === null || value === undefined || value === "") return "-";
@@ -423,8 +414,8 @@ export default function MasterDataPage() {
   const submitRecord = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!token) {
-      setError("Authentication token required.");
+    if (!authReady) {
+      setError("Please sign in to save records.");
       return;
     }
 
@@ -456,15 +447,14 @@ export default function MasterDataPage() {
 
     try {
       if (editingId) {
-        await api.put(`/master-data/${definition.endpoint}/${editingId}`, payload, authHeaders);
+        await api.put(`/master-data/${definition.endpoint}/${editingId}`, payload);
         setMessage("Record updated successfully");
       } else {
-        await api.post(`/master-data/${definition.endpoint}`, payload, authHeaders);
+        await api.post(`/master-data/${definition.endpoint}`, payload);
         setMessage("Record created successfully");
       }
 
     const response = await api.get(`/master-data/${definition.endpoint}`, {
-      ...authHeaders,
       params: {
         search: search.trim() || undefined,
         status: statusFilter || undefined,
@@ -529,13 +519,13 @@ export default function MasterDataPage() {
   };
 
   const deactivateRecord = async (row: RowData) => {
-    if (!token) {
-      setError("Authentication token required.");
+    if (!authReady) {
+      setError("Please sign in to deactivate records.");
       return;
     }
 
     try {
-      await api.delete(`/master-data/${definition.endpoint}/${row.id}`, authHeaders);
+      await api.delete(`/master-data/${definition.endpoint}/${row.id}`);
       setMessage("Record deactivated");
       setRows((current) => current.filter((item) => item.id !== row.id));
     } catch {
@@ -690,11 +680,13 @@ export default function MasterDataPage() {
           }
         />
 
-        {(error || message || !token) && (
+        {(error || message || !authReady) && (
           <div className="mb-3">
             {error && <div className="alert alert-danger mb-0">{error}</div>}
             {message && <div className="alert alert-success mb-0">{message}</div>}
-            {!token && <div className="alert alert-warning mb-0">Authentication token required before loading records.</div>}
+            {!authReady && (
+              <div className="alert alert-warning mb-0">Please sign in before loading and editing master data.</div>
+            )}
           </div>
         )}
 
@@ -752,7 +744,7 @@ export default function MasterDataPage() {
           <span className="small text-secondary">{rows.length} record{rows.length === 1 ? "" : "s"}</span>
         </div>
 
-        <DataTable columns={tableColumns as never} rows={(token ? rows : []) as never} empty="No records found." />
+        <DataTable columns={tableColumns as never} rows={rows as never} empty="No records found." />
 
         {dialogOpen ? (
           <>
@@ -786,7 +778,7 @@ export default function MasterDataPage() {
                     <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
                       Cancel
                     </button>
-                    <button className="btn btn-primary" type="submit" disabled={!token}>
+                    <button className="btn btn-primary" type="submit" disabled={!authReady}>
                       <i className={`bi ${editingId ? "bi-save" : "bi-plus-circle"} me-1`} />
                       {editingId ? "Update Record" : "Save Record"}
                     </button>

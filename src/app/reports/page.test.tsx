@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import ReportsPage from "./page";
+import { AuthProvider } from "@/lib/auth";
 
 type ReportRow = {
   id: number;
@@ -64,6 +65,20 @@ const reportRows = {
 };
 
 const buildGetResponse = (url: string) => {
+  if (url === "/auth/me") {
+    return {
+      data: {
+        user: {
+          id: 1,
+          name: "Admin User",
+          email: "admin@example.com",
+          status: "active",
+          roles: [{ id: 1, name: "super-admin" }],
+          permissions: [],
+        },
+      },
+    };
+  }
   if (url === "/reports/controlled-stationery/batches") {
     return { data: { data: reportRows.controlled } };
   }
@@ -143,7 +158,11 @@ const getButtonByName = (name: string | RegExp) =>
 
 const renderPage = async () => {
   const user = userEvent.setup();
-  render(<ReportsPage />);
+  render(
+    <AuthProvider>
+      <ReportsPage />
+    </AuthProvider>,
+  );
 
   await waitFor(() => {
     expect(screen.getByText("Reports")).toBeInTheDocument();
@@ -176,12 +195,7 @@ describe("ReportsPage export and filter flow", () => {
 
     const reportCall = mockedApi.get.mock.calls.find(([url]) => url === "/reports/controlled-stationery/batches");
     expect(reportCall).toBeTruthy();
-    expect(reportCall?.[1]).toEqual(
-      expect.objectContaining({
-        headers: { Authorization: "Bearer test-token" },
-        params: {},
-      }),
-    );
+    expect(reportCall?.[1]).toEqual(expect.objectContaining({ params: {} }));
 
     expect(screen.getByText("Batch No")).toBeInTheDocument();
     expect(screen.getByText("Safety Gloves")).toBeInTheDocument();
@@ -240,12 +254,7 @@ describe("ReportsPage export and filter flow", () => {
         department_id: "2",
       }),
     );
-    expect(requestConfig).toEqual(
-      expect.objectContaining({
-        responseType: "blob",
-        headers: { Authorization: "Bearer test-token" },
-      }),
-    );
+    expect(requestConfig).toEqual(expect.objectContaining({ responseType: "blob" }));
   });
 
   test("requires token before exporting excel", async () => {
@@ -255,7 +264,11 @@ describe("ReportsPage export and filter flow", () => {
     mockedApi.get.mockImplementation(() => Promise.resolve({ data: { data: [] } }));
 
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    render(
+      <AuthProvider>
+        <ReportsPage />
+      </AuthProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Load a report to begin.")).toBeInTheDocument();
@@ -264,14 +277,18 @@ describe("ReportsPage export and filter flow", () => {
     await user.click(getButtonByName(/excel/i));
 
     await waitFor(() => {
-      expect(screen.getByText("Please save your token before exporting.")).toBeInTheDocument();
+      expect(screen.getByText("Please sign in before exporting reports.")).toBeInTheDocument();
     });
     expect(mockedApi.post).not.toHaveBeenCalled();
   });
 
   test("switches report endpoint when report type changes", async () => {
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    render(
+      <AuthProvider>
+        <ReportsPage />
+      </AuthProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Safety Gloves")).toBeInTheDocument();
@@ -290,11 +307,7 @@ describe("ReportsPage export and filter flow", () => {
 
     const reportCall = mockedApi.get.mock.calls.findLast(([url]) => url === "/reports/stock-balance");
     expect(reportCall).toBeTruthy();
-    expect(reportCall?.[1]).toEqual(
-      expect.objectContaining({
-        headers: { Authorization: "Bearer test-token" },
-      }),
-    );
+    expect(reportCall?.[1]).toBeTruthy();
   });
 
   test("shows backend error when export export request fails", async () => {
@@ -322,7 +335,11 @@ test("does not allow PDF export when no rows are loaded", async () => {
     return Promise.resolve(buildGetResponse(url));
   });
 
-  render(<ReportsPage />);
+  render(
+    <AuthProvider>
+      <ReportsPage />
+    </AuthProvider>,
+  );
 
   await waitFor(() => {
     expect(screen.getByText("No rows found.")).toBeInTheDocument();

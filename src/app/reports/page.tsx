@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, ExportButtons, FileAttachmentList, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type ReportType =
@@ -813,7 +814,8 @@ const buildFilterPayload = (config: ReportConfig, filters: ReportFilters): Recor
 const toReportStatus = (status: unknown) => (typeof status === "string" ? status : String(status ?? ""));
 
 export default function ReportsPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const { isAuthenticated, loading } = useAuth();
+  const authReady = isAuthenticated && !loading;
   const [activeReport, setActiveReport] = useState<ReportType>("controlled_stationery_batches");
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>(emptyLookups);
   const [filters, setFilters] = useState<Record<ReportType, ReportFilters>>({
@@ -838,13 +840,6 @@ export default function ReportsPage() {
   const [message, setMessage] = useState("Load a report to begin.");
   const [error, setError] = useState("");
 
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
-
   const reportConfig = reportConfigs[activeReport];
   const currentFilters = filters[activeReport];
   const addExportArtifact = useCallback((artifact: ExportArtifact) => {
@@ -862,7 +857,7 @@ export default function ReportsPage() {
   }, []);
 
   const loadLookups = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     const next = { ...emptyLookups };
     const loadables: Array<{ key: LookupKey; path: string }> = [
@@ -879,7 +874,7 @@ export default function ReportsPage() {
 
     await Promise.all(
       loadables.map(async (lookup) => {
-        const response = await api.get(`/master-data/${lookup.path}`, { ...authHeaders });
+        const response = await api.get(`/master-data/${lookup.path}`);
         const payload = response.data?.data;
         if (Array.isArray(payload)) {
           next[lookup.key] = payload;
@@ -888,17 +883,14 @@ export default function ReportsPage() {
     );
 
     setLookups(next);
-  }, [authHeaders, token]);
+  }, [authReady]);
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     try {
       const payload = buildFilterPayload(reportConfig, currentFilters);
-      const response = await api.get(reportConfig.endpoint, {
-        ...authHeaders,
-        params: payload,
-      });
+      const response = await api.get(reportConfig.endpoint, { params: payload });
       const data = response.data?.data;
       setRows(Array.isArray(data) ? data : []);
       setError("");
@@ -908,7 +900,7 @@ export default function ReportsPage() {
       setMessage("");
       setError("Failed to load report. Verify token and endpoint availability.");
     }
-  }, [authHeaders, currentFilters, reportConfig, token]);
+  }, [authReady, currentFilters, reportConfig]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -940,8 +932,8 @@ export default function ReportsPage() {
   };
 
   const exportReport = async (format: "pdf" | "excel") => {
-    if (!token) {
-      setError("Please save your token before exporting.");
+    if (!authReady) {
+      setError("Please sign in before exporting reports.");
       return;
     }
 
@@ -960,7 +952,6 @@ export default function ReportsPage() {
           ...payload,
         },
         {
-          ...authHeaders,
           responseType: "blob",
         },
       );

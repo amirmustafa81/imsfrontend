@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type ImportBatch = {
@@ -43,13 +44,8 @@ const templateTypeOptions = [
 ];
 
 export default function ImportPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
+  const { isAuthenticated, loading } = useAuth();
+  const authReady = isAuthenticated && !loading;
 
   const [importTypeFilter, setImportTypeFilter] = useState("");
   const [uploadType, setUploadType] = useState("assets");
@@ -59,19 +55,18 @@ export default function ImportPage() {
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const loadBatches = useCallback(async () => {
-    if (!token) {
+    if (!authReady) {
       return;
     }
 
-    setLoading(true);
+    setIsLoading(true);
     setError("");
 
     try {
       const response = await api.get<{ data: ImportBatch[] }>("/excel-import/batches", {
-        ...authHeaders,
         params: importTypeFilter ? { import_type: importTypeFilter } : undefined,
       });
 
@@ -80,25 +75,25 @@ export default function ImportPage() {
       setBatches([]);
       setError("Unable to load import batches. Verify token and backend connectivity.");
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, [authHeaders, importTypeFilter, token]);
+  }, [authReady, importTypeFilter]);
 
   const loadErrors = useCallback(
     async (batchId: number) => {
-      if (!token) {
+      if (!authReady) {
         return;
       }
 
       try {
-        const response = await api.get<{ data: ErrorRow[] }>(`/excel-import/${batchId}/errors`, authHeaders);
+        const response = await api.get<{ data: ErrorRow[] }>(`/excel-import/${batchId}/errors`);
         setErrors(response.data.data ?? []);
       } catch {
         setErrors([]);
         setError("Unable to load errors for selected import batch.");
       }
     },
-    [authHeaders, token],
+    [authReady],
   );
 
   useEffect(() => {
@@ -115,8 +110,8 @@ export default function ImportPage() {
   const upload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!token) {
-      setError("Authentication token required.");
+    if (!authReady) {
+      setError("Please sign in before uploading batches.");
       return;
     }
 
@@ -130,9 +125,7 @@ export default function ImportPage() {
     formData.append("file", file);
 
     try {
-      await api.post("/excel-import/imports", formData, {
-        ...authHeaders,
-      });
+      await api.post("/excel-import/imports", formData);
       setMessage("Import batch uploaded.");
       setFile(null);
       await loadBatches();
@@ -142,13 +135,13 @@ export default function ImportPage() {
   };
 
   const actionValidate = async (batchId: number) => {
-    if (!token) {
-      setError("Authentication token required.");
+    if (!authReady) {
+      setError("Please sign in before validating a batch.");
       return;
     }
 
     try {
-      const response = await api.post<{ data: ImportBatch }>(`/excel-import/${batchId}/validate`, {}, authHeaders);
+      const response = await api.post<{ data: ImportBatch }>(`/excel-import/${batchId}/validate`, {});
       setMessage(response.data.data?.status ? `Batch validation status: ${response.data.data.status}` : "Validation completed.");
       await loadBatches();
       await loadErrors(batchId);
@@ -158,13 +151,13 @@ export default function ImportPage() {
   };
 
   const actionRun = async (batchId: number) => {
-    if (!token) {
-      setError("Authentication token required.");
+    if (!authReady) {
+      setError("Please sign in before running a batch.");
       return;
     }
 
     try {
-      const response = await api.post<{ data: ImportBatch }>(`/excel-import/${batchId}/run`, {}, authHeaders);
+      const response = await api.post<{ data: ImportBatch }>(`/excel-import/${batchId}/run`, {});
       setMessage(response.data.data?.status ? `Run completed: ${response.data.data.status}` : "Run completed.");
       await loadBatches();
       await loadErrors(batchId);
@@ -321,7 +314,7 @@ export default function ImportPage() {
           </div>
         </div>
 
-        {loading ? <span className="small text-secondary">Loading…</span> : null}
+        {isLoading ? <span className="small text-secondary">Loading…</span> : null}
         {message ? <div className="alert alert-success mt-3">{message}</div> : null}
         {error ? <div className="alert alert-danger mt-3">{error}</div> : null}
       </div>

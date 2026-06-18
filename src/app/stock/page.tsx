@@ -293,7 +293,9 @@ export default function StockPage() {
           rowClassName={() => ""}
         />
 
-        {!token ? <div className="alert alert-info mb-0 mt-3">Save your token to connect the live API.</div> : null}
+        {!isAuthenticated || authLoading ? (
+          <div className="alert alert-info mb-0 mt-3">Log in to connect the live API.</div>
+        ) : null}
       </div>
     </main>
   );

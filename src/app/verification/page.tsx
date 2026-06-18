@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "buildings" | "rooms" | "items" | "funding-sources" | "research-projects";
@@ -169,7 +170,8 @@ const emptyItem: VerificationItemInput = {
 };
 
 export default function VerificationPage() {
-  const [token] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("ims_api_token") ?? ""));
+  const { isAuthenticated, loading } = useAuth();
+  const authReady = isAuthenticated && !loading;
   const [rows, setRows] = useState<Verification[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
@@ -192,13 +194,6 @@ export default function VerificationPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const authHeaders = useMemo(
-    () => ({
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-    [token],
-  );
-
   const lookupLabel = (source: LookupKey, value: unknown) => {
     if (value === null || value === undefined || value === "") return "-";
     const options = lookups[source] ?? [];
@@ -209,7 +204,7 @@ export default function VerificationPage() {
   };
 
   const loadRows = useCallback(async () => {
-    if (!token) return;
+    if (!authReady) return;
 
     const params: Record<string, string> = {};
     if (search.trim()) params.search = search.trim();
@@ -219,17 +214,14 @@ export default function VerificationPage() {
     if (projectFilter) params.project_id = projectFilter;
 
     try {
-      const response = await api.get("/physical-verifications", {
-        ...authHeaders,
-        params,
-      });
+      const response = await api.get("/physical-verifications", { params });
       setRows(Array.isArray(response.data?.data) ? response.data.data : []);
       setError("");
     } catch {
       setRows([]);
       setError("Unable to load verification records.");
     }
-  }, [authHeaders, search, typeFilter, statusFilter, departmentFilter, projectFilter, token]);
+  }, [authReady, search, typeFilter, statusFilter, departmentFilter, projectFilter]);
 
   useEffect(() => {
     (async () => {
@@ -238,7 +230,7 @@ export default function VerificationPage() {
   }, [loadRows]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!authReady) return;
 
     const requiredLookups: LookupKey[] = [
       "departments",
@@ -267,7 +259,7 @@ export default function VerificationPage() {
 
       await Promise.all(
         requiredLookups.map(async (key) => {
-          const response = await api.get(`/master-data/${key}`, { ...authHeaders });
+          const response = await api.get(`/master-data/${key}`);
           const data = response.data?.data;
           if (Array.isArray(data)) {
             next[key] = data;
@@ -279,7 +271,7 @@ export default function VerificationPage() {
     };
 
     void loadLookups();
-  }, [authHeaders, token]);
+  }, [authReady]);
 
   const setFormValue = (key: keyof VerificationForm, value: string) => {
     setForm((current) => ({
@@ -313,8 +305,8 @@ export default function VerificationPage() {
   const saveVerification = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!token) {
-      setError("Authentication token required.");
+    if (!authReady) {
+      setError("Please sign in before saving verification entries.");
       return;
     }
 
@@ -364,7 +356,7 @@ export default function VerificationPage() {
     };
 
     try {
-      const response = await api.post("/physical-verifications", payload, authHeaders);
+      const response = await api.post("/physical-verifications", payload);
       if (response.data?.data?.id) {
         setMessage(`Verification ${response.data.data.verification_no} created.`);
       } else {
@@ -380,11 +372,14 @@ export default function VerificationPage() {
   const loadItems = async (verificationId: number) => {
     if (expandedItems[verificationId]) return;
 
+    if (!authReady) {
+      setError("Please sign in to view verification details.");
+      return;
+    }
+
     setExpandedLoading((prev) => ({ ...prev, [verificationId]: true }));
     try {
-      const response = await api.get(`/physical-verifications/${verificationId}`, {
-        ...authHeaders,
-      });
+      const response = await api.get(`/physical-verifications/${verificationId}`);
       const itemRows = response.data?.items;
       setExpandedItems((prev) => ({
         ...prev,
@@ -409,8 +404,13 @@ export default function VerificationPage() {
   };
 
   const deleteVerification = async (id: number) => {
+    if (!authReady) {
+      setError("Please sign in before deleting.");
+      return;
+    }
+
     try {
-      await api.delete(`/physical-verifications/${id}`, authHeaders);
+      await api.delete(`/physical-verifications/${id}`);
       setMessage("Verification deleted.");
       setError("");
       await loadRows();
