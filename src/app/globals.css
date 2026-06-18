@@ -466,14 +466,35 @@ a {
 }
 
 .ims-login-brand-panel {
+  position: relative;
   min-height: 100vh;
   color: #ffffff;
   background:
     linear-gradient(135deg, rgba(24, 49, 88, 0.95), rgba(45, 99, 205, 0.86)),
     url("/window.svg");
   background-repeat: no-repeat;
-  background-position: right 4rem top 4rem;
-  background-size: 220px;
+  background-position: right 5rem center;
+  background-size: 180px;
+  overflow: hidden;
+}
+
+.ims-login-brand-panel::after {
+  position: absolute;
+  inset: 12% 0 12% auto;
+  width: 38%;
+  content: "";
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ims-login-brand-content {
+  position: relative;
+  z-index: 1;
+  max-width: 560px;
+}
+
+.ims-login-brand-content h1,
+.ims-login-brand-content p {
+  max-width: 520px;
 }
 
 .ims-login-emblem {

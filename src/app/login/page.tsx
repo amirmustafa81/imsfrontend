@@ -37,19 +37,19 @@ export default function LoginPage() {
     <main className="min-vh-100 ims-login-page">
       <div className="container-fluid min-vh-100">
         <div className="row min-vh-100">
-          <section className="col-12 col-lg-7 d-none d-lg-flex ims-login-brand-panel">
-            <div className="align-self-end p-5">
+          <section className="col-12 col-lg-6 d-none d-lg-flex align-items-center ims-login-brand-panel">
+            <div className="ims-login-brand-content p-5">
               <div className="d-inline-flex align-items-center justify-content-center ims-login-emblem mb-4">
                 <i className="bi bi-buildings" />
               </div>
-              <h1 className="display-6 fw-bold mb-3">UOH Inventory Management System</h1>
-              <p className="fs-5 mb-0">
+              <h1 className="h2 fw-bold mb-3">UOH Inventory Management System</h1>
+              <p className="fs-6 mb-0">
                 Secure access for inventory, fixed assets, verification, reporting, and compliance workflows.
               </p>
             </div>
           </section>
 
-          <section className="col-12 col-lg-5 d-flex align-items-center justify-content-center p-4">
+          <section className="col-12 col-lg-6 d-flex align-items-center justify-content-center p-4">
             <div className="card border-0 shadow-sm ims-login-card w-100">
               <div className="card-body p-4 p-md-5">
                 <div className="mb-4">
