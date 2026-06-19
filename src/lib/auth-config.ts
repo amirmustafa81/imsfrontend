@@ -17,11 +17,15 @@ const parseAuthFlag = (value: string | undefined, defaultValue: boolean) => {
 };
 
 export const isAuthBypassEnabled = () => {
-  if (parseAuthFlag(process.env.NEXT_PUBLIC_ALLOW_ANONYMOUS_ACCESS, true)) {
+  if (parseAuthFlag(process.env.NEXT_PUBLIC_GUEST_MODE, false)) {
     return true;
   }
 
-  if (parseAuthFlag(process.env.NEXT_PUBLIC_TEMP_DISABLE_AUTH, true)) {
+  if (parseAuthFlag(process.env.NEXT_PUBLIC_ALLOW_ANONYMOUS_ACCESS, false)) {
+    return true;
+  }
+
+  if (parseAuthFlag(process.env.NEXT_PUBLIC_TEMP_DISABLE_AUTH, false)) {
     return true;
   }
 
@@ -29,5 +33,5 @@ export const isAuthBypassEnabled = () => {
     return true;
   }
 
-  return parseAuthFlag(process.env.NEXT_PUBLIC_DISABLE_AUTH, true);
+  return parseAuthFlag(process.env.NEXT_PUBLIC_DISABLE_AUTH, false);
 };
