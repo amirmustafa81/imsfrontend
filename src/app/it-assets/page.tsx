@@ -91,8 +91,8 @@ export default function ItAssetsPage() {
     }
 
     try {
-      const response = await api.get<Department[]>("/master-data/departments", authHeaders);
-      setDepartments(response.data);
+      const response = await api.get<{ data?: Department[] } | Department[]>("/master-data/departments", authHeaders);
+      setDepartments(Array.isArray(response.data) ? response.data : response.data?.data ?? []);
     } catch {
       setError("Unable to load departments. Verify token and connection.");
     }
