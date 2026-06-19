@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -50,6 +50,14 @@ const emptyForm: FormState = {
 };
 
 export default function MaintenanceRecordsPage() {
+  return (
+    <Suspense fallback={<main className="p-4 text-secondary">Loading maintenance records...</main>}>
+      <MaintenanceRecordsContent />
+    </Suspense>
+  );
+}
+
+function MaintenanceRecordsContent() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
   const headers = useMemo(() => ({}), []);

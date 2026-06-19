@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -138,6 +138,14 @@ const numberOrNull = (value: string): number | null => {
 };
 
 export default function IssuesReturnsPage() {
+  return (
+    <Suspense fallback={<main className="p-4 text-secondary">Loading transactions...</main>}>
+      <IssuesReturnsContent />
+    </Suspense>
+  );
+}
+
+function IssuesReturnsContent() {
   const { isAuthenticated, loading } = useAuth();
   const authReady = useMemo(() => isAuthenticated && !loading, [isAuthenticated, loading]);
   const [rows, setRows] = useState<Transaction[]>([]);
