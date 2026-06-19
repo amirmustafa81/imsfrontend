@@ -550,7 +550,7 @@ export default function VerificationPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Verification no</label>
                       <input
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={form.verification_no}
                         required
                         onChange={(e) => setFormValue("verification_no", e.target.value)}
@@ -560,7 +560,7 @@ export default function VerificationPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Type</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.verification_type}
                         onChange={(e) => setFormValue("verification_type", e.target.value)}
                       >
@@ -574,7 +574,7 @@ export default function VerificationPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Status</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.status}
                         onChange={(e) => setFormValue("status", e.target.value)}
                       >
@@ -588,7 +588,7 @@ export default function VerificationPage() {
                     <div className="col-12 col-md-3">
                       <label className="form-label">Department</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.department_id}
                         onChange={(e) => setFormValue("department_id", e.target.value)}
                       >
@@ -603,7 +603,7 @@ export default function VerificationPage() {
                     <div className="col-12 col-md-3">
                       <label className="form-label">Building</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.building_id}
                         onChange={(e) => setFormValue("building_id", e.target.value)}
                       >
@@ -618,7 +618,7 @@ export default function VerificationPage() {
                     <div className="col-12 col-md-3">
                       <label className="form-label">Room</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.room_id}
                         onChange={(e) => setFormValue("room_id", e.target.value)}
                       >
@@ -633,7 +633,7 @@ export default function VerificationPage() {
                     <div className="col-12 col-md-3">
                       <label className="form-label">Project</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.project_id}
                         onChange={(e) => setFormValue("project_id", e.target.value)}
                       >
@@ -648,7 +648,7 @@ export default function VerificationPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Funding source</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.funding_source_id}
                         onChange={(e) => setFormValue("funding_source_id", e.target.value)}
                       >
@@ -664,7 +664,7 @@ export default function VerificationPage() {
                       <label className="form-label">Start date</label>
                       <input
                         type="date"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={form.start_date}
                         onChange={(e) => setFormValue("start_date", e.target.value)}
                       />
@@ -673,7 +673,7 @@ export default function VerificationPage() {
                       <label className="form-label">End date</label>
                       <input
                         type="date"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={form.end_date}
                         onChange={(e) => setFormValue("end_date", e.target.value)}
                       />
@@ -682,7 +682,7 @@ export default function VerificationPage() {
                       <label className="form-label">Custodian user id</label>
                       <input
                         type="number"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={form.custodian_user_id}
                         onChange={(e) => setFormValue("custodian_user_id", e.target.value)}
                         placeholder="Optional"
@@ -692,7 +692,7 @@ export default function VerificationPage() {
                       <label className="form-label">Conducted by user id</label>
                       <input
                         type="number"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={form.conducted_by}
                         onChange={(e) => setFormValue("conducted_by", e.target.value)}
                         placeholder="Optional"
@@ -701,7 +701,7 @@ export default function VerificationPage() {
                     <div className="col-12">
                       <label className="form-label">Remarks</label>
                       <textarea
-                        className="form-control"
+                        className="form-control form-control-sm"
                         rows={2}
                         value={form.remarks}
                         onChange={(e) => setFormValue("remarks", e.target.value)}
@@ -725,7 +725,7 @@ export default function VerificationPage() {
                       <div className="col-12 col-xl-2">
                         <label className="form-label mb-1 small">Asset ID</label>
                         <input
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={item.asset_id}
                           onChange={(e) => setItemValue(index, "asset_id", e.target.value)}
                           placeholder="Optional"
@@ -734,7 +734,7 @@ export default function VerificationPage() {
                       <div className="col-12 col-xl-2">
                         <label className="form-label mb-1 small">Item</label>
                         <select
-                          className="form-select"
+                          className="form-select form-select-sm"
                           value={item.item_id}
                           onChange={(e) => setItemValue(index, "item_id", e.target.value)}
                         >
@@ -749,7 +749,7 @@ export default function VerificationPage() {
                       <div className="col-12 col-xl-2">
                         <label className="form-label mb-1 small">Status</label>
                         <select
-                          className="form-select"
+                          className="form-select form-select-sm"
                           value={item.verification_status}
                           onChange={(e) => setItemValue(index, "verification_status", e.target.value as VerificationItemInput["verification_status"])}
                           required
@@ -768,7 +768,7 @@ export default function VerificationPage() {
                           type="number"
                           step="0.001"
                           min="0"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={item.expected_quantity}
                           onChange={(e) => setItemValue(index, "expected_quantity", e.target.value)}
                           placeholder="0"
@@ -780,7 +780,7 @@ export default function VerificationPage() {
                           type="number"
                           step="0.001"
                           min="0"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={item.found_quantity}
                           onChange={(e) => setItemValue(index, "found_quantity", e.target.value)}
                           placeholder="0"
@@ -789,7 +789,7 @@ export default function VerificationPage() {
                       <div className="col-12 col-xl-2">
                         <label className="form-label mb-1 small">Expected dept</label>
                         <select
-                          className="form-select"
+                          className="form-select form-select-sm"
                           value={item.expected_department_id}
                           onChange={(e) => setItemValue(index, "expected_department_id", e.target.value)}
                         >
@@ -804,7 +804,7 @@ export default function VerificationPage() {
                       <div className="col-12 col-xl-2">
                         <label className="form-label mb-1 small">Found dept</label>
                         <select
-                          className="form-select"
+                          className="form-select form-select-sm"
                           value={item.found_department_id}
                           onChange={(e) => setItemValue(index, "found_department_id", e.target.value)}
                         >
@@ -830,7 +830,7 @@ export default function VerificationPage() {
                       <div className="col-12">
                         <label className="form-label mb-1 small">Condition / remarks</label>
                         <textarea
-                          className="form-control"
+                          className="form-control form-control-sm"
                           rows={1}
                           value={item.condition_remarks}
                           onChange={(e) => setItemValue(index, "condition_remarks", e.target.value)}

@@ -471,7 +471,7 @@ export default function TransfersPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Transfer no</label>
                       <input
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={form.transaction_no}
                         required
                         onChange={(e) => setFormValue("transaction_no", e.target.value)}
@@ -482,7 +482,7 @@ export default function TransfersPage() {
                       <label className="form-label">Transfer date</label>
                       <input
                         type="date"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={form.transaction_date}
                         onChange={(e) => setFormValue("transaction_date", e.target.value)}
                       />
@@ -491,7 +491,7 @@ export default function TransfersPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">From Department</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.from_department_id}
                         onChange={(e) => setFormValue("from_department_id", e.target.value)}
                       >
@@ -506,7 +506,7 @@ export default function TransfersPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">From Store</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.from_store_id}
                         onChange={(e) => setFormValue("from_store_id", e.target.value)}
                       >
@@ -521,7 +521,7 @@ export default function TransfersPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">To Department</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.to_department_id}
                         onChange={(e) => setFormValue("to_department_id", e.target.value)}
                       >
@@ -536,7 +536,7 @@ export default function TransfersPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">To Store</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.to_store_id}
                         onChange={(e) => setFormValue("to_store_id", e.target.value)}
                       >
@@ -552,7 +552,7 @@ export default function TransfersPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Funding Source</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.funding_source_id}
                         onChange={(e) => setFormValue("funding_source_id", e.target.value)}
                       >
@@ -567,7 +567,7 @@ export default function TransfersPage() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Research Project</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={form.project_id}
                         onChange={(e) => setFormValue("project_id", e.target.value)}
                       >
@@ -599,7 +599,7 @@ export default function TransfersPage() {
                     <div className="col-12">
                       <label className="form-label">Purpose</label>
                       <textarea
-                        className="form-control"
+                        className="form-control form-control-sm"
                         rows={2}
                         value={form.purpose}
                         onChange={(e) => setFormValue("purpose", e.target.value)}
@@ -623,7 +623,7 @@ export default function TransfersPage() {
                       <div className="col-12 col-xl-3">
                         <label className="form-label mb-1 small">Item</label>
                         <select
-                          className="form-select"
+                          className="form-select form-select-sm"
                           value={item.item_id}
                           onChange={(e) => setItemValue(index, "item_id", e.target.value)}
                         >
@@ -638,7 +638,7 @@ export default function TransfersPage() {
                       <div className="col-12 col-xl-3">
                         <label className="form-label mb-1 small">Asset ID</label>
                         <input
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={item.asset_id}
                           onChange={(e) => setItemValue(index, "asset_id", e.target.value)}
                           placeholder="Optional fixed asset"
@@ -650,7 +650,7 @@ export default function TransfersPage() {
                           type="number"
                           step="0.001"
                           min="0"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={item.quantity}
                           onChange={(e) => setItemValue(index, "quantity", e.target.value)}
                           placeholder="0"
@@ -662,7 +662,7 @@ export default function TransfersPage() {
                           type="number"
                           step="0.01"
                           min="0"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={item.unit_cost}
                           onChange={(e) => setItemValue(index, "unit_cost", e.target.value)}
                           placeholder="0"
@@ -682,7 +682,7 @@ export default function TransfersPage() {
                       <div className="col-12">
                         <label className="form-label mb-1 small">Remarks</label>
                         <textarea
-                          className="form-control"
+                          className="form-control form-control-sm"
                           rows={1}
                           value={item.remarks}
                           onChange={(e) => setItemValue(index, "remarks", e.target.value)}
