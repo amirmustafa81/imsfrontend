@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
@@ -56,10 +57,20 @@ export default function MaintenanceRecordsPage() {
   const [assets, setAssets] = useState<Lookup[]>([]);
   const [vendors, setVendors] = useState<Lookup[]>([]);
   const [rows, setRows] = useState<MaintenanceRecord[]>([]);
-  const [filters, setFilters] = useState({ status: "", maintenance_type: "", search: "" });
   const [form, setForm] = useState<FormState>(emptyForm);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const searchParams = useSearchParams();
+  const queryAssetId = useMemo(() => {
+    const assetIdFromQuery = searchParams.get("asset_id");
+    return assetIdFromQuery && /^\d+$/.test(assetIdFromQuery) ? assetIdFromQuery : "";
+  }, [searchParams]);
+  const [filters, setFilters] = useState({
+    status: "",
+    maintenance_type: "",
+    search: "",
+    asset_id: queryAssetId,
+  });
 
   const loadLookups = useCallback(async () => {
     if (!authReady) return;
@@ -80,6 +91,7 @@ export default function MaintenanceRecordsPage() {
     if (!authReady) return;
     const params: Record<string, string> = {};
     if (filters.search.trim()) params.search = filters.search.trim();
+    if (filters.asset_id) params.asset_id = filters.asset_id;
     if (filters.status) params.status = filters.status;
     if (filters.maintenance_type) params.maintenance_type = filters.maintenance_type;
 
@@ -91,7 +103,7 @@ export default function MaintenanceRecordsPage() {
       setRows([]);
       setError("Unable to load maintenance records.");
     }
-  }, [headers, authReady, filters.search, filters.status, filters.maintenance_type]);
+  }, [headers, authReady, filters.search, filters.status, filters.maintenance_type, filters.asset_id]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -329,7 +341,18 @@ export default function MaintenanceRecordsPage() {
           </div>
 
           <div className="col-12 col-xl-7">
-            <FilterBar onReset={() => setFilters({ status: "", maintenance_type: "", search: "" })}>
+            <FilterBar onReset={() => setFilters({ status: "", maintenance_type: "", search: "", asset_id: "" })}>
+              <div className="col-12 col-md-4">
+                <label className="form-label small mb-1">Asset ID</label>
+                <input
+                  className="form-control form-control-sm"
+                  value={filters.asset_id}
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setFilters((current) => ({ ...current, asset_id: event.target.value.replace(/\D/g, "") }))
+                  }
+                />
+              </div>
               <div className="col-12 col-md-4">
                 <label className="form-label small mb-1">Search</label>
                 <input

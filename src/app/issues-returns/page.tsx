@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
@@ -160,6 +161,12 @@ export default function IssuesReturnsPage() {
   const [expandedLoading, setExpandedLoading] = useState<Record<number, boolean>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const searchParams = useSearchParams();
+  const queryAssetId = useMemo(() => {
+    const assetIdFromQuery = searchParams.get("asset_id");
+    return assetIdFromQuery && /^\d+$/.test(assetIdFromQuery) ? assetIdFromQuery : "";
+  }, [searchParams]);
+  const [assetIdFilter, setAssetIdFilter] = useState(() => queryAssetId);
 
   
 
@@ -182,6 +189,7 @@ export default function IssuesReturnsPage() {
     if (typeFilter) params.transaction_type = typeFilter;
     if (departmentFilter) params.department_id = departmentFilter;
     if (storeFilter) params.store_id = storeFilter;
+    if (assetIdFilter) params.asset_id = assetIdFilter;
 
     try {
       const response = await api.get("/inventory-transactions", { params });
@@ -192,7 +200,7 @@ export default function IssuesReturnsPage() {
       setRows([]);
       setError("Unable to load transactions.");
     }
-  }, [authReady, search, statusFilter, typeFilter, departmentFilter, storeFilter]);
+  }, [authReady, search, statusFilter, typeFilter, departmentFilter, storeFilter, assetIdFilter]);
 
   useEffect(() => {
     (async () => {
@@ -522,6 +530,7 @@ export default function IssuesReturnsPage() {
     setTypeFilter("");
     setDepartmentFilter("");
     setStoreFilter("");
+    setAssetIdFilter("");
   };
 
   const transactionColumns = [
@@ -971,6 +980,18 @@ export default function IssuesReturnsPage() {
                       placeholder="Voucher number / purpose / remarks"
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
+                    />
+                  </div>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small mb-1">Asset ID</label>
+                    <input
+                      className="form-control form-control-sm"
+                      placeholder="e.g. 12"
+                      value={assetIdFilter}
+                      inputMode="numeric"
+                      onChange={(event) => {
+                        setAssetIdFilter(event.target.value.replace(/[^0-9]/g, ""));
+                      }}
                     />
                   </div>
                   <div className="col-12 col-md-2">
