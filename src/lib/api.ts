@@ -1,22 +1,9 @@
 import axios from "axios";
 import { getStoredToken } from "@/lib/auth-storage";
+import { isAuthBypassEnabled as resolveAuthBypassEnabled } from "@/lib/auth-config";
 
-const resolveAuthBypass = () => {
-  const value = process.env.NEXT_PUBLIC_DISABLE_AUTH;
-
-  if (value === undefined || value === "") {
-    return true;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (["false", "0", "off", "no"].includes(normalized)) {
-    return false;
-  }
-
-  return ["true", "1", "on", "yes"].includes(normalized);
-};
-
-const isAuthBypassEnabled = resolveAuthBypass();
+const isAuthBypassEnabled = resolveAuthBypassEnabled();
+const DEMO_TOKEN = "demo-token";
 
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api",
@@ -27,9 +14,10 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = getStoredToken();
+  const activeToken = token || (isAuthBypassEnabled ? DEMO_TOKEN : "");
 
-  if (!isAuthBypassEnabled && token && !config.headers.Authorization) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (activeToken && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${activeToken}`;
   }
 
   return config;
