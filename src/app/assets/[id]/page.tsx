@@ -83,6 +83,31 @@ type RelationLookup = {
   value?: string | null;
 };
 
+type AssetStatusForm = {
+  status: string;
+  condition_status: string;
+};
+
+const assetStatusOptions = [
+  { value: "in_store", label: "In Store" },
+  { value: "issued", label: "Issued" },
+  { value: "in_use", label: "In Use" },
+  { value: "under_repair", label: "Under Repair" },
+  { value: "missing_under_investigation", label: "Missing / Under Investigation" },
+  { value: "damaged", label: "Damaged" },
+  { value: "obsolete", label: "Obsolete" },
+  { value: "disposed", label: "Disposed" },
+  { value: "written_off", label: "Written Off" },
+];
+
+const conditionStatusOptions = [
+  { value: "new", label: "New" },
+  { value: "good", label: "Good" },
+  { value: "needs_repair", label: "Needs Repair" },
+  { value: "damaged", label: "Damaged" },
+  { value: "obsolete", label: "Obsolete" },
+];
+
 const toMoney = (value: number | null): string => {
   if (value === null || Number.isNaN(value)) return "-";
   return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -122,6 +147,8 @@ export default function AssetDetailPage() {
   const id = Number(params.id);
   const [asset, setAsset] = useState<AssetDetail | null>(null);
   const [movements, setMovements] = useState<AssetMovement[]>([]);
+  const [statusForm, setStatusForm] = useState<AssetStatusForm>({ status: "", condition_status: "" });
+  const [savingStatus, setSavingStatus] = useState(false);
   const [message, setMessage] = useState("Loading asset details...");
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -145,7 +172,12 @@ export default function AssetDetailPage() {
         api.get<{ data: AssetMovement[] }>("/asset-movements", { params: { asset_id: id } }),
       ]);
 
-      setAsset(assetResponse.data?.data ?? null);
+      const loadedAsset = assetResponse.data?.data ?? null;
+      setAsset(loadedAsset);
+      setStatusForm({
+        status: loadedAsset?.status ?? "",
+        condition_status: loadedAsset?.condition_status ?? "",
+      });
       setMovements(Array.isArray(movementResponse.data?.data) ? movementResponse.data?.data : []);
       setError("");
       setMessage("");
@@ -165,6 +197,37 @@ export default function AssetDetailPage() {
 
   const generatedTagId = asset?.printable_tag_id || (asset?.asset_id ? `${asset.asset_id}-TAG` : `FA-${asset?.id ?? 0}`);
   const tagPrintQuery = asset ? `asset_id=${asset.id}&asset_code=${encodeURIComponent(asset.asset_id)}&suggested_tag=${encodeURIComponent(generatedTagId)}` : "";
+
+  const saveStatus = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!asset) {
+      setError("Load an asset before updating status.");
+      return;
+    }
+
+    setSavingStatus(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await api.put<{ data: AssetDetail }>(`/assets/${asset.id}`, {
+        status: statusForm.status || null,
+        condition_status: statusForm.condition_status || null,
+      });
+      const updatedAsset = response.data?.data ?? asset;
+      setAsset(updatedAsset);
+      setStatusForm({
+        status: updatedAsset.status ?? "",
+        condition_status: updatedAsset.condition_status ?? "",
+      });
+      setMessage("Asset status updated.");
+    } catch {
+      setError("Unable to update asset status. Check permissions and selected values.");
+    } finally {
+      setSavingStatus(false);
+    }
+  };
 
   if (Number.isNaN(id) || id <= 0) {
     return (
@@ -206,6 +269,18 @@ export default function AssetDetailPage() {
           subtitle="Track fixed asset identity, location, cost, and movement history."
           actions={
             <div className="d-flex gap-2">
+              <Link href={`/issues-returns?asset_id=${asset?.id ?? ""}&transaction_type=issue`} className="btn btn-outline-primary btn-sm">
+                <i className="bi bi-arrow-up-right-square me-1" />
+                Open Issue / Return
+              </Link>
+              <Link href={`/maintenance-records?asset_id=${asset?.id ?? ""}`} className="btn btn-outline-primary btn-sm">
+                <i className="bi bi-tools me-1" />
+                Open Maintenance
+              </Link>
+              <Link href={`/assets/${asset?.id ?? ""}/movements`} className="btn btn-outline-primary btn-sm">
+                <i className="bi bi-diagram-3 me-1" />
+                Open Movement History
+              </Link>
               <Link href={`/tag-print-log?${tagPrintQuery}`} className="btn btn-outline-primary btn-sm">
                 <i className="bi bi-qr-code me-1" />
                 Generate / Print Tag
@@ -337,6 +412,52 @@ export default function AssetDetailPage() {
             </div>
 
             <div className="row g-3">
+              <div className="col-12">
+                <div className="card border-0 shadow-sm">
+                  <div className="card-header bg-white fw-semibold">Status Update</div>
+                  <div className="card-body">
+                    <form className="row g-3 align-items-end" onSubmit={saveStatus}>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small mb-1">Asset Status</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={statusForm.status}
+                          onChange={(event) => setStatusForm((current) => ({ ...current, status: event.target.value }))}
+                        >
+                          <option value="">Select status</option>
+                          {assetStatusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small mb-1">Condition</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={statusForm.condition_status}
+                          onChange={(event) => setStatusForm((current) => ({ ...current, condition_status: event.target.value }))}
+                        >
+                          <option value="">Select condition</option>
+                          {conditionStatusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-auto">
+                        <button className="btn btn-sm btn-primary" type="submit" disabled={savingStatus}>
+                          <i className="bi bi-check2-circle me-1" />
+                          {savingStatus ? "Saving..." : "Save Status"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
               <div className="col-12 col-lg-6">
                 <div className="card border-0 shadow-sm">
                   <div className="card-header bg-white fw-semibold">Financial Snapshot</div>
