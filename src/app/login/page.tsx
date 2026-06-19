@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import { isAuthBypassEnabled, useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +13,14 @@ export default function LoginPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (isAuthBypassEnabled) {
+      if (!loading) {
+        router.replace("/");
+      }
+
+      return;
+    }
+
     if (!loading && isAuthenticated) {
       router.replace("/");
     }
@@ -32,6 +40,27 @@ export default function LoginPage() {
       setSubmitting(false);
     }
   };
+
+  if (isAuthBypassEnabled) {
+    if (loading) {
+      return (
+        <main className="min-vh-100 d-flex align-items-center justify-content-center bg-body-tertiary">
+          <div className="text-center">
+            <div className="spinner-border text-primary mb-3" role="status" />
+            <div className="fw-semibold">Preparing IMS workspace…</div>
+          </div>
+        </main>
+      );
+    }
+
+    return (
+      <main className="min-vh-100 d-flex align-items-center justify-content-center bg-body-tertiary">
+        <div className="text-center">
+          <div className="text-primary fw-semibold">Login is currently disabled. Redirecting to dashboard…</div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-vh-100 ims-login-page">

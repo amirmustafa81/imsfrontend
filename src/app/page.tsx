@@ -73,6 +73,29 @@ type ControlledStationeryBatchRow = {
   status?: string | null;
 };
 
+type DashboardSummary = {
+  data: {
+    metrics: {
+      fixed_assets: number;
+      fixed_assets_in_use: number;
+      stock_items: number;
+      low_stock_alerts: number;
+      pending_approvals: number;
+      missing_damaged_assets: number;
+      recent_receipts_30_days: number;
+      issue_return_recent: number;
+      stationery_active: number;
+      verification_progress: number;
+      verification_reference: string | null;
+      open_maintenance: number;
+    };
+    department_counts: DepartmentCount[];
+    low_stock_rows: LowStockTableRow[];
+    recent_receipts: ReceiptTableRow[];
+    recent_movements: MovementTableRow[];
+  };
+};
+
 type DashboardMetric = {
   label: string;
   value: string;
@@ -208,254 +231,344 @@ export default function Home() {
     setLoading(true);
     setDashboardError("");
 
-    void Promise.allSettled([
-      api.get<{ data: AssetRow[] }>("/assets"),
-      api.get<{ data: StockRow[] }>("/reports/stock-balance"),
-      api.get<{ data: StockRow[] }>("/reports/low-stock"),
-      api.get<{ data: VerificationRow[] }>("/physical-verifications"),
-      api.get<{ data: MissingDamagedRow[] }>("/reports/missing-damaged-assets"),
-      api.get<{ data: ReceiptReportRow[] }>("/reports/purchase-receipt"),
-      api.get<{ data: InventoryTransactionRow[] }>("/inventory-transactions"),
-      api.get<{ data: IssueReturnRow[] }>("/reports/issue-return"),
-      api.get<{ data: AssetTransferRow[] }>("/reports/asset-transfer"),
-      api.get<{ data: MaintenanceRow[] }>("/maintenance-records"),
-      api.get<{ data: ControlledStationeryBatchRow[] }>("/controlled-stationery/batches"),
-    ])
-      .then((results) => {
-          if (!active) {
-            return;
+    const applySummaryPayload = (summary: DashboardSummary["data"]) => {
+      setMetrics([
+        {
+          label: "Fixed Assets",
+          value: formatCount(summary.metrics.fixed_assets),
+          hint: `${formatCount(summary.metrics.fixed_assets_in_use)} in use`,
+          icon: "bi-tags",
+          tone: "primary",
+        },
+        {
+          label: "Stock Items",
+          value: formatCount(summary.metrics.stock_items),
+          hint: "distinct SKUs",
+          icon: "bi-box-seam",
+          tone: "info",
+        },
+        {
+          label: "Low Stock Alerts",
+          value: formatCount(summary.metrics.low_stock_alerts),
+          hint: "below reorder level",
+          icon: "bi-exclamation-triangle",
+          tone: "warning",
+        },
+        {
+          label: "Pending Approvals",
+          value: formatCount(summary.metrics.pending_approvals),
+          hint: "awaiting manual ref",
+          icon: "bi-clipboard2-check",
+          tone: "secondary",
+        },
+        {
+          label: "Missing / Damaged",
+          value: formatCount(summary.metrics.missing_damaged_assets),
+          hint: "under investigation",
+          icon: "bi-patch-question",
+          tone: "danger",
+        },
+        {
+          label: "Recent Receipts",
+          value: formatCount(summary.metrics.recent_receipts_30_days),
+          hint: "last 30 days",
+          icon: "bi-truck",
+          tone: "success",
+        },
+        {
+          label: "Issues / Returns",
+          value: formatCount(summary.metrics.issue_return_recent),
+          hint: "recent movements",
+          icon: "bi-arrow-left-right",
+          tone: "info",
+        },
+        {
+          label: "Controlled Stationery Alerts",
+          value: formatCount(summary.metrics.stationery_active),
+          hint: "active tracked batches",
+          icon: "bi-shield-exclamation",
+          tone: "danger",
+        },
+        {
+          label: "Verification Progress",
+          value: `${summary.metrics.verification_progress}%`,
+          hint: summary.metrics.verification_reference || "current cycle",
+          icon: "bi-clipboard-check",
+          tone: "primary",
+        },
+        {
+          label: "Under Repair",
+          value: formatCount(summary.metrics.open_maintenance),
+          hint: "assets in workshop",
+          icon: "bi-wrench",
+          tone: "warning",
+        },
+      ]);
+
+      setDepartmentCounts(summary.department_counts);
+      setLowStockRows(summary.low_stock_rows);
+      setRecentReceiptRows(
+        summary.recent_receipts.map((receipt) => ({
+          ...receipt,
+          date: formatDate(receipt.date),
+        })),
+      );
+      setRecentMovementRows(
+        summary.recent_movements.map((movement) => ({
+          ...movement,
+          date: formatDate(movement.date),
+        })),
+      );
+    };
+
+    const loadLegacyDashboard = async () => {
+      const results = await Promise.allSettled([
+        api.get<{ data: AssetRow[] }>("/assets"),
+        api.get<{ data: StockRow[] }>("/reports/stock-balance"),
+        api.get<{ data: StockRow[] }>("/reports/low-stock"),
+        api.get<{ data: VerificationRow[] }>("/physical-verifications"),
+        api.get<{ data: MissingDamagedRow[] }>("/reports/missing-damaged-assets"),
+        api.get<{ data: ReceiptReportRow[] }>("/reports/purchase-receipt"),
+        api.get<{ data: InventoryTransactionRow[] }>("/inventory-transactions"),
+        api.get<{ data: IssueReturnRow[] }>("/reports/issue-return"),
+        api.get<{ data: AssetTransferRow[] }>("/reports/asset-transfer"),
+        api.get<{ data: MaintenanceRow[] }>("/maintenance-records"),
+        api.get<{ data: ControlledStationeryBatchRow[] }>("/controlled-stationery/batches"),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      const getRows = <T,>(index: number): T[] => {
+        const result = results[index];
+        if (result?.status !== "fulfilled") {
+          return [];
+        }
+        const payload = result.value.data as { data?: unknown };
+        return asArray<T>(payload.data);
+      };
+
+      const failedRequests = results.filter((result) => result.status === "rejected").length;
+      setDashboardError(
+        failedRequests > 0
+          ? `${failedRequests} dashboard data source${failedRequests > 1 ? "s" : ""} could not be loaded. Showing available data.`
+          : "",
+      );
+
+      const assets = getRows<AssetRow>(0);
+      const stockBalances = getRows<StockRow>(1);
+      const lowStock = getRows<StockRow>(2);
+      const verifications = getRows<VerificationRow>(3);
+      const missingDamaged = getRows<MissingDamagedRow>(4);
+      const receiptReport = getRows<ReceiptReportRow>(5);
+      const inventoryTransactions = getRows<InventoryTransactionRow>(6);
+      const issueReturn = getRows<IssueReturnRow>(7);
+      const assetTransfers = getRows<AssetTransferRow>(8);
+      const maintenanceRecords = getRows<MaintenanceRow>(9);
+      const stationeryBatches = getRows<ControlledStationeryBatchRow>(10);
+
+      const inUseCount = assets.filter((asset) => {
+        const status = (asset.status ?? "").toLowerCase();
+        return status === "in_use" || status === "issued";
+      }).length;
+
+      const pendingReceipts = receiptReport.filter((receipt) => {
+        const status = (receipt.status ?? "").toLowerCase();
+        return status !== "posted" && status !== "cancelled";
+      }).length;
+
+      const pendingTransactions = inventoryTransactions.filter((transaction) => {
+        const status = (transaction.status ?? "").toLowerCase();
+        return status === "draft";
+      }).length;
+
+      const pendingApprovals = pendingReceipts + pendingTransactions;
+
+      const recentReceipts = Array.from(
+        receiptReport.reduce<Map<string, ReceiptTableRow>>((map, row) => {
+          const key = row.receipt_no ?? `receipt-${row.id}`;
+          if (!map.has(key)) {
+            map.set(key, {
+              id: row.id,
+              grn: row.receipt_no ?? "-",
+              date: formatDate(row.receipt_date),
+              rawDate: row.receipt_date ?? null,
+              supplier: row.supplier_name ?? "Direct / Not linked",
+              status: row.status ?? "draft",
+            });
           }
+          return map;
+        }, new Map()).values(),
+      );
 
-          const getRows = <T,>(index: number): T[] => {
-            const result = results[index];
+      const sortedRecentReceipts = sortByNewest(recentReceipts, (row) => row.rawDate).slice(0, 4);
 
-            if (result?.status !== "fulfilled") {
-              return [];
-            }
+      const recentReceiptCount = receiptReport.filter((receipt) => isWithinLastDays(receipt.receipt_date, 30)).length;
+      const issueReturnCount = issueReturn.filter((movement) => isWithinLastDays(movement.transaction_date, 30)).length;
 
-            const payload = result.value.data as { data?: unknown };
-            return asArray<T>(payload.data);
-          };
+      const openMaintenance = maintenanceRecords.filter((record) => {
+        const status = (record.status ?? "").toLowerCase();
+        return status !== "closed" && status !== "cancelled" && status !== "repaired" && status !== "not_repairable";
+      }).length;
 
-          const failedRequests = results.filter((result) => result.status === "rejected").length;
-          setDashboardError(
-            failedRequests > 0
-              ? `${failedRequests} dashboard data source${failedRequests > 1 ? "s" : ""} could not be loaded. Showing available data.`
-              : "",
-          );
+      const activeStationeryBatches = stationeryBatches.filter(
+        (batch) => (batch.status ?? "").toLowerCase() === "active",
+      ).length;
 
-          const assets = getRows<AssetRow>(0);
-          const stockBalances = getRows<StockRow>(1);
-          const lowStock = getRows<StockRow>(2);
-          const verifications = getRows<VerificationRow>(3);
-          const missingDamaged = getRows<MissingDamagedRow>(4);
-          const receiptReport = getRows<ReceiptReportRow>(5);
-          const inventoryTransactions = getRows<InventoryTransactionRow>(6);
-          const issueReturn = getRows<IssueReturnRow>(7);
-          const assetTransfers = getRows<AssetTransferRow>(8);
-          const maintenanceRecords = getRows<MaintenanceRow>(9);
-          const stationeryBatches = getRows<ControlledStationeryBatchRow>(10);
+      const completedVerifications = verifications.filter((verification) => (verification.status ?? "").toLowerCase() === "completed").length;
+      const verificationProgress = verifications.length === 0
+        ? 0
+        : Math.round((completedVerifications / verifications.length) * 100);
+      const latestVerification = sortByNewest(verifications, (verification) => verification.verification_no ?? "").find(Boolean);
 
-          const inUseCount = assets.filter((asset) => {
-            const status = (asset.status ?? "").toLowerCase();
-            return status === "in_use" || status === "issued";
-          }).length;
+      const departmentMap = assets.reduce<Map<string, number>>((map, asset) => {
+        const name = asset.department?.name?.trim() || "Unassigned";
+        map.set(name, (map.get(name) ?? 0) + 1);
+        return map;
+      }, new Map());
 
-          const pendingReceipts = receiptReport.filter((receipt) => {
-            const status = (receipt.status ?? "").toLowerCase();
-            return status !== "posted" && status !== "cancelled";
-          }).length;
+      const groupedDepartments = Array.from(departmentMap.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+        .slice(0, 7);
 
-          const pendingTransactions = inventoryTransactions.filter((transaction) => {
-            const status = (transaction.status ?? "").toLowerCase();
-            return status === "draft";
-          }).length;
+      const lowStockTable = lowStock.slice(0, 5).map((row) => ({
+        id: row.id,
+        item: row.item_name ?? "-",
+        store: row.store_name ?? "-",
+        onHand: formatCount(toNumber(row.quantity_on_hand)),
+        minimum: formatCount(toNumber(row.minimum_stock_level)),
+      }));
 
-          const pendingApprovals = pendingReceipts + pendingTransactions;
+      const recentMovements = [...issueReturn, ...assetTransfers]
+        .map((row, index) => ({
+          id: index + 1,
+          date: (row as IssueReturnRow).transaction_date ?? (row as AssetTransferRow).movement_date ?? "",
+          type: (row as IssueReturnRow).transaction_type ?? (row as AssetTransferRow).movement_type ?? "movement",
+          item: (row as IssueReturnRow).item_name ?? (row as AssetTransferRow).item_name ?? "-",
+          department:
+            (row as IssueReturnRow).to_department_name ??
+            (row as IssueReturnRow).from_department_name ??
+            (row as AssetTransferRow).to_department_name ??
+            "-",
+        }))
+        .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+        .slice(0, 4)
+        .map((row, index) => ({ ...row, id: index + 1, date: formatDate(row.date) }));
 
-          const recentReceipts = Array.from(
-            receiptReport.reduce<Map<string, ReceiptTableRow>>((map, row) => {
-              const key = row.receipt_no ?? `receipt-${row.id}`;
+      setMetrics([
+        {
+          label: "Fixed Assets",
+          value: formatCount(assets.length),
+          hint: `${formatCount(inUseCount)} in use`,
+          icon: "bi-tags",
+          tone: "primary",
+        },
+        {
+          label: "Stock Items",
+          value: formatCount(stockBalances.length),
+          hint: "distinct SKUs",
+          icon: "bi-box-seam",
+          tone: "info",
+        },
+        {
+          label: "Low Stock Alerts",
+          value: formatCount(lowStock.length),
+          hint: "below reorder level",
+          icon: "bi-exclamation-triangle",
+          tone: "warning",
+        },
+        {
+          label: "Pending Approvals",
+          value: formatCount(pendingApprovals),
+          hint: "awaiting manual ref",
+          icon: "bi-clipboard2-check",
+          tone: "secondary",
+        },
+        {
+          label: "Missing / Damaged",
+          value: formatCount(missingDamaged.length),
+          hint: "under investigation",
+          icon: "bi-patch-question",
+          tone: "danger",
+        },
+        {
+          label: "Recent Receipts",
+          value: formatCount(recentReceiptCount),
+          hint: "last 30 days",
+          icon: "bi-truck",
+          tone: "success",
+        },
+        {
+          label: "Issues / Returns",
+          value: formatCount(issueReturnCount),
+          hint: "recent movements",
+          icon: "bi-arrow-left-right",
+          tone: "info",
+        },
+        {
+          label: "Controlled Stationery Alerts",
+          value: formatCount(activeStationeryBatches),
+          hint: "active tracked batches",
+          icon: "bi-shield-exclamation",
+          tone: "danger",
+        },
+        {
+          label: "Verification Progress",
+          value: `${verificationProgress}%`,
+          hint: latestVerification?.verification_no ?? "current cycle",
+          icon: "bi-clipboard-check",
+          tone: "primary",
+        },
+        {
+          label: "Under Repair",
+          value: formatCount(openMaintenance),
+          hint: "assets in workshop",
+          icon: "bi-wrench",
+          tone: "warning",
+        },
+      ]);
+      setDepartmentCounts(groupedDepartments);
+      setLowStockRows(lowStockTable);
+      setRecentReceiptRows(sortedRecentReceipts);
+      setRecentMovementRows(recentMovements);
+    };
 
-              if (!map.has(key)) {
-                map.set(key, {
-                  id: row.id,
-                  grn: row.receipt_no ?? "-",
-                  date: formatDate(row.receipt_date),
-                  rawDate: row.receipt_date ?? null,
-                  supplier: row.supplier_name ?? "Direct / Not linked",
-                  status: row.status ?? "draft",
-                });
-              }
-
-              return map;
-            }, new Map()).values(),
-          );
-
-          const sortedRecentReceipts = sortByNewest(recentReceipts, (row) => row.rawDate)
-            .slice(0, 4);
-
-          const recentReceiptCount = receiptReport.filter((receipt) => isWithinLastDays(receipt.receipt_date, 30)).length;
-          const issueReturnCount = issueReturn.filter((movement) => isWithinLastDays(movement.transaction_date, 30)).length;
-
-          const openMaintenance = maintenanceRecords.filter((record) => {
-            const status = (record.status ?? "").toLowerCase();
-            return status !== "closed" && status !== "cancelled" && status !== "repaired" && status !== "not_repairable";
-          }).length;
-
-          const activeStationeryBatches = stationeryBatches.filter(
-            (batch) => (batch.status ?? "").toLowerCase() === "active",
-          ).length;
-
-          const completedVerifications = verifications.filter(
-            (verification) => (verification.status ?? "").toLowerCase() === "completed",
-          ).length;
-          const verificationProgress = verifications.length === 0
-            ? 0
-            : Math.round((completedVerifications / verifications.length) * 100);
-          const latestVerification = sortByNewest(verifications, (verification) => verification.verification_no ?? "")
-            .find(Boolean);
-
-          const departmentMap = assets.reduce<Map<string, number>>((map, asset) => {
-            const name = asset.department?.name?.trim() || "Unassigned";
-            map.set(name, (map.get(name) ?? 0) + 1);
-            return map;
-          }, new Map());
-
-          const groupedDepartments = Array.from(departmentMap.entries())
-            .map(([name, count]) => ({ name, count }))
-            .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
-            .slice(0, 7);
-
-          const lowStockTable = lowStock.slice(0, 5).map((row) => ({
-            id: row.id,
-            item: row.item_name ?? "-",
-            store: row.store_name ?? "-",
-            onHand: formatCount(toNumber(row.quantity_on_hand)),
-            minimum: formatCount(toNumber(row.minimum_stock_level)),
-          }));
-
-          const recentMovements = [
-            ...issueReturn.map((row) => ({
-              id: `issue-${row.id}`,
-              date: row.transaction_date ?? "",
-              type: row.transaction_type ?? "issue",
-              item: row.item_name ?? "-",
-              department: row.to_department_name ?? row.from_department_name ?? "-",
-            })),
-            ...assetTransfers.map((row) => ({
-              id: `transfer-${row.id}`,
-              date: row.movement_date ?? "",
-              type: row.movement_type ?? "transfer",
-              item: row.item_name ?? "-",
-              department: row.to_department_name ?? "-",
-            })),
-          ]
-            .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
-            .slice(0, 4)
-            .map((row, index) => ({
-              id: index + 1,
-              date: formatDate(row.date),
-              type: row.type,
-              item: row.item,
-              department: row.department,
-            }));
-
-          setMetrics([
-            {
-              label: "Fixed Assets",
-              value: formatCount(assets.length),
-              hint: `${formatCount(inUseCount)} in use`,
-              icon: "bi-tags",
-              tone: "primary",
-            },
-            {
-              label: "Stock Items",
-              value: formatCount(stockBalances.length),
-              hint: "distinct SKUs",
-              icon: "bi-box-seam",
-              tone: "info",
-            },
-            {
-              label: "Low Stock Alerts",
-              value: formatCount(lowStock.length),
-              hint: "below reorder level",
-              icon: "bi-exclamation-triangle",
-              tone: "warning",
-            },
-            {
-              label: "Pending Approvals",
-              value: formatCount(pendingApprovals),
-              hint: "awaiting manual ref",
-              icon: "bi-clipboard2-check",
-              tone: "secondary",
-            },
-            {
-              label: "Missing / Damaged",
-              value: formatCount(missingDamaged.length),
-              hint: "under investigation",
-              icon: "bi-patch-question",
-              tone: "danger",
-            },
-            {
-              label: "Recent Receipts",
-              value: formatCount(recentReceiptCount),
-              hint: "last 30 days",
-              icon: "bi-truck",
-              tone: "success",
-            },
-            {
-              label: "Issues / Returns",
-              value: formatCount(issueReturnCount),
-              hint: "recent movements",
-              icon: "bi-arrow-left-right",
-              tone: "info",
-            },
-            {
-              label: "Controlled Stationery Alerts",
-              value: formatCount(activeStationeryBatches),
-              hint: "active tracked batches",
-              icon: "bi-shield-exclamation",
-              tone: "danger",
-            },
-            {
-              label: "Verification Progress",
-              value: `${verificationProgress}%`,
-              hint: latestVerification?.verification_no ?? "current cycle",
-              icon: "bi-clipboard-check",
-              tone: "primary",
-            },
-            {
-              label: "Under Repair",
-              value: formatCount(openMaintenance),
-              hint: "assets in workshop",
-              icon: "bi-wrench",
-              tone: "warning",
-            },
-          ]);
-
-          setDepartmentCounts(groupedDepartments);
-          setLowStockRows(lowStockTable);
-          setRecentReceiptRows(sortedRecentReceipts);
-          setRecentMovementRows(recentMovements);
-        })
-      .catch(() => {
+    const loadDashboard = async () => {
+      try {
+        const response = await api.get<DashboardSummary>("/dashboard/summary");
         if (!active) {
           return;
         }
-
-        setDashboardError("Unable to load dashboard data from backend. Verify token, API base URL, and permissions.");
-        setMetrics(DEFAULT_METRICS);
-        setDepartmentCounts([]);
-        setLowStockRows([]);
-        setRecentReceiptRows([]);
-        setRecentMovementRows([]);
-      })
-      .finally(() => {
+        applySummaryPayload(response.data?.data);
+        setDashboardError("");
+      } catch {
+        if (!active) {
+          return;
+        }
+        setDashboardError("Using fallback dashboard loaders.");
+        try {
+          await loadLegacyDashboard();
+        } catch {
+          if (!active) {
+            return;
+          }
+          setDashboardError("Unable to load dashboard data from backend. Verify token, API base URL, and permissions.");
+          setMetrics(DEFAULT_METRICS);
+          setDepartmentCounts([]);
+          setLowStockRows([]);
+          setRecentReceiptRows([]);
+          setRecentMovementRows([]);
+        }
+      } finally {
         if (active) {
           setLoading(false);
         }
-      });
+      }
+    };
+
+    void loadDashboard();
 
     return () => {
       active = false;

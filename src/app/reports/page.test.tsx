@@ -245,10 +245,10 @@ describe("ReportsPage export and filter flow", () => {
 
     expect(mockedApi.post).toHaveBeenCalledTimes(1);
     const [payload, requestBody, requestConfig] = mockedApi.post.mock.calls[0];
-    expect(payload).toBe("/reports/controlled-stationery/export");
+    expect(payload).toBe("/reports/export");
     expect(requestBody).toEqual(
       expect.objectContaining({
-        report: "controlled_stationery_batches",
+        report_type: "controlled_stationery_batches",
         format: "excel",
         search: "Lab",
         department_id: "2",

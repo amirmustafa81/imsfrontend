@@ -6,7 +6,12 @@ import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type Permission = { id: number; name: string };
-type Role = { id: number; name: string; permissions?: Permission[] };
+type Role = {
+  id: number;
+  name: string;
+  is_system_role?: boolean;
+  permissions?: Permission[];
+};
 type Department = { id: number; name: string; code: string };
 type UserRow = {
   id: number;
@@ -19,6 +24,16 @@ type UserRow = {
   status: "active" | "inactive" | "suspended";
   department_id: number | null;
   roles: Role[];
+};
+
+type RoleUser = {
+  id: number;
+  name: string;
+  email: string;
+  employee_code: string | null;
+  department_id: number | null;
+  access_scope: string;
+  status: string;
 };
 
 type RowFilter = { search: string; status: string; accessScope: string; department: string };
@@ -61,10 +76,14 @@ export default function UsersPage() {
   const [filters, setFilters] = useState<RowFilter>({ search: "", status: "", accessScope: "", department: "" });
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [loadingRoleUsers, setLoadingRoleUsers] = useState(false);
+  const [loadingUserRoles, setLoadingUserRoles] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [roleUsersRole, setRoleUsersRole] = useState<Role | null>(null);
+  const [roleUsers, setRoleUsers] = useState<RoleUser[]>([]);
 
   const loadLookups = useCallback(async () => {
     if (!authReady) return;
@@ -122,12 +141,13 @@ export default function UsersPage() {
 
   const openCreateDialog = () => {
     resetForm();
+    setLoadingUserRoles(false);
     setDialogOpen(true);
     setError("");
     setMessage("");
   };
 
-  const startEdit = (user: UserRow) => {
+  const startEdit = async (user: UserRow) => {
     setEditingUserId(user.id);
     setForm({
       name: user.name,
@@ -144,6 +164,21 @@ export default function UsersPage() {
     setDialogOpen(true);
     setError("");
     setMessage("");
+    setLoadingUserRoles(true);
+
+    try {
+      const response = await api.get<{ data: { roles: Role[] } }>(`/users/${user.id}/roles`, headers);
+      const authoritativeRoles = response.data?.data?.roles ?? [];
+
+      setForm((current) => ({
+        ...current,
+        role_ids: authoritativeRoles.map((role) => String(role.id)),
+      }));
+    } catch {
+      // keep the row snapshot as fallback role assignment if the endpoint is unavailable.
+    } finally {
+      setLoadingUserRoles(false);
+    }
   };
 
   const toggleRole = (roleId: number, checked: boolean) => {
@@ -152,6 +187,28 @@ export default function UsersPage() {
       ...current,
       role_ids: checked ? [...current.role_ids, roleIdString] : current.role_ids.filter((id) => id !== roleIdString),
     }));
+  };
+
+  const openRoleUsersDialog = async (role: Role) => {
+    setRoleUsersRole(role);
+    setLoadingRoleUsers(true);
+    setRoleUsers([]);
+    setError("");
+
+    try {
+      const response = await api.get<{ data: { users: RoleUser[] } }>(`/roles/${role.id}/users`, headers);
+      setRoleUsers(response.data?.data?.users ?? []);
+    } catch {
+      setError("Unable to load users assigned to this role.");
+      setRoleUsers([]);
+    } finally {
+      setLoadingRoleUsers(false);
+    }
+  };
+
+  const closeRoleUsersDialog = () => {
+    setRoleUsersRole(null);
+    setRoleUsers([]);
   };
 
   const saveUser = async (event: FormEvent<HTMLFormElement>) => {
@@ -234,7 +291,25 @@ export default function UsersPage() {
     {
       key: "roles",
       header: "Assigned Roles",
-      render: (row: UserRow) => row.roles.map((role) => role.name).join(", ") || "-",
+      render: (row: UserRow) => (
+        <div className="d-flex flex-wrap gap-2">
+          {row.roles.length === 0 ? (
+            <span className="text-secondary">-</span>
+          ) : (
+            row.roles.map((role) => (
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                key={role.id}
+                type="button"
+                onClick={() => void openRoleUsersDialog(role)}
+                title={`View users assigned to ${role.name}`}
+              >
+                {role.name}
+              </button>
+            ))
+          )}
+        </div>
+      ),
     },
     {
       key: "action",
@@ -414,6 +489,14 @@ export default function UsersPage() {
                         </div>
                       )}
                     </div>
+                    <div className="col-12">
+                      {loadingUserRoles ? (
+                        <div className="small text-secondary">
+                          <i className="bi bi-arrow-repeat me-2" />
+                          Loading authoritative role assignment...
+                        </div>
+                      ) : null}
+                    </div>
                     <div className="col-12 col-lg-4">
                       <div className="h-100 rounded-3 border bg-body-tertiary p-3">
                         <div className="small fw-semibold text-uppercase text-secondary mb-2">Access Notes</div>
@@ -437,6 +520,71 @@ export default function UsersPage() {
             </div>
           </div>
           <div className="modal-backdrop fade show" onClick={closeDialog} />
+        </>
+      ) : null}
+
+      {roleUsersRole ? (
+        <>
+          <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+            <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable" style={{ width: "min(58vw, 900px)", maxWidth: "min(58vw, 900px)" }}>
+              <div className="modal-content border-0 shadow-lg">
+                <div className="modal-header px-4 py-3">
+                  <div>
+                    <h5 className="modal-title mb-1">Users assigned to {roleUsersRole.name}</h5>
+                    <div className="small text-secondary">Review role membership in one place.</div>
+                  </div>
+                  <button className="btn-close" type="button" aria-label="Close" onClick={closeRoleUsersDialog} />
+                </div>
+                <div className="modal-body px-4 py-4">
+                  {loadingRoleUsers ? (
+                    <div className="text-secondary">
+                      <i className="bi bi-arrow-repeat me-2" />
+                      Loading assigned users...
+                    </div>
+                  ) : roleUsers.length === 0 ? (
+                    <EmptyState title="No users found" message={`No users currently have ${roleUsersRole.name}.`} />
+                  ) : (
+                    <div className="card border-0 shadow-sm">
+                      <div className="table-responsive">
+                        <table className="table table-sm table-hover mb-0 align-middle">
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              <th>Email</th>
+                              <th>Employee Code</th>
+                              <th>Department</th>
+                              <th>Scope</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {roleUsers.map((roleUser) => (
+                              <tr key={roleUser.id}>
+                                <td>{roleUser.name}</td>
+                                <td>{roleUser.email}</td>
+                                <td>{roleUser.employee_code ?? "-"}</td>
+                                <td>{roleUser.department_id ? departments.find((department) => department.id === roleUser.department_id)?.name ?? "-" : "-"}</td>
+                                <td>{roleUser.access_scope === "university" ? "University-wide" : "Department"}</td>
+                                <td>
+                                  <StatusBadge status={roleUser.status} />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer px-4 py-3">
+                  <button className="btn btn-outline-secondary" type="button" onClick={closeRoleUsersDialog}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-backdrop fade show" onClick={closeRoleUsersDialog} />
         </>
       ) : null}
     </main>

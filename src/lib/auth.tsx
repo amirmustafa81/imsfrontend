@@ -2,6 +2,7 @@
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { isAuthBypassEnabled as resolveAuthBypassEnabled } from "@/lib/auth-config";
 import { clearStoredToken, getStoredToken, setStoredToken } from "@/lib/auth-storage";
 
 type AuthRole = {
@@ -38,22 +39,7 @@ type AuthContextValue = {
   hasPermission: (permission: string | string[]) => boolean;
 };
 
-const resolveAuthBypass = () => {
-  const value = process.env.NEXT_PUBLIC_DISABLE_AUTH;
-
-  if (value === undefined || value === "") {
-    return true;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (["false", "0", "off", "no"].includes(normalized)) {
-    return false;
-  }
-
-  return ["true", "1", "on", "yes"].includes(normalized);
-};
-
-export const isAuthBypassEnabled = resolveAuthBypass();
+export const isAuthBypassEnabled = resolveAuthBypassEnabled();
 
 const DEMO_USER: AuthUser = {
   id: 0,

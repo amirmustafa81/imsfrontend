@@ -78,6 +78,8 @@ type FilterSelectOption = {
   label: string;
 };
 
+const REPORT_EXPORT_ENDPOINT = "/reports/export";
+
 type ReportConfig = {
   title: string;
   subtitle: string;
@@ -945,9 +947,9 @@ export default function ReportsPage() {
     try {
       const payload = buildFilterPayload(reportConfig, currentFilters);
       const response = await api.post(
-        "/reports/controlled-stationery/export",
+        REPORT_EXPORT_ENDPOINT,
         {
-          report: activeReport,
+          report_type: activeReport,
           format,
           ...payload,
         },

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { isAuthBypassEnabled, useAuth } from "@/lib/auth";
 
@@ -109,6 +109,16 @@ export function ImsShell({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, isLoginPage, loading, router]);
 
+  const handleLogout = useCallback(async () => {
+    await logout();
+    if (isAuthBypassEnabled) {
+      router.replace("/");
+      return;
+    }
+
+    router.replace("/login");
+  }, [logout, router]);
+
   if (isLoginPage) {
     return <>{children}</>;
   }
@@ -123,11 +133,6 @@ export function ImsShell({ children }: { children: ReactNode }) {
       </main>
     );
   }
-
-  const handleLogout = async () => {
-    await logout();
-    router.replace("/login");
-  };
 
   return (
     <div className="ims-shell min-vh-100 text-body">

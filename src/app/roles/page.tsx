@@ -12,6 +12,16 @@ type Permission = {
   description: string | null;
 };
 
+type RoleUser = {
+  id: number;
+  name: string;
+  email: string;
+  employee_code: string | null;
+  department_id: number | null;
+  access_scope: string;
+  status: string;
+};
+
 type Role = {
   id: number;
   name: string;
@@ -51,19 +61,25 @@ export default function RolesPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
+  const [departmentNames, setDepartmentNames] = useState<Record<number, string>>({});
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [roleUsers, setRoleUsers] = useState<RoleUser[]>([]);
+  const [loadingRoleUsers, setLoadingRoleUsers] = useState(false);
 
   const loadRows = useCallback(async () => {
     if (!authReady) return;
 
     try {
       const params = filters.search.trim() ? { search: filters.search.trim() } : undefined;
-      const [roleResponse, permissionResponse] = await Promise.all([
+      const [roleResponse, permissionResponse, departmentResponse] = await Promise.all([
         api.get<{ data: Role[] }>("/roles", { params }),
         api.get<{ data: Permission[] }>("/permissions"),
+        api.get<{ data: { id: number; name: string }[] }>("/master-data/departments"),
       ]);
 
       setRoles(roleResponse.data?.data ?? []);
       setPermissions(permissionResponse.data?.data ?? []);
+      setDepartmentNames(Object.fromEntries((departmentResponse.data?.data ?? []).map((department) => [department.id, department.name])));
       setError("");
     } catch {
       setRoles([]);
@@ -204,6 +220,28 @@ export default function RolesPage() {
     });
   };
 
+  const openRoleUsersDialog = async (role: Role) => {
+    setSelectedRole(role);
+    setLoadingRoleUsers(true);
+    setRoleUsers([]);
+
+    try {
+      const response = await api.get<{ data: { users: RoleUser[] } }>(`/roles/${role.id}/users`);
+      setRoleUsers(response.data?.data?.users ?? []);
+      setError("");
+    } catch {
+      setError("Unable to load users assigned to this role.");
+      setRoleUsers([]);
+    } finally {
+      setLoadingRoleUsers(false);
+    }
+  };
+
+  const closeRoleUsersDialog = () => {
+    setSelectedRole(null);
+    setRoleUsers([]);
+  };
+
   const columns = [
     { key: "name", header: "Role" },
     { key: "description", header: "Description" },
@@ -229,6 +267,16 @@ export default function RolesPage() {
             {row.permissions?.map((permission) => permission.name).join(", ") || "-"}
           </div>
         </div>
+      ),
+    },
+    {
+      key: "users_list",
+      header: "Users",
+      render: (row: Role) => (
+        <button className="btn btn-sm btn-outline-secondary" type="button" onClick={() => void openRoleUsersDialog(row)}>
+          <i className="bi bi-people me-1" />
+          {row.users_count ?? 0}
+        </button>
       ),
     },
     {
@@ -460,6 +508,72 @@ export default function RolesPage() {
             </div>
           </div>
           <div className="modal-backdrop fade show" onClick={closeDialog} />
+        </>
+      ) : null}
+
+      {selectedRole ? (
+        <>
+          <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+            <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable" style={{ width: "min(58vw, 900px)", maxWidth: "min(58vw, 900px)" }}>
+              <div className="modal-content border-0 shadow-lg">
+                <div className="modal-header px-4 py-3">
+                  <div>
+                    <h5 className="modal-title mb-1">Users assigned to {selectedRole.name}</h5>
+                    <div className="small text-secondary">View role membership in one place.</div>
+                  </div>
+                  <button className="btn-close" type="button" aria-label="Close" onClick={closeRoleUsersDialog} />
+                </div>
+
+                <div className="modal-body px-4 py-4">
+                  {loadingRoleUsers ? (
+                    <div className="text-secondary">
+                      <i className="bi bi-arrow-repeat me-2" />
+                      Loading assigned users…
+                    </div>
+                  ) : roleUsers.length === 0 ? (
+                    <EmptyState title="No users found" message="No users are currently assigned to this role." />
+                  ) : (
+                    <div className="card border-0 shadow-sm">
+                      <div className="table-responsive">
+                        <table className="table table-sm table-hover mb-0 align-middle">
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              <th>Email</th>
+                              <th>Employee Code</th>
+                              <th>Department</th>
+                              <th>Scope</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {roleUsers.map((roleUser) => (
+                              <tr key={roleUser.id}>
+                                <td>{roleUser.name}</td>
+                                <td>{roleUser.email}</td>
+                                <td>{roleUser.employee_code ?? "-"}</td>
+                                <td>{roleUser.department_id ? departmentNames[roleUser.department_id] ?? "-" : "-"}</td>
+                                <td>{roleUser.access_scope === "university" ? "University-wide" : "Department"}</td>
+                                <td>
+                                  <StatusBadge status={roleUser.status} />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer px-4 py-3">
+                  <button className="btn btn-outline-secondary" type="button" onClick={closeRoleUsersDialog}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-backdrop fade show" onClick={closeRoleUsersDialog} />
         </>
       ) : null}
     </main>

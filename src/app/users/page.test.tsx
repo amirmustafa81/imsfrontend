@@ -47,8 +47,19 @@ const fakeStorage = (() => {
   };
 })();
 
-const roles = [{ id: 1, name: "Store Admin" }];
-const departments = [{ id: 2, name: "Computer Science", code: "CSE" }];
+  const roles = [{ id: 1, name: "Store Admin" }];
+const roleUsers = [
+  {
+    id: 7,
+    name: "Areeba Khan",
+    email: "areeba@example.com",
+    employee_code: "EMP-7",
+    department_id: 2,
+    access_scope: "department",
+    status: "active",
+  },
+];
+  const departments = [{ id: 2, name: "Computer Science", code: "CSE" }];
 const users = [
   {
     id: 7,
@@ -86,6 +97,13 @@ beforeEach(() => {
     if (url === "/roles") return Promise.resolve({ data: { data: roles } });
     if (url === "/master-data/departments") return Promise.resolve({ data: { data: departments } });
     if (url === "/users") return Promise.resolve({ data: { data: users } });
+    if (url === "/users/7/roles") {
+      return Promise.resolve({ data: { data: { roles } } });
+    }
+    if (url === "/roles/1/users") {
+      return Promise.resolve({ data: { data: { users: roleUsers } } });
+    }
+
     return Promise.resolve({ data: { data: [] } });
   });
   mockedApi.post.mockResolvedValue({ data: { data: { id: 8 } } });
@@ -153,13 +171,26 @@ describe("UsersPage", () => {
     await waitFor(() => {
       expect(mockedApi.put).toHaveBeenCalledWith(
         "/users/7",
-        expect.objectContaining({
-          name: "Areeba Noor",
-          email: "areeba@example.com",
-          role_ids: [1],
-        }),
+        expect.objectContaining({ name: "Areeba Noor", email: "areeba@example.com", role_ids: [1] }),
         expect.anything(),
       );
+    });
+  });
+
+  test("opens role membership modal from user row", async () => {
+    const user = userEvent.setup();
+    render(<UsersPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Store Admin/i })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /Store Admin/i }));
+
+    await waitFor(() => {
+      const dialog = screen.getByRole("dialog");
+      expect(within(dialog).getByText("Users assigned to Store Admin")).toBeInTheDocument();
+      expect(within(dialog).getByText("Areeba Khan")).toBeInTheDocument();
     });
   });
 });
