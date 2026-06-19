@@ -707,7 +707,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                       </label>
                       <input
                         id="batch-no"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={batchForm.batch_no}
                         onChange={(event) => setBatchFormValue("batch_no", event.target.value)}
                         placeholder="e.g. CS-2026-001"
@@ -719,7 +719,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                       </label>
                       <select
                         id="batch-item"
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={batchForm.item_id}
                         onChange={(event) => setBatchFormValue("item_id", event.target.value)}
                       >
@@ -737,7 +737,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                       </label>
                       <input
                         id="batch-receipt"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={batchForm.receipt_item_id}
                         onChange={(event) => setBatchFormValue("receipt_item_id", event.target.value)}
                         placeholder="optional"
@@ -752,7 +752,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                       </label>
                       <select
                         id="batch-department"
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={batchForm.department_id}
                         onChange={(event) => setBatchFormValue("department_id", event.target.value)}
                       >
@@ -770,7 +770,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                       </label>
                       <select
                         id="batch-store"
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={batchForm.store_id}
                         onChange={(event) => setBatchFormValue("store_id", event.target.value)}
                       >
@@ -792,7 +792,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                       <input
                         id="batch-received-date"
                         type="date"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={batchForm.received_date}
                         onChange={(event) => setBatchFormValue("received_date", event.target.value)}
                       />
@@ -803,7 +803,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                       </label>
                       <select
                         id="batch-status"
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={batchForm.status}
                         onChange={(event) => setBatchFormValue("status", event.target.value as BatchStatus)}
                       >
@@ -818,7 +818,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                       </label>
                       <input
                         id="batch-qty"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={batchForm.total_quantity}
                         onChange={(event) => setBatchFormValue("total_quantity", event.target.value)}
                         placeholder="e.g. 100"
@@ -831,7 +831,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                     <div className="col-md-4">
                       <label className="form-label">Serialing Method</label>
                       <select
-                        className="form-select"
+                        className="form-select form-select-sm"
                         value={batchForm.use_range ? "range" : "manual"}
                         onChange={(event) => setBatchFormValue("use_range", event.target.value === "range")}
                       >
@@ -845,7 +845,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                       </label>
                       <input
                         id="batch-prefix"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={batchForm.serial_prefix}
                         onChange={(event) => setBatchFormValue("serial_prefix", event.target.value)}
                       />
@@ -856,7 +856,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                       </label>
                       <input
                         id="batch-remarks"
-                        className="form-control"
+                        className="form-control form-control-sm"
                         value={batchForm.remarks}
                         onChange={(event) => setBatchFormValue("remarks", event.target.value)}
                       />
@@ -871,7 +871,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                         </label>
                         <input
                           id="serial-from"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={batchForm.serial_from}
                           onChange={(event) => setBatchFormValue("serial_from", event.target.value)}
                         />
@@ -882,7 +882,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                         </label>
                         <input
                           id="serial-to"
-                          className="form-control"
+                          className="form-control form-control-sm"
                           value={batchForm.serial_to}
                           onChange={(event) => setBatchFormValue("serial_to", event.target.value)}
                         />
@@ -902,7 +902,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                           <div className="col-md-5">
                             <label className="form-label">Serial No.</label>
                             <input
-                              className="form-control"
+                              className="form-control form-control-sm"
                               value={serialRow.serial_no}
                               onChange={(event) => setSerialRowValue(index, "serial_no", event.target.value)}
                               placeholder="e.g. ANS-001"
@@ -911,7 +911,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                           <div className="col-md-5">
                             <label className="form-label">Remarks</label>
                             <input
-                              className="form-control"
+                              className="form-control form-control-sm"
                               value={serialRow.remarks}
                               onChange={(event) => setSerialRowValue(index, "remarks", event.target.value)}
                             />

@@ -539,7 +539,7 @@ export default function MasterDataPage() {
     if (field.type === "textarea") {
       return (
         <textarea
-          className="form-control"
+          className="form-control form-control-sm"
           rows={3}
           value={typeof value === "boolean" ? (value ? "1" : "0") : String(value)}
           placeholder={getFieldPlaceholder(field)}
@@ -562,7 +562,7 @@ export default function MasterDataPage() {
 
       return (
         <select
-          className="form-select"
+          className="form-select form-select-sm"
           value={String(value)}
           onChange={(event) => setFieldValue(field.key, event.target.value)}
         >
@@ -589,7 +589,7 @@ export default function MasterDataPage() {
 
       return (
         <input
-          className="form-control"
+          className="form-control form-control-sm"
           type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
           value={String(value)}
           placeholder={getFieldPlaceholder(field)}
