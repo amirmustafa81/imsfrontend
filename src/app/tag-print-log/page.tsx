@@ -72,6 +72,14 @@ function TagPrintLogContent() {
   const prefillAssetId = useMemo(() => Number(searchParams.get("asset_id") ?? ""), [searchParams]);
   const prefillAssetCode = searchParams.get("asset_code") || "";
   const prefillSuggestedTag = searchParams.get("suggested_tag") || "";
+  const selectedAsset = useMemo(
+    () => assets.find((asset) => String(asset.id) === form.asset_id) ?? null,
+    [assets, form.asset_id],
+  );
+  const suggestedTag = useMemo(() => {
+    if (!selectedAsset) return "";
+    return `${selectedAsset.asset_id || `FA-${selectedAsset.id}`}-TAG`;
+  }, [selectedAsset]);
 
   const loadLookups = useCallback(async () => {
     if (authLoading || !isAuthenticated) {
@@ -167,6 +175,20 @@ function TagPrintLogContent() {
     setForm((current) => ({ ...current, [field]: value }));
   }, []);
 
+  const selectAsset = useCallback((assetId: string) => {
+    const nextAsset = assets.find((asset) => String(asset.id) === assetId);
+    setForm((current) => ({
+      ...current,
+      asset_id: assetId,
+      printable_tag_id: current.printable_tag_id || (nextAsset ? `${nextAsset.asset_id || `FA-${nextAsset.id}`}-TAG` : ""),
+    }));
+  }, [assets]);
+
+  const printCurrentTag = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.print();
+  }, []);
+
   const saveLog = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -177,6 +199,16 @@ function TagPrintLogContent() {
 
     setError("");
     setMessage("");
+
+    if (!assets.some((asset) => String(asset.id) === form.asset_id)) {
+      setError("Please choose a valid asset before saving the print log.");
+      return;
+    }
+
+    if (!form.printable_tag_id.trim()) {
+      setError("Printable Tag ID is required before saving or printing.");
+      return;
+    }
 
     try {
       await api.post("/asset-tag-print-logs", form);
@@ -234,7 +266,7 @@ function TagPrintLogContent() {
                     <select
                       className="form-select form-select-sm"
                       value={form.asset_id}
-                      onChange={(event) => setField("asset_id", event.target.value)}
+                      onChange={(event) => selectAsset(event.target.value)}
                       required
                     >
                       <option value="">Choose asset</option>
@@ -247,11 +279,22 @@ function TagPrintLogContent() {
                   </div>
                   <div className="col-12">
                     <label className="form-label small mb-1">Printable Tag ID</label>
-                    <input
-                      className="form-control form-control-sm"
-                      value={form.printable_tag_id}
-                      onChange={(event) => setField("printable_tag_id", event.target.value)}
-                    />
+                    <div className="input-group input-group-sm">
+                      <input
+                        className="form-control"
+                        value={form.printable_tag_id}
+                        onChange={(event) => setField("printable_tag_id", event.target.value)}
+                        required
+                      />
+                      <button
+                        className="btn btn-outline-secondary"
+                        type="button"
+                        disabled={!suggestedTag}
+                        onClick={() => setField("printable_tag_id", suggestedTag)}
+                      >
+                        Use Suggested
+                      </button>
+                    </div>
                   </div>
                   <div className="col-12">
                     <label className="form-label small mb-1">Print Format</label>
@@ -277,9 +320,28 @@ function TagPrintLogContent() {
                     />
                   </div>
                   <div className="col-12">
-                    <button className="btn btn-sm btn-primary" type="submit" disabled={!form.asset_id || !form.printable_tag_id}>
+                    <div className="border rounded bg-light p-3">
+                      <div className="small text-secondary mb-2">Tag Preview</div>
+                      <div className="d-flex align-items-center gap-3">
+                        <div className="border bg-white d-flex align-items-center justify-content-center" style={{ width: 84, height: 84 }}>
+                          <i className="bi bi-qr-code fs-1 text-dark" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="fw-semibold text-truncate">{form.printable_tag_id || "Select asset to generate tag"}</div>
+                          <div className="small text-secondary text-truncate">{selectedAsset?.asset_id ?? "No asset selected"}</div>
+                          <div className="small text-secondary text-truncate">{selectedAsset?.serial_number || "No serial recorded"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-12">
+                    <button className="btn btn-sm btn-primary me-2" type="submit" disabled={!form.asset_id || !form.printable_tag_id}>
                       <i className="bi bi-printer me-1" />
                       Save Print Log
+                    </button>
+                    <button className="btn btn-sm btn-outline-primary" type="button" disabled={!form.asset_id || !form.printable_tag_id} onClick={printCurrentTag}>
+                      <i className="bi bi-printer-fill me-1" />
+                      Print Tag
                     </button>
                   </div>
                 </form>
