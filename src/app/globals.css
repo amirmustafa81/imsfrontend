@@ -469,13 +469,16 @@ a {
   position: relative;
   min-height: 100vh;
   color: #ffffff;
-  background:
-    linear-gradient(155deg, rgba(22, 43, 73, 0.98), rgba(30, 65, 124, 0.96) 58%, rgba(47, 109, 246, 0.9)),
-    url("/window.svg");
-  background-repeat: no-repeat;
-  background-position: right 3.5rem bottom 4rem;
-  background-size: 172px;
+  background: #162b49;
   overflow: hidden;
+}
+
+.ims-login-brand-panel::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background:
+    linear-gradient(155deg, #162b49 0%, #1d3f78 58%, #2f6df6 100%);
 }
 
 .ims-login-brand-panel::after {
