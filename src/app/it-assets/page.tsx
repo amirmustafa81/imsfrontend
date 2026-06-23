@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { AssetCreateDialog } from "@/components/ims/AssetCreateDialog";
 
 type AssetRow = {
   id: number;
@@ -50,6 +51,7 @@ export default function ItAssetsPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [assetDialogOpen, setAssetDialogOpen] = useState(false);
 
   const itRows = useMemo(
     () =>
@@ -146,7 +148,12 @@ export default function ItAssetsPage() {
         <PageHeader
           title="IT Assets"
           subtitle="IT-focused fixed assets and serialised devices for department operations."
-          
+          actions={
+            <button className="btn btn-sm btn-primary" type="button" onClick={() => setAssetDialogOpen(true)}>
+              <i className="bi bi-plus-lg me-1" />
+              Register IT Asset
+            </button>
+          }
         />
 
         <FilterBar onReset={reset}>
@@ -222,6 +229,15 @@ export default function ItAssetsPage() {
         />
 
         {loading ? <span className="small text-secondary">Loading…</span> : null}
+
+        <AssetCreateDialog
+          open={assetDialogOpen}
+          title="Register IT Asset"
+          subtitle="Create an IT equipment asset record with serial, model, location, and custodian details."
+          defaults={{ subcategory_code: "IT", status: "in_store", is_sensitive_controlled: true }}
+          onClose={() => setAssetDialogOpen(false)}
+          onCreated={loadRows}
+        />
       </div>
     </main>
   );

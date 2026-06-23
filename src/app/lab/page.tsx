@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { AssetCreateDialog } from "@/components/ims/AssetCreateDialog";
 
 type AssetLookup = {
   id: number;
@@ -42,6 +43,7 @@ export default function LabInventoryPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [assetDialogOpen, setAssetDialogOpen] = useState(false);
 
   const matchingRows = useMemo(
     () =>
@@ -134,7 +136,12 @@ export default function LabInventoryPage() {
         <PageHeader
           title="Laboratory Inventory"
           subtitle="Scientific consumables and lab assets filtered by keyword profile."
-          
+          actions={
+            <button className="btn btn-sm btn-primary" type="button" onClick={() => setAssetDialogOpen(true)}>
+              <i className="bi bi-plus-lg me-1" />
+              Register Lab Asset
+            </button>
+          }
         />
 
         <FilterBar onReset={reset}>
@@ -203,6 +210,15 @@ export default function LabInventoryPage() {
         />
 
         {loading ? <span className="small text-secondary">Loading…</span> : null}
+
+        <AssetCreateDialog
+          open={assetDialogOpen}
+          title="Register Lab Asset"
+          subtitle="Create a lab equipment or laboratory inventory asset record."
+          defaults={{ subcategory_code: "LAB", status: "in_store", is_sensitive_controlled: true }}
+          onClose={() => setAssetDialogOpen(false)}
+          onCreated={loadRows}
+        />
       </div>
     </main>
   );
