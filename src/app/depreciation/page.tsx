@@ -12,6 +12,17 @@ type RowData = {
   [key: string]: string | number | null | undefined;
 };
 
+type AssetOption = {
+  id: number;
+  asset_id: string | null;
+  printable_tag_id: string | null;
+  serial_number: string | null;
+  item?: {
+    name?: string | null;
+    item_code?: string | null;
+  } | null;
+};
+
 type DepreciationRow = {
   id: number;
   depreciation_run_id: number;
@@ -62,11 +73,14 @@ const initialLookups: Record<LookupKey, RowData[]> = {
   "research-projects": [],
 };
 
+const createRunNo = () => `DEP-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`;
+
 export default function DepreciationPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
   const [rows, setRows] = useState<DepreciationRow[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>(initialLookups);
+  const [assets, setAssets] = useState<AssetOption[]>([]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -78,6 +92,16 @@ export default function DepreciationPage() {
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("Load depreciation report to begin.");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [runNo, setRunNo] = useState(createRunNo);
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+  const [runType, setRunType] = useState<"monthly" | "yearly" | "on_demand">("monthly");
+  const [departmentId, setDepartmentId] = useState("");
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const [remarks, setRemarks] = useState("");
+  const [calculateAfterSave, setCalculateAfterSave] = useState(true);
 
   const authHeaders = useMemo(() => ({}), []);
 
@@ -145,6 +169,10 @@ export default function DepreciationPage() {
     );
 
     setLookups(next);
+
+    const assetsResponse = await api.get<{ data: AssetOption[] }>("/assets", { ...authHeaders });
+    const assetPayload = assetsResponse.data?.data;
+    setAssets(Array.isArray(assetPayload) ? assetPayload : []);
   }, [authReady, authHeaders]);
 
   useEffect(() => {
@@ -175,6 +203,77 @@ export default function DepreciationPage() {
     setTimeout(() => {
       void loadRows();
     }, 0);
+  };
+
+  const openCreateDialog = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+
+    setRunNo(createRunNo());
+    setPeriodStart(start);
+    setPeriodEnd(end);
+    setRunType("monthly");
+    setDepartmentId("");
+    setSelectedAssetIds([]);
+    setRemarks("");
+    setCalculateAfterSave(true);
+    setDialogOpen(true);
+    setError("");
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setSaving(false);
+  };
+
+  const toggleAssetSelection = (assetId: string) => {
+    setSelectedAssetIds((current) =>
+      current.includes(assetId) ? current.filter((id) => id !== assetId) : [...current, assetId],
+    );
+  };
+
+  const saveDepreciationRun = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!authReady) {
+      setError("Please sign in before creating depreciation runs.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await api.post<{ data: { id: number } }>(
+        "/depreciation-runs",
+        {
+          run_no: runNo.trim(),
+          period_start: periodStart,
+          period_end: periodEnd,
+          run_type: runType,
+          status: "draft",
+          remarks: remarks.trim() || null,
+          ...(departmentId ? { department_id: Number(departmentId) } : {}),
+          asset_ids: selectedAssetIds.map((id) => Number(id)),
+        },
+        authHeaders,
+      );
+
+      const newRunId = response.data?.data?.id;
+      if (calculateAfterSave && newRunId) {
+        await api.post(`/depreciation-runs/${newRunId}/calculate`, {}, authHeaders);
+      }
+
+      setDialogOpen(false);
+      setMessage(calculateAfterSave ? "Depreciation run created and calculated." : "Depreciation run created.");
+      await loadRows();
+    } catch {
+      setError("Unable to create depreciation run. Verify period, unique run number, selected assets, and backend connectivity.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const tableColumns = [
@@ -243,7 +342,12 @@ export default function DepreciationPage() {
         <PageHeader
           title="Depreciation"
           subtitle="Review straight-line depreciation entries, period totals, and run status by asset."
-          
+          actions={
+            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+              <i className="bi bi-plus-lg me-1" />
+              Create Run
+            </button>
+          }
         />
 
         {(message || error) && (
@@ -322,6 +426,116 @@ export default function DepreciationPage() {
         </FilterBar>
 
         <DataTable columns={tableColumns} rows={rows} empty="No depreciation entries found." />
+
+        {dialogOpen ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable" style={{ width: "min(54vw, 920px)", maxWidth: "min(54vw, 920px)" }}>
+                <form className="modal-content border-0 shadow-lg" onSubmit={saveDepreciationRun}>
+                  <div className="modal-header px-4 py-3">
+                    <div>
+                      <h5 className="modal-title mb-1">Create Depreciation Run</h5>
+                      <div className="small text-secondary">Create a straight-line run for selected assets and period.</div>
+                    </div>
+                    <button className="btn-close" type="button" aria-label="Close" onClick={closeDialog} />
+                  </div>
+                  <div className="modal-body px-4 py-4">
+                    <div className="row g-3">
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small">Run No <span className="text-danger">*</span></label>
+                        <input className="form-control form-control-sm" value={runNo} onChange={(event) => setRunNo(event.target.value)} required />
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small">Run Type</label>
+                        <select className="form-select form-select-sm" value={runType} onChange={(event) => setRunType(event.target.value as typeof runType)}>
+                          <option value="monthly">Monthly</option>
+                          <option value="yearly">Yearly</option>
+                          <option value="on_demand">On Demand</option>
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small">Department</label>
+                        <select className="form-select form-select-sm" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
+                          <option value="">All allowed departments</option>
+                          {lookups.departments.map((department) => (
+                            <option key={department.id} value={department.id}>
+                              {department.code} - {department.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Period Start <span className="text-danger">*</span></label>
+                        <input className="form-control form-control-sm" type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} required />
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Period End <span className="text-danger">*</span></label>
+                        <input className="form-control form-control-sm" type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} required />
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label small">Assets</label>
+                        <div className="border rounded bg-light p-2" style={{ maxHeight: 180, overflowY: "auto" }}>
+                          {assets.length === 0 ? (
+                            <div className="small text-secondary px-1 py-2">No assets available.</div>
+                          ) : (
+                            assets.map((asset) => {
+                              const assetId = String(asset.id);
+                              const label = `${asset.asset_id ?? `Asset #${asset.id}`} - ${asset.item?.item_code ?? asset.item?.name ?? asset.serial_number ?? "No item"}`;
+
+                              return (
+                                <div className="form-check" key={asset.id}>
+                                  <input
+                                    id={`depreciation-asset-${asset.id}`}
+                                    className="form-check-input"
+                                    type="checkbox"
+                                    checked={selectedAssetIds.includes(assetId)}
+                                    onChange={() => toggleAssetSelection(assetId)}
+                                  />
+                                  <label className="form-check-label small" htmlFor={`depreciation-asset-${asset.id}`}>
+                                    {label}
+                                  </label>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                        <div className="form-text">Select one or more assets so report entries are created for this run.</div>
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label small">Remarks</label>
+                        <textarea className="form-control form-control-sm" rows={3} value={remarks} onChange={(event) => setRemarks(event.target.value)} />
+                      </div>
+                      <div className="col-12">
+                        <div className="form-check">
+                          <input
+                            id="calculate-after-save"
+                            className="form-check-input"
+                            type="checkbox"
+                            checked={calculateAfterSave}
+                            onChange={(event) => setCalculateAfterSave(event.target.checked)}
+                          />
+                          <label className="form-check-label small" htmlFor="calculate-after-save">
+                            Calculate depreciation immediately after creating the run
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer px-4 py-3">
+                    <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
+                      Cancel
+                    </button>
+                    <button className="btn btn-primary" type="submit" disabled={saving || selectedAssetIds.length === 0 || !authReady}>
+                      <i className="bi bi-plus-circle me-1" />
+                      {saving ? "Saving..." : "Create Run"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+            <div className="modal-backdrop fade show" onClick={closeDialog} />
+          </>
+        ) : null}
       </div>
     </main>
   );
