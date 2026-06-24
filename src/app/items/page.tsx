@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
@@ -126,6 +127,52 @@ const createInitialForm = (): ItemFormState => ({
   requires_expiry_tracking: false,
   status: "active",
 });
+
+const infoText = {
+  itemCode: "Unique item code used in receipts, stock, issue, asset registration, reports, and imports.",
+  itemName: "Official item name shown to users in lists, transactions, receipts, and reports.",
+  itemType: "Controls how the item behaves, such as consumable stock, fixed asset, controlled stationery, project inventory, or license.",
+  category: "Main classification used for reporting, coding, depreciation policy, and item grouping.",
+  subcategory: "More specific classification under the selected category, used for consistent item and asset coding.",
+  unit: "Default measurement unit for receipt, stock balance, issue, return, and consumption quantities.",
+  minimumStock: "Minimum quantity expected in stock. Reports use this to identify low-stock items.",
+  capitalizable: "Enable when this item can become a fixed asset after purchase or registration.",
+  sensitive: "Enable for controlled or sensitive items that need stronger tracking and accountability.",
+  serial: "Enable when each item or asset must be tracked by serial number.",
+  batch: "Enable when stock should be tracked by batch or lot number.",
+  expiry: "Enable when expiry date tracking is required for this item.",
+  status: "Inactive items remain in history but are normally not selected for new transactions.",
+};
+
+const FieldLabel = ({
+  children,
+  required = false,
+  info,
+  htmlFor,
+  check = false,
+}: {
+  children: ReactNode;
+  required?: boolean;
+  info?: string;
+  htmlFor?: string;
+  check?: boolean;
+}) => (
+  <label htmlFor={htmlFor} className={`${check ? "form-check-label" : "form-label"} small d-inline-flex align-items-center gap-1`}>
+    <span>
+      {children} {required ? <span className="text-danger">*</span> : null}
+    </span>
+    {info ? (
+      <span className="ims-info-hint">
+        <button className="ims-info-button" type="button" aria-label={`${children} help`}>
+          i
+        </button>
+        <span className="ims-info-tooltip" role="tooltip">
+          {info}
+        </span>
+      </span>
+    ) : null}
+  </label>
+);
 
 export default function ItemsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -494,7 +541,7 @@ export default function ItemsPage() {
                   <div className="modal-body px-4 py-4">
                     <div className="row g-3">
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Item Code <span className="text-danger">*</span></label>
+                        <FieldLabel required info={infoText.itemCode}>Item Code</FieldLabel>
                         <input
                           className="form-control form-control-sm"
                           value={form.item_code}
@@ -504,7 +551,7 @@ export default function ItemsPage() {
                         />
                       </div>
                       <div className="col-12 col-md-8">
-                        <label className="form-label small">Item Name <span className="text-danger">*</span></label>
+                        <FieldLabel required info={infoText.itemName}>Item Name</FieldLabel>
                         <input
                           className="form-control form-control-sm"
                           value={form.name}
@@ -514,7 +561,7 @@ export default function ItemsPage() {
                         />
                       </div>
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Item Type <span className="text-danger">*</span></label>
+                        <FieldLabel required info={infoText.itemType}>Item Type</FieldLabel>
                         <select
                           className="form-select form-select-sm"
                           value={form.item_type}
@@ -531,7 +578,7 @@ export default function ItemsPage() {
                         </select>
                       </div>
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Category <span className="text-danger">*</span></label>
+                        <FieldLabel required info={infoText.category}>Category</FieldLabel>
                         <select
                           className="form-select form-select-sm"
                           value={form.category_id}
@@ -547,7 +594,7 @@ export default function ItemsPage() {
                         </select>
                       </div>
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Subcategory</label>
+                        <FieldLabel info={infoText.subcategory}>Subcategory</FieldLabel>
                         <select
                           className="form-select form-select-sm"
                           value={form.subcategory_id}
@@ -570,7 +617,7 @@ export default function ItemsPage() {
                         </select>
                       </div>
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Unit of Measure <span className="text-danger">*</span></label>
+                        <FieldLabel required info={infoText.unit}>Unit of Measure</FieldLabel>
                         <select
                           className="form-select form-select-sm"
                           value={form.unit_id}
@@ -604,7 +651,7 @@ export default function ItemsPage() {
                         />
                       </div>
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Minimum Stock Level</label>
+                        <FieldLabel info={infoText.minimumStock}>Minimum Stock Level</FieldLabel>
                         <input
                           className="form-control form-control-sm"
                           type="number"
@@ -627,12 +674,12 @@ export default function ItemsPage() {
                       <div className="col-12">
                         <div className="row g-2">
                           {[
-                            ["is_capitalizable", "Capitalizable"],
-                            ["is_sensitive_controlled", "Sensitive / Controlled"],
-                            ["requires_serial_tracking", "Serial Tracking"],
-                            ["requires_batch_tracking", "Batch Tracking"],
-                            ["requires_expiry_tracking", "Expiry Tracking"],
-                          ].map(([key, label]) => (
+                            ["is_capitalizable", "Capitalizable", infoText.capitalizable],
+                            ["is_sensitive_controlled", "Sensitive / Controlled", infoText.sensitive],
+                            ["requires_serial_tracking", "Serial Tracking", infoText.serial],
+                            ["requires_batch_tracking", "Batch Tracking", infoText.batch],
+                            ["requires_expiry_tracking", "Expiry Tracking", infoText.expiry],
+                          ].map(([key, label, info]) => (
                             <div className="col-12 col-md-4" key={key}>
                               <div className="form-check">
                                 <input
@@ -642,16 +689,14 @@ export default function ItemsPage() {
                                   checked={Boolean(form[key as keyof ItemFormState])}
                                   onChange={(event) => setFormField(key as keyof ItemFormState, event.target.checked as never)}
                                 />
-                                <label className="form-check-label small" htmlFor={`item-${key}`}>
-                                  {label}
-                                </label>
+                                <FieldLabel htmlFor={`item-${key}`} check info={info}>{label}</FieldLabel>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Status</label>
+                        <FieldLabel info={infoText.status}>Status</FieldLabel>
                         <select
                           className="form-select form-select-sm"
                           value={form.status}
@@ -679,6 +724,64 @@ export default function ItemsPage() {
           </>
         ) : null}
       </div>
+      <style jsx global>{`
+        .ims-info-hint {
+          display: inline-flex;
+          position: relative;
+          align-items: center;
+        }
+
+        .ims-info-button {
+          width: 1rem;
+          height: 1rem;
+          border: 1px solid #94a3b8;
+          border-radius: 999px;
+          background: #ffffff;
+          color: #64748b;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          font-size: 0.68rem;
+          font-weight: 700;
+          line-height: 1;
+        }
+
+        .ims-info-button:hover,
+        .ims-info-button:focus {
+          border-color: #2563eb;
+          color: #2563eb;
+          outline: none;
+          box-shadow: 0 0 0 0.15rem rgba(37, 99, 235, 0.18);
+        }
+
+        .ims-info-tooltip {
+          position: absolute;
+          left: 50%;
+          bottom: calc(100% + 0.55rem);
+          z-index: 1100;
+          width: max-content;
+          max-width: 20rem;
+          transform: translateX(-50%) translateY(0.2rem);
+          border-radius: 0.35rem;
+          background: #111827;
+          color: #ffffff;
+          padding: 0.55rem 0.7rem;
+          font-size: 0.78rem;
+          font-weight: 600;
+          line-height: 1.35;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.15s ease, transform 0.15s ease;
+          box-shadow: 0 0.75rem 1.75rem rgba(15, 23, 42, 0.22);
+        }
+
+        .ims-info-hint:hover .ims-info-tooltip,
+        .ims-info-button:focus + .ims-info-tooltip {
+          opacity: 1;
+          transform: translateX(-50%) translateY(0);
+        }
+      `}</style>
     </main>
   );
 }
