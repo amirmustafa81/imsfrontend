@@ -31,6 +31,18 @@ type Department = {
   name: string;
 };
 
+const unwrapRows = <T,>(payload: unknown): T[] => {
+  if (Array.isArray(payload)) {
+    return payload as T[];
+  }
+
+  if (payload && typeof payload === "object" && "data" in payload && Array.isArray((payload as { data?: unknown }).data)) {
+    return (payload as { data: T[] }).data;
+  }
+
+  return [];
+};
+
 export default function LabInventoryPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
@@ -81,8 +93,8 @@ export default function LabInventoryPage() {
     }
 
     try {
-      const response = await api.get<Department[]>("/master-data/departments", authHeaders);
-      setDepartments(response.data);
+      const response = await api.get("/master-data/departments", authHeaders);
+      setDepartments(unwrapRows<Department>(response.data));
     } catch {
       setError("Unable to load departments. Verify token and connection.");
     }

@@ -38,6 +38,18 @@ const statusOptions = [
   { value: "damaged", label: "Damaged" },
 ];
 
+const unwrapRows = <T,>(payload: unknown): T[] => {
+  if (Array.isArray(payload)) {
+    return payload as T[];
+  }
+
+  if (payload && typeof payload === "object" && "data" in payload && Array.isArray((payload as { data?: unknown }).data)) {
+    return (payload as { data: T[] }).data;
+  }
+
+  return [];
+};
+
 export default function ProjectsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
@@ -68,8 +80,8 @@ export default function ProjectsPage() {
     }
 
     try {
-      const response = await api.get<Lookup[]>("/master-data/research-projects", authHeaders);
-      setProjects(response.data);
+      const response = await api.get("/master-data/research-projects", authHeaders);
+      setProjects(unwrapRows<Lookup>(response.data));
     } catch {
       setError("Unable to load projects. Verify token and backend connectivity.");
     }
