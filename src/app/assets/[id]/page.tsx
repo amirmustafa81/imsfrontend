@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import QRCode from "qrcode";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
@@ -161,6 +162,8 @@ export default function AssetDetailPage() {
   const [message, setMessage] = useState("Loading asset details...");
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [assetDetailUrl, setAssetDetailUrl] = useState("");
 
   const clearAsset = () => {
     setAsset(null);
@@ -206,6 +209,47 @@ export default function AssetDetailPage() {
 
   const generatedTagId = asset?.printable_tag_id || (asset?.asset_id ? `${asset.asset_id}-TAG` : `FA-${asset?.id ?? 0}`);
   const tagPrintQuery = asset ? `asset_id=${asset.id}&asset_code=${encodeURIComponent(asset.asset_id)}&suggested_tag=${encodeURIComponent(generatedTagId)}` : "";
+
+  useEffect(() => {
+    if (!asset || typeof window === "undefined") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAssetDetailUrl("");
+      return;
+    }
+
+    setAssetDetailUrl(new URL(`/assets/${asset.id}`, window.location.origin).toString());
+  }, [asset]);
+
+  useEffect(() => {
+    const qrPayload = assetDetailUrl.trim();
+
+    if (!asset || !qrPayload) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQrDataUrl("");
+      return;
+    }
+
+    let isMounted = true;
+    QRCode.toDataURL(qrPayload, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      scale: 8,
+      color: {
+        dark: "#20242a",
+        light: "#ffffff",
+      },
+    })
+      .then((dataUrl) => {
+        if (isMounted) setQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (isMounted) setQrDataUrl("");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [asset, assetDetailUrl]);
 
   const saveStatus = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -352,8 +396,19 @@ export default function AssetDetailPage() {
                       </div>
                       <div className="col-md-6">
                         <div className="small text-secondary">QR / Barcode</div>
-                        <div className="fw-medium">
-                          {asset.qr_code_path ? "QR available" : "No QR"} / {asset.barcode_value ?? "-"}
+                        <div className="d-flex align-items-center gap-3 mt-1">
+                          <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-qr-box">
+                            {qrDataUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img className="ims-qr-preview-img" src={qrDataUrl} alt={`QR code for ${assetDetailUrl || generatedTagId}`} />
+                            ) : (
+                              <span className="small text-secondary">QR</span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="fw-medium text-break">{generatedTagId}</div>
+                            <small className="text-secondary text-break">{assetDetailUrl || asset.barcode_value || `BC-${asset.asset_id}`}</small>
+                          </div>
                         </div>
                       </div>
                       <div className="col-md-6">

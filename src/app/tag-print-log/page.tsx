@@ -102,6 +102,13 @@ function TagPrintLogContent() {
     return `${selectedAsset.asset_id || `FA-${selectedAsset.id}`}-TAG`;
   }, [selectedAsset]);
   const selectedPrintFormat = normalizePrintFormat(form.print_format);
+  const qrPayload = useMemo(() => {
+    if (typeof window === "undefined" || !form.asset_id) {
+      return "";
+    }
+
+    return new URL(`/assets/${form.asset_id}`, window.location.origin).toString();
+  }, [form.asset_id]);
 
   const loadLookups = useCallback(async () => {
     if (authLoading || !isAuthenticated) {
@@ -194,16 +201,16 @@ function TagPrintLogContent() {
   }, [loadRows]);
 
   useEffect(() => {
-    const tagId = form.printable_tag_id.trim();
+    const qrValue = qrPayload.trim();
 
-    if (!tagId || selectedPrintFormat === "BARCODE") {
+    if (!qrValue || selectedPrintFormat === "BARCODE") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setQrDataUrl("");
       return;
     }
 
     let isMounted = true;
-    QRCode.toDataURL(tagId, {
+    QRCode.toDataURL(qrValue, {
       errorCorrectionLevel: "M",
       margin: 2,
       scale: 8,
@@ -222,7 +229,7 @@ function TagPrintLogContent() {
     return () => {
       isMounted = false;
     };
-  }, [form.printable_tag_id, selectedPrintFormat]);
+  }, [qrPayload, selectedPrintFormat]);
 
   const setField = useCallback((field: keyof TagPrintForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));

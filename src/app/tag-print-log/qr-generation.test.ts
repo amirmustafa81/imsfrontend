@@ -4,8 +4,8 @@ import jsQR from "jsqr";
 import { PNG } from "pngjs";
 
 describe("tag QR generation", () => {
-  it("generates a QR image that decodes back to the tag id", async () => {
-    const expected = "TAG-ITD-IT-LAP-00002";
+  it("generates a QR image that decodes back to the asset detail URL", async () => {
+    const expected = "http://localhost:3000/assets/2";
     const dataUrl = await QRCode.toDataURL(expected, {
       errorCorrectionLevel: "M",
       margin: 2,
