@@ -45,7 +45,7 @@ type AssetFormState = {
   is_sensitive_controlled: boolean;
 };
 
-type AssetCreateDefaults = Partial<Pick<AssetFormState, "subcategory_code" | "status" | "condition_status" | "is_sensitive_controlled" | "project_id">>;
+type AssetCreateDefaults = Partial<Pick<AssetFormState, "category_code" | "subcategory_code" | "status" | "condition_status" | "is_sensitive_controlled" | "project_id">>;
 
 const initialLookups: Record<LookupKey, LookupRow[]> = {
   departments: [],
@@ -60,7 +60,7 @@ const initialLookups: Record<LookupKey, LookupRow[]> = {
 
 const createInitialForm = (defaults?: AssetCreateDefaults): AssetFormState => ({
   item_id: "",
-  category_code: "",
+  category_code: defaults?.category_code ?? "",
   subcategory_code: defaults?.subcategory_code ?? "",
   department_id: "",
   department_code: "",
@@ -188,6 +188,7 @@ export function AssetCreateDialog({
     const category = lookups["asset-categories"].find((row) => String(row.code) === categoryCode);
     setForm((current) => ({
       ...current,
+      item_id: "",
       category_code: categoryCode,
       subcategory_code: "",
       useful_life_years: current.useful_life_years || (category?.useful_life_years ? String(category.useful_life_years) : ""),
@@ -247,6 +248,31 @@ export function AssetCreateDialog({
   const subcategoryOptions = selectedCategory
     ? lookups["asset-categories"].filter((row) => isChildOfCategory(row, selectedCategory.id))
     : [];
+  const itemOptions = selectedCategory
+    ? lookups.items.filter((item) => String(item.category_id ?? "") === String(selectedCategory.id))
+    : lookups.items;
+
+  const selectItem = (itemId: string) => {
+    const item = lookups.items.find((row) => String(row.id) === itemId);
+    const category = parentCategories.find((row) => String(row.id) === String(item?.category_id ?? ""));
+    const subcategory = lookups["asset-categories"].find((row) => String(row.id) === String(item?.subcategory_id ?? ""));
+
+    setForm((current) => ({
+      ...current,
+      item_id: itemId,
+      category_code: category ? String(category.code ?? "") : current.category_code,
+      subcategory_code: subcategory ? String(subcategory.code ?? "") : current.subcategory_code,
+      useful_life_years: current.useful_life_years || (category?.useful_life_years ? String(category.useful_life_years) : ""),
+      is_sensitive_controlled: Boolean(
+        current.is_sensitive_controlled ||
+        category?.is_sensitive_controlled === 1 ||
+        category?.is_sensitive_controlled === "1" ||
+        item?.is_sensitive_controlled === 1 ||
+        item?.is_sensitive_controlled === "1" ||
+        item?.is_sensitive_controlled === true,
+      ),
+    }));
+  };
 
   return (
     <>
@@ -267,9 +293,9 @@ export function AssetCreateDialog({
               <div className="row g-3">
                 <div className="col-12 col-md-6">
                   <label className="form-label small">Item *</label>
-                  <select className="form-select form-select-sm" value={form.item_id} onChange={(event) => setFormField("item_id", event.target.value)} required>
+                  <select className="form-select form-select-sm" value={form.item_id} onChange={(event) => selectItem(event.target.value)} required>
                     <option value="">Choose item</option>
-                    {lookups.items.map((item) => (
+                    {itemOptions.map((item) => (
                       <option key={item.id} value={item.id}>
                         {labelFor(item)}
                       </option>

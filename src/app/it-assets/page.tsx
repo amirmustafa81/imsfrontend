@@ -234,7 +234,7 @@ export default function ItAssetsPage() {
           open={assetDialogOpen}
           title="Register IT Asset"
           subtitle="Create an IT equipment asset record with serial, model, location, and custodian details."
-          defaults={{ status: "in_store", is_sensitive_controlled: true }}
+          defaults={{ category_code: "IT", status: "in_store", is_sensitive_controlled: true }}
           onClose={() => setAssetDialogOpen(false)}
           onCreated={loadRows}
         />
