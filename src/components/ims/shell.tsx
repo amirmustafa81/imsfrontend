@@ -89,7 +89,6 @@ export function ImsShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { isAuthenticated, loading, logout, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
-  const [workspace, setWorkspace] = useState("Administration");
 
   const isLoginPage = pathname === "/login";
   const isActive = (href: string) => pathname === href;
@@ -189,18 +188,6 @@ export function ImsShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="d-flex align-items-center gap-2">
-            <select
-              className="form-select ims-workspace-select"
-              value={workspace}
-              onChange={(event) => setWorkspace(event.target.value)}
-              aria-label="Workspace"
-            >
-              <option>Administration</option>
-              <option>Inventory</option>
-              <option>Procurement</option>
-              <option>Compliance</option>
-            </select>
-
             <button className="btn btn-outline-secondary ims-icon-button position-relative" type="button" aria-label="Notifications">
               <i className="bi bi-bell" />
               <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">3</span>

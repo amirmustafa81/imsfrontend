@@ -328,15 +328,10 @@ a {
 }
 
 .ims-global-search .form-control,
-.ims-global-search .input-group-text,
-.ims-workspace-select {
+.ims-global-search .input-group-text {
   min-height: 36px;
   border-color: var(--ims-table-border);
   font-size: 0.9rem;
-}
-
-.ims-workspace-select {
-  width: 250px;
 }
 
 .ims-user-menu {
@@ -584,8 +579,7 @@ a {
     flex-direction: column;
   }
 
-  .ims-global-search,
-  .ims-workspace-select {
+  .ims-global-search {
     width: 100%;
     max-width: none;
   }
