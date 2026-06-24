@@ -206,11 +206,13 @@ export function DataTable<T extends Record<string, unknown>>({
   rows,
   empty = "No records.",
   rowClassName,
+  onRowClick,
 }: {
   columns: { key: string; header: string; render?: (row: T) => ReactNode; className?: string }[];
   rows: T[];
   empty?: string;
   rowClassName?: (row: T, index: number) => string;
+  onRowClick?: (row: T, index: number) => void;
 }) {
   return (
     <div className="card border-0 shadow-sm ims-table-card">
@@ -235,7 +237,23 @@ export function DataTable<T extends Record<string, unknown>>({
               </tr>
             ) : (
               rows.map((row, index) => (
-                <tr className={rowClassName?.(row, index)} key={`${row.id ?? index}`}>
+                <tr
+                  className={rowClassName?.(row, index)}
+                  key={`${row.id ?? index}`}
+                  onClick={onRowClick ? () => onRowClick(row, index) : undefined}
+                  onKeyDown={
+                    onRowClick
+                      ? (event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onRowClick(row, index);
+                          }
+                        }
+                      : undefined
+                  }
+                  role={onRowClick ? "button" : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                >
                   {columns.map((column) => (
                     <td className={column.className} key={column.key}>
                       {column.render ? column.render(row) : (row[column.key] as ReactNode)}

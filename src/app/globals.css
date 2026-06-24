@@ -562,6 +562,10 @@ a {
   height: 84px;
 }
 
+.ims-data-table tr.cursor-pointer > td {
+  cursor: pointer;
+}
+
 @media print {
   @page {
     margin: 10mm;

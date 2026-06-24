@@ -189,6 +189,27 @@ function TagPrintLogContent() {
     window.print();
   }, []);
 
+  const selectLogForPrinting = useCallback((row: TagPrintLog) => {
+    const format = row.print_format?.toLowerCase() ?? "";
+    const normalizedFormat = format.includes("qr") && format.includes("barcode")
+      ? "COMBINED"
+      : format.includes("barcode")
+        ? "BARCODE"
+        : format.includes("qr")
+          ? "QR"
+          : "";
+
+    setForm({
+      asset_id: String(row.asset_id),
+      printable_tag_id: row.printable_tag_id,
+      print_format: normalizedFormat,
+      remarks: row.remarks ?? "",
+    });
+    setAssetFilterId(row.asset_id);
+    setMessage(`Selected ${row.asset?.asset_id ?? row.printable_tag_id} for printing.`);
+    setError("");
+  }, []);
+
   const saveLog = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -385,7 +406,10 @@ function TagPrintLogContent() {
                     <button
                       className="btn btn-sm btn-outline-danger"
                       type="button"
-                      onClick={() => void deleteLog(row.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void deleteLog(row.id);
+                      }}
                     >
                       <i className="bi bi-trash me-1" />
                       Delete
@@ -395,6 +419,8 @@ function TagPrintLogContent() {
               ]}
               rows={rows}
               empty="No print logs found."
+              rowClassName={() => "cursor-pointer"}
+              onRowClick={(row) => selectLogForPrinting(row)}
             />
           </div>
         </div>
