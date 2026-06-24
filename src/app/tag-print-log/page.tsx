@@ -320,10 +320,10 @@ function TagPrintLogContent() {
                     />
                   </div>
                   <div className="col-12">
-                    <div className="border rounded bg-light p-3">
+                    <div className="border rounded bg-light p-3 ims-tag-print-area">
                       <div className="small text-secondary mb-2">Tag Preview</div>
-                      <div className="d-flex align-items-center gap-3">
-                        <div className="border bg-white d-flex align-items-center justify-content-center" style={{ width: 84, height: 84 }}>
+                      <div className="d-flex align-items-center gap-3 ims-tag-print-label">
+                        <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-qr-box">
                           <i className="bi bi-qr-code fs-1 text-dark" />
                         </div>
                         <div className="min-w-0">
