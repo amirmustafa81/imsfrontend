@@ -51,6 +51,11 @@ const reportColumns = [
   { key: "funding_source_code", header: "Funding" },
 ];
 
+const reportEndpoints: Record<"stock_balance" | "low_stock", string> = {
+  stock_balance: "stock-balance",
+  low_stock: "low-stock",
+};
+
 const unwrapRows = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) {
     return payload as T[];
@@ -138,7 +143,7 @@ export default function StockPage() {
         params.project_id = filter.project_id;
       }
 
-      const response = await api.get<{ data: StockRow[] }>(`/reports/${reportType}`, {
+      const response = await api.get<{ data: StockRow[] }>(`/reports/${reportEndpoints[reportType]}`, {
         params,
       });
 
