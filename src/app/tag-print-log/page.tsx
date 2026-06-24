@@ -2,6 +2,7 @@
 
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import QRCode from "qrcode";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
@@ -55,13 +56,6 @@ const normalizePrintFormat = (format: string | null | undefined): NormalizedPrin
   return "QR";
 };
 
-const qrSvgMarkup = `
-  <svg width="64" height="64" viewBox="0 0 64 64" role="img" xmlns="http://www.w3.org/2000/svg">
-    <rect width="64" height="64" fill="#fff"/>
-    <path fill="#20242a" d="M6 6h18v18H6zM10 10v10h10V10H10zm30-4h18v18H40zM44 10v10h10V10H44zM6 40h18v18H6zM10 44v10h10V44H10zm24-34h4v8h-4zM30 22h8v4h-8zM26 30h8v4h-8zM38 30h4v8h-4zM46 28h12v4H46zM46 36h4v8h-4zM54 36h4v4h-4zM30 42h8v4h-8zM42 46h16v4H42zM30 52h4v6h-4zM38 54h8v4h-8zM50 54h8v4h-8zM26 10h4v4h-4zM26 18h4v4h-4zM10 30h10v4H10z"/>
-  </svg>
-`;
-
 const barcodeSvgMarkup = `
   <svg width="128" height="48" viewBox="0 0 128 48" role="img" xmlns="http://www.w3.org/2000/svg">
     <rect width="128" height="48" fill="#fff"/>
@@ -94,6 +88,7 @@ function TagPrintLogContent() {
     remarks: "",
   });
   const [message, setMessage] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState("");
 
   const prefillAssetId = useMemo(() => Number(searchParams.get("asset_id") ?? ""), [searchParams]);
   const prefillAssetCode = searchParams.get("asset_code") || "";
@@ -198,6 +193,37 @@ function TagPrintLogContent() {
     void loadRows();
   }, [loadRows]);
 
+  useEffect(() => {
+    const tagId = form.printable_tag_id.trim();
+
+    if (!tagId || selectedPrintFormat === "BARCODE") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQrDataUrl("");
+      return;
+    }
+
+    let isMounted = true;
+    QRCode.toDataURL(tagId, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      scale: 8,
+      color: {
+        dark: "#20242a",
+        light: "#ffffff",
+      },
+    })
+      .then((dataUrl) => {
+        if (isMounted) setQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (isMounted) setQrDataUrl("");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [form.printable_tag_id, selectedPrintFormat]);
+
   const setField = useCallback((field: keyof TagPrintForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
   }, []);
@@ -231,11 +257,14 @@ function TagPrintLogContent() {
 
     const assetCode = selectedAsset?.asset_id ?? "No asset selected";
     const serialNumber = selectedAsset?.serial_number || "No serial recorded";
+    const qrImageMarkup = qrDataUrl
+      ? `<img src="${escapeHtml(qrDataUrl)}" alt="QR code for ${escapeHtml(tagId)}" />`
+      : `<span class="unavailable">QR unavailable</span>`;
     const visualMarkup = selectedPrintFormat === "BARCODE"
       ? `<div class="barcode" aria-hidden="true">${barcodeSvgMarkup}</div>`
       : selectedPrintFormat === "COMBINED"
-        ? `<div class="combined" aria-hidden="true"><div class="qr">${qrSvgMarkup}</div><div class="barcode">${barcodeSvgMarkup}</div></div>`
-        : `<div class="qr" aria-hidden="true">${qrSvgMarkup}</div>`;
+        ? `<div class="combined"><div class="qr">${qrImageMarkup}</div><div class="barcode" aria-hidden="true">${barcodeSvgMarkup}</div></div>`
+        : `<div class="qr">${qrImageMarkup}</div>`;
     const frame = document.createElement("iframe");
     frame.setAttribute("title", "IMS tag print");
     frame.style.position = "fixed";
@@ -289,6 +318,16 @@ function TagPrintLogContent() {
               align-items: center;
               justify-content: center;
             }
+            .qr img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .unavailable {
+              color: #9a1f2b;
+              font-size: 7pt;
+              text-align: center;
+            }
             .barcode {
               width: 36mm;
               height: 18mm;
@@ -317,6 +356,10 @@ function TagPrintLogContent() {
               flex: 0 0 20mm;
             }
             .combined .qr svg {
+              width: 17mm;
+              height: 17mm;
+            }
+            .combined .qr img {
               width: 17mm;
               height: 17mm;
             }
@@ -367,7 +410,7 @@ function TagPrintLogContent() {
       frameWindow.print();
       window.setTimeout(() => frame.remove(), 1000);
     }, 100);
-  }, [form.printable_tag_id, selectedAsset, selectedPrintFormat]);
+  }, [form.printable_tag_id, qrDataUrl, selectedAsset, selectedPrintFormat]);
 
   const selectLogForPrinting = useCallback((row: TagPrintLog) => {
     const format = row.print_format?.toLowerCase() ?? "";
@@ -531,7 +574,12 @@ function TagPrintLogContent() {
                         ) : selectedPrintFormat === "COMBINED" ? (
                           <div className="d-flex flex-column align-items-center gap-2">
                             <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-qr-box ims-tag-qr-box-sm">
-                              <i className="bi bi-qr-code fs-2 text-dark" />
+                              {qrDataUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img className="ims-qr-preview-img" src={qrDataUrl} alt={`QR code for ${form.printable_tag_id}`} />
+                              ) : (
+                                <span className="small text-secondary text-center">QR</span>
+                              )}
                             </div>
                             <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-barcode-box ims-tag-barcode-box-sm">
                               <span className="ims-barcode-preview ims-barcode-preview-sm" aria-hidden="true" />
@@ -539,7 +587,12 @@ function TagPrintLogContent() {
                           </div>
                         ) : (
                           <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-qr-box">
-                            <i className="bi bi-qr-code fs-1 text-dark" />
+                            {qrDataUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img className="ims-qr-preview-img" src={qrDataUrl} alt={`QR code for ${form.printable_tag_id}`} />
+                            ) : (
+                              <span className="small text-secondary text-center">QR</span>
+                            )}
                           </div>
                         )}
                         <div className="min-w-0">
