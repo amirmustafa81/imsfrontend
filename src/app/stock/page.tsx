@@ -7,7 +7,10 @@ import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims"
 
 type Lookup = {
   id: number;
-  name: string;
+  name?: string;
+  title?: string;
+  code?: string;
+  project_code?: string;
 };
 
 type StockRow = {
@@ -47,6 +50,20 @@ const reportColumns = [
   { key: "project_code", header: "Project" },
   { key: "funding_source_code", header: "Funding" },
 ];
+
+const unwrapRows = <T,>(payload: unknown): T[] => {
+  if (Array.isArray(payload)) {
+    return payload as T[];
+  }
+
+  if (payload && typeof payload === "object" && "data" in payload && Array.isArray((payload as { data?: unknown }).data)) {
+    return (payload as { data: T[] }).data;
+  }
+
+  return [];
+};
+
+const lookupLabel = (lookup: Lookup): string => lookup.name ?? lookup.title ?? lookup.project_code ?? lookup.code ?? String(lookup.id);
 
 export default function StockPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -90,9 +107,9 @@ export default function StockPage() {
         api.get("/master-data/research-projects"),
       ]);
 
-      setDepartments(departmentsResponse.data);
-      setStores(storesResponse.data);
-      setProjects(projectsResponse.data);
+      setDepartments(unwrapRows<Lookup>(departmentsResponse.data));
+      setStores(unwrapRows<Lookup>(storesResponse.data));
+      setProjects(unwrapRows<Lookup>(projectsResponse.data));
     } catch {
       setError("Unable to load lookup data. Please check token and backend connectivity.");
     }
@@ -225,7 +242,7 @@ export default function StockPage() {
               <option value="">All</option>
               {departments.map((department) => (
                 <option key={department.id} value={department.id}>
-                  {department.name}
+                  {lookupLabel(department)}
                 </option>
               ))}
             </select>
@@ -241,7 +258,7 @@ export default function StockPage() {
               <option value="">All</option>
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
-                  {store.name}
+                  {lookupLabel(store)}
                 </option>
               ))}
             </select>
@@ -257,7 +274,7 @@ export default function StockPage() {
               <option value="">All</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
-                  {project.name}
+                  {lookupLabel(project)}
                 </option>
               ))}
             </select>
