@@ -22,8 +22,15 @@ type ItemRow = {
   category_id: number;
   subcategory_id: number | null;
   unit_id: number;
+  description: string | null;
+  brand: string | null;
+  model: string | null;
   minimum_stock_level: string | number | null;
+  is_capitalizable: boolean | number | string;
+  is_sensitive_controlled: boolean | number | string;
   requires_serial_tracking: boolean | number | string;
+  requires_batch_tracking: boolean | number | string;
+  requires_expiry_tracking: boolean | number | string;
   requires_qr_tag: boolean | number | string;
   status: "active" | "inactive" | string;
 };
@@ -136,6 +143,7 @@ export default function ItemsPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Load data to begin.");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ItemFormState>(createInitialForm);
 
@@ -225,6 +233,7 @@ export default function ItemsPage() {
   };
 
   const openCreateDialog = () => {
+    setEditingId(null);
     setForm(createInitialForm());
     setError("");
     setDialogOpen(true);
@@ -232,6 +241,7 @@ export default function ItemsPage() {
 
   const closeDialog = () => {
     setDialogOpen(false);
+    setEditingId(null);
     setSaving(false);
   };
 
@@ -264,6 +274,31 @@ export default function ItemsPage() {
     }));
   };
 
+  const startEditing = (row: ItemRow) => {
+    setEditingId(row.id);
+    setForm({
+      item_code: row.item_code ?? "",
+      name: row.name ?? "",
+      item_type: row.item_type,
+      category_id: row.category_id ? String(row.category_id) : "",
+      subcategory_id: row.subcategory_id ? String(row.subcategory_id) : "",
+      unit_id: row.unit_id ? String(row.unit_id) : "",
+      description: row.description ?? "",
+      brand: row.brand ?? "",
+      model: row.model ?? "",
+      minimum_stock_level: toNumericString(row.minimum_stock_level),
+      is_capitalizable: toBoolean(row.is_capitalizable),
+      is_sensitive_controlled: toBoolean(row.is_sensitive_controlled),
+      requires_serial_tracking: toBoolean(row.requires_serial_tracking),
+      requires_batch_tracking: toBoolean(row.requires_batch_tracking),
+      requires_expiry_tracking: toBoolean(row.requires_expiry_tracking),
+      status: row.status === "inactive" ? "inactive" : "active",
+    });
+    setError("");
+    setMessage("");
+    setDialogOpen(true);
+  };
+
   const saveItem = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -277,35 +312,38 @@ export default function ItemsPage() {
     setMessage("");
 
     try {
-      await api.post(
-        "/master-data/items",
-        {
-          item_code: form.item_code.trim(),
-          name: form.name.trim(),
-          item_type: form.item_type,
-          category_id: Number(form.category_id),
-          subcategory_id: form.subcategory_id ? Number(form.subcategory_id) : null,
-          unit_id: Number(form.unit_id),
-          description: form.description.trim() || null,
-          brand: form.brand.trim() || null,
-          model: form.model.trim() || null,
-          minimum_stock_level: Number(form.minimum_stock_level || 0),
-          is_capitalizable: form.is_capitalizable,
-          is_sensitive_controlled: form.is_sensitive_controlled,
-          requires_serial_tracking: form.requires_serial_tracking,
-          requires_batch_tracking: form.requires_batch_tracking,
-          requires_expiry_tracking: form.requires_expiry_tracking,
-          status: form.status,
-        },
-        authHeaders,
-      );
+      const payload = {
+        item_code: form.item_code.trim(),
+        name: form.name.trim(),
+        item_type: form.item_type,
+        category_id: Number(form.category_id),
+        subcategory_id: form.subcategory_id ? Number(form.subcategory_id) : null,
+        unit_id: Number(form.unit_id),
+        description: form.description.trim() || null,
+        brand: form.brand.trim() || null,
+        model: form.model.trim() || null,
+        minimum_stock_level: Number(form.minimum_stock_level || 0),
+        is_capitalizable: form.is_capitalizable,
+        is_sensitive_controlled: form.is_sensitive_controlled,
+        requires_serial_tracking: form.requires_serial_tracking,
+        requires_batch_tracking: form.requires_batch_tracking,
+        requires_expiry_tracking: form.requires_expiry_tracking,
+        status: form.status,
+      };
+
+      if (editingId) {
+        await api.put(`/master-data/items/${editingId}`, payload, authHeaders);
+      } else {
+        await api.post("/master-data/items", payload, authHeaders);
+      }
 
       setDialogOpen(false);
+      setEditingId(null);
       setForm(createInitialForm());
-      setMessage("Item created successfully.");
+      setMessage(editingId ? "Item updated successfully." : "Item created successfully.");
       await loadRows();
     } catch {
-      setError("Unable to create item. Verify required fields, duplicate code, and backend connectivity.");
+      setError("Unable to save item. Verify required fields, duplicate code, and backend connectivity.");
     } finally {
       setSaving(false);
     }
@@ -370,6 +408,16 @@ export default function ItemsPage() {
       key: "status",
       header: "Status",
       render: (row: ItemRow) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      className: "text-end",
+      render: (row: ItemRow) => (
+        <button className="btn btn-sm btn-outline-primary" type="button" onClick={() => startEditing(row)}>
+          Edit
+        </button>
+      ),
     },
   ];
 
@@ -438,8 +486,8 @@ export default function ItemsPage() {
                 <form className="modal-content border-0 shadow-lg" onSubmit={saveItem}>
                   <div className="modal-header px-4 py-3">
                     <div>
-                      <h5 className="modal-title mb-1">Create Item</h5>
-                      <div className="small text-secondary">Add consumables, assets, controlled items, licenses, or project inventory.</div>
+                      <h5 className="modal-title mb-1">{editingId ? "Edit Item" : "Create Item"}</h5>
+                      <div className="small text-secondary">{editingId ? "Update the selected item master record." : "Add consumables, assets, controlled items, licenses, or project inventory."}</div>
                     </div>
                     <button className="btn-close" type="button" aria-label="Close" onClick={closeDialog} />
                   </div>
@@ -621,7 +669,7 @@ export default function ItemsPage() {
                     </button>
                     <button className="btn btn-primary" type="submit" disabled={saving || !authReady}>
                       <i className="bi bi-plus-circle me-1" />
-                      {saving ? "Saving..." : "Create Item"}
+                      {saving ? "Saving..." : editingId ? "Update Item" : "Create Item"}
                     </button>
                   </div>
                 </form>
