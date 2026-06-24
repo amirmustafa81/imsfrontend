@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AttributeFields, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
+import { FieldLabel } from "@/components/ims/FieldLabel";
 
 type LookupKey =
   | "departments"
@@ -90,6 +91,29 @@ const createInitialForm = (defaults?: AssetCreateDefaults): AssetFormState => ({
 const labelFor = (row: LookupRow) => String(row.code ?? row.item_code ?? row.project_code ?? row.id) + (row.name || row.title ? ` - ${row.name ?? row.title}` : "");
 const isParentCategory = (row: LookupRow) => !row.parent_category_id;
 const isChildOfCategory = (row: LookupRow, parentId: number | string | null | undefined) => String(row.parent_category_id ?? "") === String(parentId ?? "");
+
+const assetFieldInfo = {
+  item: "Select the item master record this asset belongs to. The item controls category defaults and specifications.",
+  category: "Main asset category used for asset ID coding, reporting, and depreciation policy.",
+  subcategory: "More specific classification under the category, such as laptop, printer, server, or lab equipment.",
+  department: "Owning department responsible for this asset and department-level visibility.",
+  building: "Physical building where the asset is located for verification and movement tracking.",
+  room: "Room or location inside the selected building.",
+  store: "Store or stock location currently holding the asset, if it is not issued to a custodian.",
+  project: "Research or cost-center project linked to the asset, when applicable.",
+  funding: "Budget or funding source used for reporting and financial traceability.",
+  serial: "Manufacturer serial number used to identify the physical equipment.",
+  model: "Model, version, or specification printed on the device or purchase record.",
+  custodian: "Employee or custodian reference used in the location/responsibility part of the asset tag.",
+  cost: "Acquisition cost used for capitalization and depreciation calculations.",
+  capitalizationDate: "Date from which the asset is capitalized and depreciation starts, when applicable.",
+  usefulLife: "Approved useful life in years used by straight-line depreciation.",
+  salvage: "Estimated residual value deducted during depreciation calculation.",
+  oldTag: "Previous manual tag or legacy reference, if the asset existed before this system.",
+  status: "Current operational state such as in store, issued, in use, repair, missing, damaged, or obsolete.",
+  condition: "Physical condition observed for maintenance, verification, and reporting.",
+  sensitive: "Enable for controlled or sensitive assets that require stricter tracking regardless of cost.",
+};
 
 export function AssetCreateDialog({
   open,
@@ -303,7 +327,7 @@ export function AssetCreateDialog({
 
               <div className="row g-3">
                 <div className="col-12 col-md-6">
-                  <label className="form-label small">Item *</label>
+                  <FieldLabel required info={assetFieldInfo.item}>Item</FieldLabel>
                   <select className="form-select form-select-sm" value={form.item_id} onChange={(event) => selectItem(event.target.value)} required>
                     <option value="">Choose item</option>
                     {itemOptions.map((item) => (
@@ -314,7 +338,7 @@ export function AssetCreateDialog({
                   </select>
                 </div>
                 <div className="col-12 col-md-3">
-                  <label className="form-label small">Category Code *</label>
+                  <FieldLabel required info={assetFieldInfo.category}>Category Code</FieldLabel>
                   <select className="form-select form-select-sm" value={form.category_code} onChange={(event) => selectCategory(event.target.value)} required>
                     <option value="">Choose category</option>
                     {parentCategories.map((category) => (
@@ -325,7 +349,7 @@ export function AssetCreateDialog({
                   </select>
                 </div>
                 <div className="col-12 col-md-3">
-                  <label className="form-label small">Subcategory</label>
+                  <FieldLabel info={assetFieldInfo.subcategory}>Subcategory</FieldLabel>
                   <select
                     className="form-select form-select-sm"
                     value={form.subcategory_code}
@@ -348,7 +372,7 @@ export function AssetCreateDialog({
                 </div>
 
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Department *</label>
+                  <FieldLabel required info={assetFieldInfo.department}>Department</FieldLabel>
                   <select className="form-select form-select-sm" value={form.department_id} onChange={(event) => selectDepartment(event.target.value)} required>
                     <option value="">Choose department</option>
                     {lookups.departments.map((department) => (
@@ -359,7 +383,7 @@ export function AssetCreateDialog({
                   </select>
                 </div>
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Building</label>
+                  <FieldLabel info={assetFieldInfo.building}>Building</FieldLabel>
                   <select className="form-select form-select-sm" value={form.building_id} onChange={(event) => selectBuilding(event.target.value)}>
                     <option value="">Choose building</option>
                     {lookups.buildings.map((building) => (
@@ -370,7 +394,7 @@ export function AssetCreateDialog({
                   </select>
                 </div>
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Room</label>
+                  <FieldLabel info={assetFieldInfo.room}>Room</FieldLabel>
                   <select className="form-select form-select-sm" value={form.room_id} onChange={(event) => selectRoom(event.target.value)}>
                     <option value="">Choose room</option>
                     {lookups.rooms.map((room) => (
@@ -382,7 +406,7 @@ export function AssetCreateDialog({
                 </div>
 
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Store</label>
+                  <FieldLabel info={assetFieldInfo.store}>Store</FieldLabel>
                   <select className="form-select form-select-sm" value={form.store_id} onChange={(event) => setFormField("store_id", event.target.value)}>
                     <option value="">Choose store</option>
                     {lookups.stores.map((store) => (
@@ -393,7 +417,7 @@ export function AssetCreateDialog({
                   </select>
                 </div>
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Project</label>
+                  <FieldLabel info={assetFieldInfo.project}>Project</FieldLabel>
                   <select className="form-select form-select-sm" value={form.project_id} onChange={(event) => setFormField("project_id", event.target.value)}>
                     <option value="">No project</option>
                     {lookups["research-projects"].map((project) => (
@@ -404,7 +428,7 @@ export function AssetCreateDialog({
                   </select>
                 </div>
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Funding Source</label>
+                  <FieldLabel info={assetFieldInfo.funding}>Funding Source</FieldLabel>
                   <select className="form-select form-select-sm" value={form.funding_source_id} onChange={(event) => setFormField("funding_source_id", event.target.value)}>
                     <option value="">Choose funding</option>
                     {lookups["funding-sources"].map((source) => (
@@ -416,15 +440,15 @@ export function AssetCreateDialog({
                 </div>
 
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Serial Number</label>
+                  <FieldLabel info={assetFieldInfo.serial}>Serial Number</FieldLabel>
                   <input className="form-control form-control-sm" value={form.serial_number} onChange={(event) => setFormField("serial_number", event.target.value)} placeholder="Manufacturer serial" />
                 </div>
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Model</label>
+                  <FieldLabel info={assetFieldInfo.model}>Model</FieldLabel>
                   <input className="form-control form-control-sm" value={form.model} onChange={(event) => setFormField("model", event.target.value)} placeholder="Model / version" />
                 </div>
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Employee / Custodian Code</label>
+                  <FieldLabel info={assetFieldInfo.custodian}>Employee / Custodian Code</FieldLabel>
                   <input className="form-control form-control-sm" value={form.employee_code} onChange={(event) => setFormField("employee_code", event.target.value)} placeholder="Employee ID if applicable" />
                 </div>
                 <AttributeFields
@@ -441,28 +465,28 @@ export function AssetCreateDialog({
                 />
 
                 <div className="col-12 col-md-3">
-                  <label className="form-label small">Purchase Cost</label>
+                  <FieldLabel info={assetFieldInfo.cost}>Purchase Cost</FieldLabel>
                   <input className="form-control form-control-sm" min="0" step="0.01" type="number" value={form.purchase_cost} onChange={(event) => setFormField("purchase_cost", event.target.value)} />
                 </div>
                 <div className="col-12 col-md-3">
-                  <label className="form-label small">Capitalization Date</label>
+                  <FieldLabel info={assetFieldInfo.capitalizationDate}>Capitalization Date</FieldLabel>
                   <input className="form-control form-control-sm" type="date" value={form.capitalization_date} onChange={(event) => setFormField("capitalization_date", event.target.value)} />
                 </div>
                 <div className="col-12 col-md-3">
-                  <label className="form-label small">Useful Life</label>
+                  <FieldLabel info={assetFieldInfo.usefulLife}>Useful Life</FieldLabel>
                   <input className="form-control form-control-sm" min="0" step="0.1" type="number" value={form.useful_life_years} onChange={(event) => setFormField("useful_life_years", event.target.value)} placeholder="Years" />
                 </div>
                 <div className="col-12 col-md-3">
-                  <label className="form-label small">Salvage Value</label>
+                  <FieldLabel info={assetFieldInfo.salvage}>Salvage Value</FieldLabel>
                   <input className="form-control form-control-sm" min="0" step="0.01" type="number" value={form.salvage_value} onChange={(event) => setFormField("salvage_value", event.target.value)} />
                 </div>
 
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Old Tag Reference</label>
+                  <FieldLabel info={assetFieldInfo.oldTag}>Old Tag Reference</FieldLabel>
                   <input className="form-control form-control-sm" value={form.old_tag_reference} onChange={(event) => setFormField("old_tag_reference", event.target.value)} placeholder="Old/manual tag if any" />
                 </div>
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Status</label>
+                  <FieldLabel info={assetFieldInfo.status}>Status</FieldLabel>
                   <select className="form-select form-select-sm" value={form.status} onChange={(event) => setFormField("status", event.target.value as AssetFormState["status"])}>
                     <option value="in_store">In Store</option>
                     <option value="issued">Issued</option>
@@ -474,7 +498,7 @@ export function AssetCreateDialog({
                   </select>
                 </div>
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Condition</label>
+                  <FieldLabel info={assetFieldInfo.condition}>Condition</FieldLabel>
                   <select className="form-select form-select-sm" value={form.condition_status} onChange={(event) => setFormField("condition_status", event.target.value as AssetFormState["condition_status"])}>
                     <option value="new">New</option>
                     <option value="good">Good</option>
@@ -485,10 +509,10 @@ export function AssetCreateDialog({
                 </div>
 
                 <div className="col-12">
-                  <label className="form-check">
-                    <input className="form-check-input" type="checkbox" checked={form.is_sensitive_controlled} onChange={(event) => setFormField("is_sensitive_controlled", event.target.checked)} />
-                    <span className="form-check-label">Sensitive / Controlled item</span>
-                  </label>
+                  <div className="form-check">
+                    <input id="asset-sensitive-controlled" className="form-check-input" type="checkbox" checked={form.is_sensitive_controlled} onChange={(event) => setFormField("is_sensitive_controlled", event.target.checked)} />
+                    <FieldLabel check htmlFor="asset-sensitive-controlled" info={assetFieldInfo.sensitive}>Sensitive / Controlled item</FieldLabel>
+                  </div>
                 </div>
               </div>
             </div>

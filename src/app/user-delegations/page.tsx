@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, EmptyState, FieldLabel, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type User = { id: number; name: string; email: string };
 type Department = { id: number; name: string };
@@ -48,6 +48,19 @@ const emptyForm: FormState = {
   authorization_ref: "",
   status: "",
   remarks: "",
+};
+
+const delegationFieldInfo = {
+  delegator: "User who is temporarily handing over authority, such as an HOD or responsible officer.",
+  delegatedTo: "User who will act on behalf of the delegator during the approved period.",
+  department: "Department where this temporary delegation applies.",
+  authorityType: "Type of authority being delegated, for example inventory acknowledgement, issue approval, or verification sign-off.",
+  amountLimit: "Maximum value covered by this delegation, if the written authorization defines a limit.",
+  startDate: "First date on which the delegated authority becomes active.",
+  endDate: "Last date on which the delegated authority remains valid.",
+  reference: "Written approval/reference number that authorizes this delegation.",
+  status: "Active delegations can be used; expired or cancelled records remain for audit history.",
+  remarks: "Optional notes about scope, limits, or special conditions.",
 };
 
 export default function UserDelegationsPage() {
@@ -203,7 +216,7 @@ export default function UserDelegationsPage() {
               <div className="card-body">
                 <form className="row g-3" onSubmit={save}>
                   <div className="col-12">
-                    <label className="form-label small">Delegator</label>
+                    <FieldLabel info={delegationFieldInfo.delegator}>Delegator</FieldLabel>
                     <select className="form-select form-select-sm" value={form.delegator_user_id} onChange={(event) => setForm((current) => ({ ...current, delegator_user_id: event.target.value }))}>
                       <option value="">Select user</option>
                       {users.map((user) => (
@@ -214,7 +227,7 @@ export default function UserDelegationsPage() {
                     </select>
                   </div>
                   <div className="col-12">
-                    <label className="form-label small">Delegated To</label>
+                    <FieldLabel info={delegationFieldInfo.delegatedTo}>Delegated To</FieldLabel>
                     <select className="form-select form-select-sm" value={form.delegated_to_user_id} onChange={(event) => setForm((current) => ({ ...current, delegated_to_user_id: event.target.value }))}>
                       <option value="">Select user</option>
                       {users.map((user) => (
@@ -225,7 +238,7 @@ export default function UserDelegationsPage() {
                     </select>
                   </div>
                   <div className="col-12">
-                    <label className="form-label small">Department</label>
+                    <FieldLabel info={delegationFieldInfo.department}>Department</FieldLabel>
                     <select className="form-select form-select-sm" value={form.department_id} onChange={(event) => setForm((current) => ({ ...current, department_id: event.target.value }))}>
                       <option value="">Select department</option>
                       {departments.map((department) => (
@@ -236,27 +249,27 @@ export default function UserDelegationsPage() {
                     </select>
                   </div>
                   <div className="col-12">
-                    <label className="form-label small">Authority Type</label>
+                    <FieldLabel info={delegationFieldInfo.authorityType}>Authority Type</FieldLabel>
                     <input className="form-control form-control-sm" value={form.authority_type} onChange={(event) => setForm((current) => ({ ...current, authority_type: event.target.value }))} />
                   </div>
                   <div className="col-12">
-                    <label className="form-label small">Amount Limit</label>
+                    <FieldLabel info={delegationFieldInfo.amountLimit}>Amount Limit</FieldLabel>
                     <input className="form-control form-control-sm" type="number" value={form.limit_amount} onChange={(event) => setForm((current) => ({ ...current, limit_amount: event.target.value }))} />
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label small">Start Date</label>
+                    <FieldLabel info={delegationFieldInfo.startDate}>Start Date</FieldLabel>
                     <input className="form-control form-control-sm" type="date" value={form.start_date} onChange={(event) => setForm((current) => ({ ...current, start_date: event.target.value }))} />
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label small">End Date</label>
+                    <FieldLabel info={delegationFieldInfo.endDate}>End Date</FieldLabel>
                     <input className="form-control form-control-sm" type="date" value={form.end_date} onChange={(event) => setForm((current) => ({ ...current, end_date: event.target.value }))} />
                   </div>
                   <div className="col-12">
-                    <label className="form-label small">Reference</label>
+                    <FieldLabel info={delegationFieldInfo.reference}>Reference</FieldLabel>
                     <input className="form-control form-control-sm" value={form.authorization_ref} onChange={(event) => setForm((current) => ({ ...current, authorization_ref: event.target.value }))} />
                   </div>
                   <div className="col-12">
-                    <label className="form-label small">Status</label>
+                    <FieldLabel info={delegationFieldInfo.status}>Status</FieldLabel>
                     <select className="form-select form-select-sm" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as FormState["status"] }))}>
                       <option value="">Default active</option>
                       <option value="active">Active</option>
@@ -265,7 +278,7 @@ export default function UserDelegationsPage() {
                     </select>
                   </div>
                   <div className="col-12">
-                    <label className="form-label small">Remarks</label>
+                    <FieldLabel info={delegationFieldInfo.remarks}>Remarks</FieldLabel>
                     <textarea className="form-control form-control-sm" rows={2} value={form.remarks} onChange={(event) => setForm((current) => ({ ...current, remarks: event.target.value }))} />
                   </div>
                   <div className="col-12">

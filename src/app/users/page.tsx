@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, EmptyState, FieldLabel, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type Permission = { id: number; name: string };
 type Role = {
@@ -61,6 +61,19 @@ const emptyForm: UserForm = {
   access_scope: "department",
   status: "active",
   role_ids: [],
+};
+
+const userFieldInfo = {
+  name: "Full display name shown in audit logs, approvals, and user lists.",
+  email: "Login email address for the IMS account.",
+  password: "Set a temporary password for new users, or leave blank while editing to keep the current password.",
+  designation: "Official role/title of the employee, such as HOD, Store Officer, or Lab In-charge.",
+  employeeCode: "Employee code used for ERP matching and custodian references.",
+  phone: "Contact number for user records and future notification support.",
+  department: "Primary department used for department-scoped access and inventory visibility.",
+  accessScope: "Department scope limits visibility to the assigned department; university-wide scope allows cross-department access where permitted.",
+  status: "Inactive or suspended users cannot operate normally but remain in history for audit traceability.",
+  roles: "Roles define the permissions this user receives, such as admin, store officer, HOD, or auditor.",
 };
 
 export default function UsersPage() {
@@ -410,31 +423,31 @@ export default function UsersPage() {
                 <div className="modal-body px-4 py-4">
                   <div className="row g-4">
                     <div className="col-12 col-md-6">
-                      <label className="form-label small" htmlFor="user-name">Name</label>
+                      <FieldLabel htmlFor="user-name" info={userFieldInfo.name}>Name</FieldLabel>
                       <input id="user-name" className="form-control" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label small" htmlFor="user-email">Email</label>
+                      <FieldLabel htmlFor="user-email" info={userFieldInfo.email}>Email</FieldLabel>
                       <input id="user-email" className="form-control" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label small" htmlFor="user-password">{editingUserId === null ? "Password" : "Reset Password"}</label>
+                      <FieldLabel htmlFor="user-password" info={userFieldInfo.password}>{editingUserId === null ? "Password" : "Reset Password"}</FieldLabel>
                       <input id="user-password" className="form-control" type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder={editingUserId === null ? "Minimum 8 characters" : "Leave blank to keep current password"} />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label small" htmlFor="user-designation">Designation</label>
+                      <FieldLabel htmlFor="user-designation" info={userFieldInfo.designation}>Designation</FieldLabel>
                       <input id="user-designation" className="form-control" value={form.designation} onChange={(event) => setForm((current) => ({ ...current, designation: event.target.value }))} />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label small" htmlFor="user-employee-code">Employee Code</label>
+                      <FieldLabel htmlFor="user-employee-code" info={userFieldInfo.employeeCode}>Employee Code</FieldLabel>
                       <input id="user-employee-code" className="form-control" value={form.employee_code} onChange={(event) => setForm((current) => ({ ...current, employee_code: event.target.value }))} />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label small" htmlFor="user-phone">Phone</label>
+                      <FieldLabel htmlFor="user-phone" info={userFieldInfo.phone}>Phone</FieldLabel>
                       <input id="user-phone" className="form-control" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
                     </div>
                     <div className="col-12 col-md-4">
-                      <label className="form-label small" htmlFor="user-department">Department</label>
+                      <FieldLabel htmlFor="user-department" info={userFieldInfo.department}>Department</FieldLabel>
                       <select id="user-department" className="form-select" value={form.department_id} onChange={(event) => setForm((current) => ({ ...current, department_id: event.target.value }))}>
                         <option value="">Select department</option>
                         {departments.map((department) => (
@@ -445,14 +458,14 @@ export default function UsersPage() {
                       </select>
                     </div>
                     <div className="col-12 col-md-4">
-                      <label className="form-label small" htmlFor="user-access-scope">Access Scope</label>
+                      <FieldLabel htmlFor="user-access-scope" info={userFieldInfo.accessScope}>Access Scope</FieldLabel>
                       <select id="user-access-scope" className="form-select" value={form.access_scope} onChange={(event) => setForm((current) => ({ ...current, access_scope: event.target.value as UserForm["access_scope"] }))}>
                         <option value="department">Department</option>
                         <option value="university">University-wide</option>
                       </select>
                     </div>
                     <div className="col-12 col-md-4">
-                      <label className="form-label small" htmlFor="user-status">Status</label>
+                      <FieldLabel htmlFor="user-status" info={userFieldInfo.status}>Status</FieldLabel>
                       <select id="user-status" className="form-select" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as UserForm["status"] }))}>
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
@@ -460,7 +473,7 @@ export default function UsersPage() {
                       </select>
                     </div>
                     <div className="col-12 col-lg-8">
-                      <label className="form-label small">Roles</label>
+                      <FieldLabel info={userFieldInfo.roles}>Roles</FieldLabel>
                       {roles.length === 0 ? (
                         <div className="border rounded px-3 py-2 text-secondary">No roles available.</div>
                       ) : (

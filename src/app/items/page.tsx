@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AttributeFields, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
-import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, FieldLabel, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type ItemType =
   | "consumable"
@@ -151,36 +150,6 @@ const infoText = {
   expiry: "Enable when expiry date tracking is required for this item.",
   status: "Inactive items remain in history but are normally not selected for new transactions.",
 };
-
-const FieldLabel = ({
-  children,
-  required = false,
-  info,
-  htmlFor,
-  check = false,
-}: {
-  children: ReactNode;
-  required?: boolean;
-  info?: string;
-  htmlFor?: string;
-  check?: boolean;
-}) => (
-  <label htmlFor={htmlFor} className={`${check ? "form-check-label" : "form-label"} small d-inline-flex align-items-center gap-1`}>
-    <span>
-      {children} {required ? <span className="text-danger">*</span> : null}
-    </span>
-    {info ? (
-      <span className="ims-info-hint">
-        <button className="ims-info-button" type="button" aria-label={`${children} help`}>
-          i
-        </button>
-        <span className="ims-info-tooltip" role="tooltip">
-          {info}
-        </span>
-      </span>
-    ) : null}
-  </label>
-);
 
 export default function ItemsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -747,64 +716,6 @@ export default function ItemsPage() {
           </>
         ) : null}
       </div>
-      <style jsx global>{`
-        .ims-info-hint {
-          display: inline-flex;
-          position: relative;
-          align-items: center;
-        }
-
-        .ims-info-button {
-          width: 1rem;
-          height: 1rem;
-          border: 1px solid #94a3b8;
-          border-radius: 999px;
-          background: #ffffff;
-          color: #64748b;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0;
-          font-size: 0.68rem;
-          font-weight: 700;
-          line-height: 1;
-        }
-
-        .ims-info-button:hover,
-        .ims-info-button:focus {
-          border-color: #2563eb;
-          color: #2563eb;
-          outline: none;
-          box-shadow: 0 0 0 0.15rem rgba(37, 99, 235, 0.18);
-        }
-
-        .ims-info-tooltip {
-          position: absolute;
-          left: 50%;
-          bottom: calc(100% + 0.55rem);
-          z-index: 1100;
-          width: max-content;
-          max-width: 20rem;
-          transform: translateX(-50%) translateY(0.2rem);
-          border-radius: 0.35rem;
-          background: #111827;
-          color: #ffffff;
-          padding: 0.55rem 0.7rem;
-          font-size: 0.78rem;
-          font-weight: 600;
-          line-height: 1.35;
-          opacity: 0;
-          pointer-events: none;
-          transition: opacity 0.15s ease, transform 0.15s ease;
-          box-shadow: 0 0.75rem 1.75rem rgba(15, 23, 42, 0.22);
-        }
-
-        .ims-info-hint:hover .ims-info-tooltip,
-        .ims-info-button:focus + .ims-info-tooltip {
-          opacity: 1;
-          transform: translateX(-50%) translateY(0);
-        }
-      `}</style>
     </main>
   );
 }

@@ -1,6 +1,9 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
+import { FieldLabel } from "./FieldLabel";
+
+export { FieldLabel };
 
 export function PageHeader({
   title,
@@ -312,7 +315,7 @@ export function ApprovalReferenceFields({
 
       <div className="row g-2">
         <div className="col-md-4">
-          <label className="form-label small">Approval Reference No.</label>
+          <FieldLabel info="Manual approval number from the written file, office order, or authority note.">Approval Reference No.</FieldLabel>
           <input
             className="form-control form-control-sm"
             value={value.ref}
@@ -321,7 +324,7 @@ export function ApprovalReferenceFields({
           />
         </div>
         <div className="col-md-4">
-          <label className="form-label small">Approving Authority</label>
+          <FieldLabel info="Officer or competent authority who approved the manual action outside the system.">Approving Authority</FieldLabel>
           <input
             className="form-control form-control-sm"
             value={value.authority}
@@ -330,7 +333,7 @@ export function ApprovalReferenceFields({
           />
         </div>
         <div className="col-md-4">
-          <label className="form-label small">Approval Date</label>
+          <FieldLabel info="Date of the written/manual approval used for audit traceability.">Approval Date</FieldLabel>
           <input
             className="form-control form-control-sm"
             type="date"
@@ -339,7 +342,7 @@ export function ApprovalReferenceFields({
           />
         </div>
         <div className="col-12">
-          <label className="form-label small">Remarks</label>
+          <FieldLabel info="Optional notes explaining the approval context or special conditions.">Remarks</FieldLabel>
           <textarea
             className="form-control form-control-sm"
             rows={2}

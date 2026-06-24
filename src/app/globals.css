@@ -608,6 +608,63 @@ a {
   cursor: pointer;
 }
 
+.ims-info-hint {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+}
+
+.ims-info-button {
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid #94a3b8;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ims-info-button:hover,
+.ims-info-button:focus {
+  border-color: #2563eb;
+  color: #2563eb;
+  outline: none;
+  box-shadow: 0 0 0 0.15rem rgba(37, 99, 235, 0.18);
+}
+
+.ims-info-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.55rem);
+  z-index: 1100;
+  width: max-content;
+  max-width: min(20rem, 80vw);
+  transform: translateX(-50%) translateY(0.2rem);
+  border-radius: 0.35rem;
+  background: #111827;
+  color: #ffffff;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 0.75rem 1.75rem rgba(15, 23, 42, 0.22);
+}
+
+.ims-info-hint:hover .ims-info-tooltip,
+.ims-info-button:focus + .ims-info-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 @media (max-width: 992px) {
   .ims-sidebar {
     width: 60px;

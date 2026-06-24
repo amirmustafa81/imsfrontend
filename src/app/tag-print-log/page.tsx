@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import QRCode from "qrcode";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, FieldLabel, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type AssetOption = {
   id: number;
@@ -43,6 +43,13 @@ const printFormatOptions = [
   { value: "BARCODE", label: "Barcode" },
   { value: "COMBINED", label: "QR + Barcode" },
 ];
+
+const tagPrintFieldInfo = {
+  asset: "Choose the asset whose physical barcode or QR tag is being generated.",
+  printableTag: "Final tag text encoded in the printed QR/barcode and shown on the physical label.",
+  printFormat: "Controls whether the label prints QR only, barcode only, or both.",
+  remarks: "Optional note explaining why the tag was printed or reprinted.",
+};
 
 type NormalizedPrintFormat = "QR" | "BARCODE" | "COMBINED";
 
@@ -513,7 +520,7 @@ function TagPrintLogContent() {
               <div className="card-body">
                 <form className="row g-3" onSubmit={saveLog}>
                   <div className="col-12">
-                    <label className="form-label small mb-1">Asset</label>
+                    <FieldLabel className="mb-1" info={tagPrintFieldInfo.asset}>Asset</FieldLabel>
                     <select
                       className="form-select form-select-sm"
                       value={form.asset_id}
@@ -529,7 +536,7 @@ function TagPrintLogContent() {
                     </select>
                   </div>
                   <div className="col-12">
-                    <label className="form-label small mb-1">Printable Tag ID</label>
+                    <FieldLabel className="mb-1" info={tagPrintFieldInfo.printableTag}>Printable Tag ID</FieldLabel>
                     <div className="input-group input-group-sm">
                       <input
                         className="form-control"
@@ -548,7 +555,7 @@ function TagPrintLogContent() {
                     </div>
                   </div>
                   <div className="col-12">
-                    <label className="form-label small mb-1">Print Format</label>
+                    <FieldLabel className="mb-1" info={tagPrintFieldInfo.printFormat}>Print Format</FieldLabel>
                     <select
                       className="form-select form-select-sm"
                       value={form.print_format}
@@ -562,7 +569,7 @@ function TagPrintLogContent() {
                     </select>
                   </div>
                   <div className="col-12">
-                    <label className="form-label small mb-1">Remarks</label>
+                    <FieldLabel className="mb-1" info={tagPrintFieldInfo.remarks}>Remarks</FieldLabel>
                     <textarea
                       className="form-control form-control-sm"
                       rows={3}

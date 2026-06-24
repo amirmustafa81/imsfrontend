@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, EmptyState, FieldLabel, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type Permission = {
   id: number;
@@ -43,6 +43,12 @@ const emptyForm: RoleForm = {
   name: "",
   description: "",
   permission_ids: [],
+};
+
+const roleFieldInfo = {
+  name: "Short role name shown while assigning access to users.",
+  description: "Plain-language purpose of the role so administrators know when to use it.",
+  permissions: "Permissions control the exact modules and actions allowed for users assigned to this role.",
 };
 
 export default function RolesPage() {
@@ -391,9 +397,7 @@ export default function RolesPage() {
                 <div className="modal-body px-4 py-4">
                   <div className="row g-4">
                     <div className="col-12 col-md-7">
-                      <label className="form-label small" htmlFor="role-name">
-                        Role Name
-                      </label>
+                      <FieldLabel htmlFor="role-name" info={roleFieldInfo.name}>Role Name</FieldLabel>
                       <input
                         id="role-name"
                         className="form-control form-control-sm"
@@ -412,9 +416,7 @@ export default function RolesPage() {
                     </div>
 
                     <div className="col-12">
-                      <label className="form-label small" htmlFor="role-description">
-                        Description
-                      </label>
+                      <FieldLabel htmlFor="role-description" info={roleFieldInfo.description}>Description</FieldLabel>
                       <textarea
                         id="role-description"
                         className="form-control form-control-sm"
@@ -426,7 +428,7 @@ export default function RolesPage() {
 
                     <div className="col-12 col-lg-8">
                       <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
-                        <label className="form-label small mb-0">Permissions</label>
+                        <FieldLabel className="mb-0" info={roleFieldInfo.permissions}>Permissions</FieldLabel>
                         <span className="badge text-bg-light border">{form.permission_ids.length} selected</span>
                       </div>
 
