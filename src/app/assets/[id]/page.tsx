@@ -400,14 +400,15 @@ export default function AssetDetailPage() {
                           <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-qr-box">
                             {qrDataUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img className="ims-qr-preview-img" src={qrDataUrl} alt={`QR code for ${assetDetailUrl || generatedTagId}`} />
+                              <img className="ims-qr-preview-img" src={qrDataUrl} alt={`QR code for ${generatedTagId}`} />
                             ) : (
-                              <span className="small text-secondary">QR</span>
+                              <span className="small text-secondary text-center">QR</span>
                             )}
                           </div>
                           <div className="min-w-0">
-                            <div className="fw-medium text-break">{generatedTagId}</div>
-                            <small className="text-secondary text-break">{assetDetailUrl || asset.barcode_value || `BC-${asset.asset_id}`}</small>
+                            <div className="fw-semibold text-truncate">{generatedTagId}</div>
+                            <div className="small text-secondary text-truncate">{asset.asset_id}</div>
+                            <div className="small text-secondary text-truncate">{asset.serial_number || "No serial recorded"}</div>
                           </div>
                         </div>
                       </div>
