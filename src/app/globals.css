@@ -566,63 +566,6 @@ a {
   cursor: pointer;
 }
 
-@media print {
-  @page {
-    margin: 10mm;
-    size: 80mm 50mm;
-  }
-
-  body {
-    background: #fff !important;
-  }
-
-  body * {
-    visibility: hidden !important;
-  }
-
-  .ims-tag-print-area,
-  .ims-tag-print-area * {
-    visibility: visible !important;
-  }
-
-  .ims-tag-print-area {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 80mm !important;
-    min-height: 50mm !important;
-    padding: 7mm !important;
-    border: 1px solid #222 !important;
-    border-radius: 0 !important;
-    background: #fff !important;
-    box-shadow: none !important;
-  }
-
-  .ims-tag-print-area .text-secondary {
-    color: #222 !important;
-  }
-
-  .ims-tag-print-area > .small {
-    display: none !important;
-  }
-
-  .ims-tag-print-label {
-    gap: 5mm !important;
-    align-items: center !important;
-  }
-
-  .ims-tag-qr-box {
-    width: 24mm !important;
-    height: 24mm !important;
-    flex: 0 0 24mm !important;
-  }
-
-  .ims-tag-qr-box i {
-    font-size: 20mm !important;
-    line-height: 1 !important;
-  }
-}
-
 @media (max-width: 992px) {
   .ims-sidebar {
     width: 60px;

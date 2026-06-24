@@ -186,8 +186,121 @@ function TagPrintLogContent() {
 
   const printCurrentTag = useCallback(() => {
     if (typeof window === "undefined") return;
-    window.print();
-  }, []);
+
+    const tagId = form.printable_tag_id.trim();
+    if (!tagId) {
+      setError("Printable Tag ID is required before printing.");
+      return;
+    }
+
+    const escapeHtml = (value: string) =>
+      value.replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;",
+      })[character] ?? character);
+
+    const assetCode = selectedAsset?.asset_id ?? "No asset selected";
+    const serialNumber = selectedAsset?.serial_number || "No serial recorded";
+    const frame = document.createElement("iframe");
+    frame.setAttribute("title", "IMS tag print");
+    frame.style.position = "fixed";
+    frame.style.right = "0";
+    frame.style.bottom = "0";
+    frame.style.width = "0";
+    frame.style.height = "0";
+    frame.style.border = "0";
+    document.body.appendChild(frame);
+
+    const frameWindow = frame.contentWindow;
+    const frameDocument = frameWindow?.document;
+    if (!frameWindow || !frameDocument) {
+      frame.remove();
+      setError("Unable to prepare tag print preview.");
+      return;
+    }
+
+    frameDocument.open();
+    frameDocument.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>${escapeHtml(tagId)}</title>
+          <style>
+            @page { size: 80mm 50mm; margin: 0; }
+            * { box-sizing: border-box; }
+            html, body {
+              width: 80mm;
+              height: 50mm;
+              margin: 0;
+              background: #fff;
+              color: #20242a;
+              font-family: Arial, Helvetica, sans-serif;
+            }
+            .label {
+              width: 80mm;
+              height: 50mm;
+              padding: 7mm;
+              display: flex;
+              align-items: center;
+              gap: 5mm;
+              border: 1px solid #20242a;
+            }
+            .qr {
+              width: 24mm;
+              height: 24mm;
+              flex: 0 0 24mm;
+              border: 1px solid #dfe3ea;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .text {
+              min-width: 0;
+              flex: 1;
+              line-height: 1.25;
+            }
+            .tag {
+              font-size: 11pt;
+              font-weight: 700;
+              overflow-wrap: anywhere;
+            }
+            .meta {
+              margin-top: 2mm;
+              color: #4f5865;
+              font-size: 9pt;
+              overflow-wrap: anywhere;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="label">
+            <div class="qr" aria-hidden="true">
+              <svg width="64" height="64" viewBox="0 0 64 64" role="img" xmlns="http://www.w3.org/2000/svg">
+                <rect width="64" height="64" fill="#fff"/>
+                <path fill="#20242a" d="M6 6h18v18H6zM10 10v10h10V10H10zm30-4h18v18H40zM44 10v10h10V10H44zM6 40h18v18H6zM10 44v10h10V44H10zm24-34h4v8h-4zM30 22h8v4h-8zM26 30h8v4h-8zM38 30h4v8h-4zM46 28h12v4H46zM46 36h4v8h-4zM54 36h4v4h-4zM30 42h8v4h-8zM42 46h16v4H42zM30 52h4v6h-4zM38 54h8v4h-8zM50 54h8v4h-8zM26 10h4v4h-4zM26 18h4v4h-4zM10 30h10v4H10z"/>
+              </svg>
+            </div>
+            <div class="text">
+              <div class="tag">${escapeHtml(tagId)}</div>
+              <div class="meta">${escapeHtml(assetCode)}</div>
+              <div class="meta">${escapeHtml(serialNumber)}</div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    frameDocument.close();
+
+    frameWindow.onafterprint = () => frame.remove();
+    window.setTimeout(() => {
+      frameWindow.focus();
+      frameWindow.print();
+      window.setTimeout(() => frame.remove(), 1000);
+    }, 100);
+  }, [form.printable_tag_id, selectedAsset]);
 
   const selectLogForPrinting = useCallback((row: TagPrintLog) => {
     const format = row.print_format?.toLowerCase() ?? "";
