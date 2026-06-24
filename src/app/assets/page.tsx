@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { AttributeFields, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey =
@@ -18,7 +19,7 @@ type LookupKey =
 
 type RowData = {
   id: number;
-  [key: string]: string | number | null | undefined;
+  [key: string]: string | number | boolean | null | undefined;
 };
 
 type AssetRow = {
@@ -53,6 +54,8 @@ type AssetRow = {
   funding_source_id: number | null;
   funding_source_name: string | null;
   created_at: string;
+  attributes?: AttributeValues;
+  attribute_details?: Array<{ code: string; label: string; value: string | boolean }>;
 };
 
 type AssetFormState = {
@@ -80,6 +83,7 @@ type AssetFormState = {
   status: "in_store" | "issued" | "in_use" | "under_repair" | "missing_under_investigation" | "damaged" | "obsolete" | "disposed" | "written_off";
   condition_status: "new" | "good" | "needs_repair" | "damaged" | "obsolete";
   is_sensitive_controlled: boolean;
+  attributes: AttributeValues;
 };
 
 type FixedAssetStatus =
@@ -138,6 +142,7 @@ const createInitialAssetForm = (): AssetFormState => ({
   status: "in_store",
   condition_status: "new",
   is_sensitive_controlled: false,
+  attributes: {},
 });
 
 const toDateDisplay = (value: string | null | undefined): string => {
@@ -157,6 +162,7 @@ export default function AssetsPage() {
   const { isAuthenticated } = useAuth();
   const [rows, setRows] = useState<AssetRow[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>(initialLookups);
+  const [attributeDefinitions, setAttributeDefinitions] = useState<AttributeDefinition[]>([]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -252,6 +258,10 @@ export default function AssetsPage() {
       }),
     );
 
+    const attributeResponse = await api.get<{ data: AttributeDefinition[] }>("/master-data/asset-attribute-definitions");
+    const attributePayload = attributeResponse.data?.data;
+    setAttributeDefinitions(Array.isArray(attributePayload) ? attributePayload : []);
+
     setLookups(next);
   }, [authReady]);
 
@@ -341,6 +351,7 @@ export default function AssetsPage() {
       subcategory_code: "",
       useful_life_years: current.useful_life_years || (category?.useful_life_years ? String(category.useful_life_years) : ""),
       is_sensitive_controlled: Boolean(current.is_sensitive_controlled || category?.is_sensitive_controlled === 1 || category?.is_sensitive_controlled === "1"),
+      attributes: {},
     }));
   };
 
@@ -349,6 +360,30 @@ export default function AssetsPage() {
   const subcategoryOptions = selectedCategory
     ? lookups["asset-categories"].filter((row) => isChildOfCategory(row, selectedCategory.id))
     : [];
+  const selectedSubcategory = subcategoryOptions.find((row) => String(row.code ?? "") === form.subcategory_code);
+
+  const selectItem = (itemId: string) => {
+    const item = lookups.items.find((row) => String(row.id) === itemId);
+    const category = parentCategories.find((row) => String(row.id) === String(item?.category_id ?? ""));
+    const subcategory = lookups["asset-categories"].find((row) => String(row.id) === String(item?.subcategory_id ?? ""));
+
+    setForm((current) => ({
+      ...current,
+      item_id: itemId,
+      category_code: category ? String(category.code ?? "") : current.category_code,
+      subcategory_code: subcategory ? String(subcategory.code ?? "") : current.subcategory_code,
+      useful_life_years: current.useful_life_years || (category?.useful_life_years ? String(category.useful_life_years) : ""),
+      is_sensitive_controlled: Boolean(
+        current.is_sensitive_controlled ||
+        category?.is_sensitive_controlled === 1 ||
+        category?.is_sensitive_controlled === "1" ||
+        item?.is_sensitive_controlled === 1 ||
+        item?.is_sensitive_controlled === "1" ||
+        item?.is_sensitive_controlled === true,
+      ),
+      attributes: (item?.attributes as AttributeValues | undefined) ?? {},
+    }));
+  };
 
   const saveAsset = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -388,6 +423,7 @@ export default function AssetsPage() {
         status: form.status,
         condition_status: form.condition_status,
         is_sensitive_controlled: form.is_sensitive_controlled,
+        attributes: form.attributes,
       });
 
       setDialogOpen(false);
@@ -462,6 +498,20 @@ export default function AssetsPage() {
     { key: "condition_status", header: "Condition", render: (row: AssetRow) => <>{row.condition_status ?? "-"}</> },
     { key: "created_at", header: "Created", render: (row: AssetRow) => <small>{toDateDisplay(row.created_at)}</small> },
     { key: "model", header: "Model", render: (row: AssetRow) => <>{row.model ?? "-"}</> },
+    {
+      key: "attributes",
+      header: "Specs",
+      render: (row: AssetRow) => {
+        const specs = row.attribute_details ?? [];
+        if (specs.length === 0) return <>-</>;
+
+        return (
+          <small className="text-secondary">
+            {specs.slice(0, 2).map((spec) => `${spec.label}: ${String(spec.value)}`).join(" / ")}
+          </small>
+        );
+      },
+    },
     {
       key: "actions",
       header: "Tag Actions",
@@ -653,7 +703,7 @@ export default function AssetsPage() {
                     <div className="row g-3">
                       <div className="col-12 col-md-4">
                         <label className="form-label small">Item <span className="text-danger">*</span></label>
-                        <select className="form-select form-select-sm" value={form.item_id} onChange={(event) => setFormField("item_id", event.target.value)} required>
+                        <select className="form-select form-select-sm" value={form.item_id} onChange={(event) => selectItem(event.target.value)} required>
                           <option value="">Choose item</option>
                           {lookups.items.map((item) => (
                             <option key={item.id} value={item.id}>
@@ -773,6 +823,18 @@ export default function AssetsPage() {
                         <label className="form-label small">Old Tag Reference</label>
                         <input className="form-control form-control-sm" value={form.old_tag_reference} onChange={(event) => setFormField("old_tag_reference", event.target.value)} />
                       </div>
+                      <AttributeFields
+                        definitions={attributeDefinitions}
+                        categoryId={selectedCategory?.id}
+                        subcategoryId={selectedSubcategory?.id}
+                        appliesTo="asset"
+                        values={form.attributes}
+                        onChange={(code, value) => setForm((current) => ({
+                          ...current,
+                          attributes: { ...current.attributes, [code]: value },
+                        }))}
+                        title="Asset Specifications"
+                      />
                       <div className="col-12 col-md-4">
                         <label className="form-label small">Employee / Custodian Code</label>
                         <input className="form-control form-control-sm" value={form.employee_code} onChange={(event) => setFormField("employee_code", event.target.value)} />

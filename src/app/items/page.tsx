@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { AttributeFields, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type ItemType =
@@ -34,6 +35,7 @@ type ItemRow = {
   requires_expiry_tracking: boolean | number | string;
   requires_qr_tag: boolean | number | string;
   status: "active" | "inactive" | string;
+  attributes?: AttributeValues;
 };
 
 type Lookup = {
@@ -43,7 +45,11 @@ type Lookup = {
   parent_category_id?: number | string | null;
 };
 
-type LookupMap = Record<"asset-categories" | "units-of-measure", Lookup[]>;
+type LookupMap = {
+  "asset-categories": Lookup[];
+  "units-of-measure": Lookup[];
+  "asset-attribute-definitions": AttributeDefinition[];
+};
 
 type ItemFormState = {
   item_code: string;
@@ -61,6 +67,7 @@ type ItemFormState = {
   requires_serial_tracking: boolean;
   requires_batch_tracking: boolean;
   requires_expiry_tracking: boolean;
+  attributes: AttributeValues;
   status: "active" | "inactive";
 };
 
@@ -125,6 +132,7 @@ const createInitialForm = (): ItemFormState => ({
   requires_serial_tracking: false,
   requires_batch_tracking: false,
   requires_expiry_tracking: false,
+  attributes: {},
   status: "active",
 });
 
@@ -182,6 +190,7 @@ export default function ItemsPage() {
   const [lookups, setLookups] = useState<LookupMap>({
     "asset-categories": [],
     "units-of-measure": [],
+    "asset-attribute-definitions": [],
   });
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -200,24 +209,24 @@ export default function ItemsPage() {
     }
 
     try {
-      const keys: Array<[LookupMap extends Record<infer K, unknown> ? K & string : never, string]> = [
-        ["asset-categories", "asset-categories"],
-        ["units-of-measure", "units-of-measure"],
-      ];
-
       const next: LookupMap = {
         "asset-categories": [],
         "units-of-measure": [],
+        "asset-attribute-definitions": [],
       };
 
       await Promise.all(
-        keys.map(async ([key, path]) => {
-          const response = await api.get<{ data: Lookup[] }>(`/master-data/${path}`, authHeaders);
-          const payload = response.data?.data;
-          if (Array.isArray(payload)) {
-            next[key] = payload;
-          }
-        }),
+        [
+          api.get<{ data: Lookup[] }>("/master-data/asset-categories", authHeaders).then((response) => {
+            next["asset-categories"] = Array.isArray(response.data?.data) ? response.data.data : [];
+          }),
+          api.get<{ data: Lookup[] }>("/master-data/units-of-measure", authHeaders).then((response) => {
+            next["units-of-measure"] = Array.isArray(response.data?.data) ? response.data.data : [];
+          }),
+          api.get<{ data: AttributeDefinition[] }>("/master-data/asset-attribute-definitions", authHeaders).then((response) => {
+            next["asset-attribute-definitions"] = Array.isArray(response.data?.data) ? response.data.data : [];
+          }),
+        ],
       );
 
       setLookups(next);
@@ -318,6 +327,7 @@ export default function ItemsPage() {
       ...current,
       category_id: categoryId,
       subcategory_id: "",
+      attributes: {},
     }));
   };
 
@@ -339,6 +349,7 @@ export default function ItemsPage() {
       requires_serial_tracking: toBoolean(row.requires_serial_tracking),
       requires_batch_tracking: toBoolean(row.requires_batch_tracking),
       requires_expiry_tracking: toBoolean(row.requires_expiry_tracking),
+      attributes: row.attributes ?? {},
       status: row.status === "inactive" ? "inactive" : "active",
     });
     setError("");
@@ -375,6 +386,7 @@ export default function ItemsPage() {
         requires_serial_tracking: form.requires_serial_tracking,
         requires_batch_tracking: form.requires_batch_tracking,
         requires_expiry_tracking: form.requires_expiry_tracking,
+        attributes: form.attributes,
         status: form.status,
       };
 
@@ -671,6 +683,17 @@ export default function ItemsPage() {
                           placeholder="Optional item description"
                         />
                       </div>
+                      <AttributeFields
+                        definitions={lookups["asset-attribute-definitions"]}
+                        categoryId={form.category_id}
+                        subcategoryId={form.subcategory_id}
+                        appliesTo="item"
+                        values={form.attributes}
+                        onChange={(code, value) => setForm((current) => ({
+                          ...current,
+                          attributes: { ...current.attributes, [code]: value },
+                        }))}
+                      />
                       <div className="col-12">
                         <div className="row g-2">
                           {[

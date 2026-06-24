@@ -12,6 +12,7 @@ type ResourceKey =
   | "stores"
   | "asset-categories"
   | "asset-subcategories"
+  | "asset-attribute-definitions"
   | "units-of-measure"
   | "funding-sources"
   | "suppliers"
@@ -156,6 +157,33 @@ const resources: Record<ResourceKey, ResourceDef> = {
       { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
     ],
   },
+  "asset-attribute-definitions": {
+    label: "Attribute Definitions",
+    endpoint: "asset-attribute-definitions",
+    tableColumns: ["id", "category_id", "subcategory_id", "code", "label", "field_type", "applies_to", "is_required", "status"],
+    fields: [
+      { key: "category_id", label: "Category", type: "select", required: true, source: "asset-categories" },
+      { key: "subcategory_id", label: "Subcategory", type: "select", source: "asset-categories" },
+      { key: "code", label: "Code", type: "text", required: true },
+      { key: "label", label: "Label", type: "text", required: true },
+      { key: "field_type", label: "Field Type", type: "select", required: true, options: [
+        { value: "text", label: "Text" },
+        { value: "number", label: "Number" },
+        { value: "boolean", label: "Yes / No" },
+        { value: "select", label: "Dropdown" },
+        { value: "date", label: "Date" },
+      ] },
+      { key: "options", label: "Options", type: "textarea" },
+      { key: "is_required", label: "Required", type: "select", options: [{ value: "1", label: "Yes" }, { value: "0", label: "No" }] },
+      { key: "applies_to", label: "Applies To", type: "select", required: true, options: [
+        { value: "item", label: "Item Master" },
+        { value: "asset", label: "Fixed Asset" },
+        { value: "both", label: "Both" },
+      ] },
+      { key: "sort_order", label: "Sort Order", type: "number" },
+      { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
+    ],
+  },
   "units-of-measure": {
     label: "Units of Measure",
     endpoint: "units-of-measure",
@@ -242,6 +270,7 @@ const createEmptyLookups = (): Record<ResourceKey, RowData[]> => ({
   stores: [],
   "asset-categories": [],
   "asset-subcategories": [],
+  "asset-attribute-definitions": [],
   "units-of-measure": [],
   "funding-sources": [],
   suppliers: [],
@@ -299,6 +328,9 @@ const getFieldPlaceholder = (field: FieldDef): string => {
     is_sensitive_controlled: "e.g. Yes / No",
     requires_serial_tracking: "e.g. Yes / No",
     requires_qr_tag: "e.g. Yes / No",
+    options: "For dropdown fields, enter one option per line or comma separated",
+    applies_to: "Choose where this specification field appears",
+    sort_order: "e.g. 10",
     sponsor_type: "e.g. Government",
     ntn: "e.g. 1234567-8",
     contact_person: "e.g. Ali Khan",
@@ -458,6 +490,14 @@ export default function MasterDataPage() {
         continue;
       }
 
+      if (field.key === "options") {
+        payload[field.key] = String(raw)
+          .split(/\r?\n|,/)
+          .map((option) => option.trim())
+          .filter(Boolean);
+        continue;
+      }
+
       payload[field.key] = String(raw);
 
       if ((field.type === "select") && (field.key.endsWith("_id") || field.key === "parent_category_id")) {
@@ -514,6 +554,8 @@ export default function MasterDataPage() {
 
       if (typeof value === "number") {
         next[field.key] = value;
+      } else if (Array.isArray(value)) {
+        next[field.key] = value.join("\n");
       } else {
         next[field.key] = String(value);
       }
@@ -642,6 +684,8 @@ export default function MasterDataPage() {
             "funding_source_id",
             "parent_department_id",
             "parent_category_id",
+            "category_id",
+            "subcategory_id",
             "department_type",
           ].includes(column);
 
@@ -655,7 +699,7 @@ export default function MasterDataPage() {
                   ? "rooms"
                   : column === "funding_source_id"
                     ? "funding-sources"
-                : "asset-categories";
+                    : "asset-categories";
 
           return <>{getLookupLabel(source, row[column])}</>;
         }

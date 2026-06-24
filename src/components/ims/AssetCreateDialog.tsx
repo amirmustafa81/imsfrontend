@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { AttributeFields, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
 
 type LookupKey =
   | "departments"
@@ -43,6 +44,7 @@ type AssetFormState = {
   status: "in_store" | "issued" | "in_use" | "under_repair" | "missing_under_investigation" | "damaged" | "obsolete";
   condition_status: "new" | "good" | "needs_repair" | "damaged" | "obsolete";
   is_sensitive_controlled: boolean;
+  attributes: AttributeValues;
 };
 
 type AssetCreateDefaults = Partial<Pick<AssetFormState, "category_code" | "subcategory_code" | "status" | "condition_status" | "is_sensitive_controlled" | "project_id">>;
@@ -82,6 +84,7 @@ const createInitialForm = (defaults?: AssetCreateDefaults): AssetFormState => ({
   status: defaults?.status ?? "in_store",
   condition_status: defaults?.condition_status ?? "new",
   is_sensitive_controlled: defaults?.is_sensitive_controlled ?? false,
+  attributes: {},
 });
 
 const labelFor = (row: LookupRow) => String(row.code ?? row.item_code ?? row.project_code ?? row.id) + (row.name || row.title ? ` - ${row.name ?? row.title}` : "");
@@ -106,6 +109,7 @@ export function AssetCreateDialog({
   const { isAuthenticated } = useAuth();
   const authReady = useMemo(() => isAuthenticated, [isAuthenticated]);
   const [lookups, setLookups] = useState<Record<LookupKey, LookupRow[]>>(initialLookups);
+  const [attributeDefinitions, setAttributeDefinitions] = useState<AttributeDefinition[]>([]);
   const [form, setForm] = useState<AssetFormState>(() => createInitialForm(defaults));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -139,6 +143,9 @@ export function AssetCreateDialog({
           }
         }),
       );
+      const attributeResponse = await api.get<{ data: AttributeDefinition[] }>("/master-data/asset-attribute-definitions");
+      const attributePayload = attributeResponse.data?.data;
+      setAttributeDefinitions(Array.isArray(attributePayload) ? attributePayload : []);
       setLookups(next);
     } catch {
       setError("Unable to load asset form lookups. Verify token and backend connectivity.");
@@ -193,6 +200,7 @@ export function AssetCreateDialog({
       subcategory_code: "",
       useful_life_years: current.useful_life_years || (category?.useful_life_years ? String(category.useful_life_years) : ""),
       is_sensitive_controlled: Boolean(current.is_sensitive_controlled || category?.is_sensitive_controlled === 1 || category?.is_sensitive_controlled === "1"),
+      attributes: {},
     }));
   };
 
@@ -232,6 +240,7 @@ export function AssetCreateDialog({
         status: form.status,
         condition_status: form.condition_status,
         is_sensitive_controlled: form.is_sensitive_controlled,
+        attributes: form.attributes,
       });
 
       await onCreated?.();
@@ -248,6 +257,7 @@ export function AssetCreateDialog({
   const subcategoryOptions = selectedCategory
     ? lookups["asset-categories"].filter((row) => isChildOfCategory(row, selectedCategory.id))
     : [];
+  const selectedSubcategory = subcategoryOptions.find((row) => String(row.code ?? "") === form.subcategory_code);
   const itemOptions = selectedCategory
     ? lookups.items.filter((item) => String(item.category_id ?? "") === String(selectedCategory.id))
     : lookups.items;
@@ -271,6 +281,7 @@ export function AssetCreateDialog({
         item?.is_sensitive_controlled === "1" ||
         item?.is_sensitive_controlled === true,
       ),
+      attributes: (item?.attributes as AttributeValues | undefined) ?? {},
     }));
   };
 
@@ -416,6 +427,18 @@ export function AssetCreateDialog({
                   <label className="form-label small">Employee / Custodian Code</label>
                   <input className="form-control form-control-sm" value={form.employee_code} onChange={(event) => setFormField("employee_code", event.target.value)} placeholder="Employee ID if applicable" />
                 </div>
+                <AttributeFields
+                  definitions={attributeDefinitions}
+                  categoryId={selectedCategory?.id}
+                  subcategoryId={selectedSubcategory?.id}
+                  appliesTo="asset"
+                  values={form.attributes}
+                  onChange={(code, value) => setForm((current) => ({
+                    ...current,
+                    attributes: { ...current.attributes, [code]: value },
+                  }))}
+                  title="Asset Specifications"
+                />
 
                 <div className="col-12 col-md-3">
                   <label className="form-label small">Purchase Cost</label>

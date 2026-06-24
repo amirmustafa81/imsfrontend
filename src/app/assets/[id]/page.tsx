@@ -48,6 +48,7 @@ type AssetDetail = {
   is_fully_depreciated: boolean;
   created_at: string;
   updated_at: string;
+  attribute_details?: Array<{ code: string; label: string; field_type: string; value: string | boolean }>;
   department?: Relation | null;
   building?: Relation | null;
   room?: Relation | null;
@@ -128,6 +129,14 @@ const toPlainText = (item?: RelationLookup | null) => {
   const value = String(item.value || "").trim();
   if (item.id === null) return "-";
   return value || String(item.id);
+};
+
+const formatAttributeValue = (value: string | boolean): string => {
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  return value || "-";
 };
 
 function movementResponseSearch(rows: AssetMovement[], query: string): AssetMovement[] {
@@ -410,6 +419,22 @@ export default function AssetDetailPage() {
                 </div>
               </div>
             </div>
+
+            {asset.attribute_details && asset.attribute_details.length > 0 ? (
+              <div className="card border-0 shadow-sm mb-3">
+                <div className="card-header bg-white fw-semibold">Specifications</div>
+                <div className="card-body">
+                  <div className="row g-3">
+                    {asset.attribute_details.map((attribute) => (
+                      <div className="col-12 col-md-4 col-xl-3" key={attribute.code}>
+                        <div className="small text-secondary">{attribute.label}</div>
+                        <div className="fw-medium">{formatAttributeValue(attribute.value)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="row g-3">
               <div className="col-12">
