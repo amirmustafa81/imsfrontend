@@ -20,6 +20,7 @@ type ItemRow = {
   name: string;
   item_type: ItemType;
   category_id: number;
+  subcategory_id: number | null;
   unit_id: number;
   minimum_stock_level: string | number | null;
   requires_serial_tracking: boolean | number | string;
@@ -41,6 +42,7 @@ type ItemFormState = {
   name: string;
   item_type: ItemType;
   category_id: string;
+  subcategory_id: string;
   unit_id: string;
   description: string;
   brand: string;
@@ -104,6 +106,7 @@ const createInitialForm = (): ItemFormState => ({
   name: "",
   item_type: "consumable",
   category_id: "",
+  subcategory_id: "",
   unit_id: "",
   description: "",
   brand: "",
@@ -147,14 +150,17 @@ export default function ItemsPage() {
         ["units-of-measure", "units-of-measure"],
       ];
 
-      const next = { ...lookups };
+      const next: LookupMap = {
+        "asset-categories": [],
+        "units-of-measure": [],
+      };
 
       await Promise.all(
         keys.map(async ([key, path]) => {
           const response = await api.get<{ data: Lookup[] }>(`/master-data/${path}`, authHeaders);
           const payload = response.data?.data;
           if (Array.isArray(payload)) {
-            next[key] = key === "asset-categories" ? payload.filter((row) => !row.parent_category_id) : payload;
+            next[key] = payload;
           }
         }),
       );
@@ -164,7 +170,7 @@ export default function ItemsPage() {
     } catch {
       setError("Unable to load item lookups. Verify token and backend connectivity.");
     }
-  }, [authHeaders, authReady, lookups]);
+  }, [authHeaders, authReady]);
 
   const loadRows = useCallback(async () => {
     if (!authReady) {
@@ -233,6 +239,31 @@ export default function ItemsPage() {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
+  const parentCategories = useMemo(
+    () => lookups["asset-categories"].filter((category) => !category.parent_category_id),
+    [lookups],
+  );
+
+  const selectedCategory = useMemo(
+    () => parentCategories.find((category) => String(category.id) === form.category_id),
+    [form.category_id, parentCategories],
+  );
+
+  const subcategoryOptions = useMemo(
+    () => selectedCategory
+      ? lookups["asset-categories"].filter((category) => String(category.parent_category_id ?? "") === String(selectedCategory.id))
+      : [],
+    [lookups, selectedCategory],
+  );
+
+  const selectCategory = (categoryId: string) => {
+    setForm((current) => ({
+      ...current,
+      category_id: categoryId,
+      subcategory_id: "",
+    }));
+  };
+
   const saveItem = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -253,6 +284,7 @@ export default function ItemsPage() {
           name: form.name.trim(),
           item_type: form.item_type,
           category_id: Number(form.category_id),
+          subcategory_id: form.subcategory_id ? Number(form.subcategory_id) : null,
           unit_id: Number(form.unit_id),
           description: form.description.trim() || null,
           brand: form.brand.trim() || null,
@@ -295,6 +327,11 @@ export default function ItemsPage() {
       key: "category_id",
       header: "Category",
       render: (row: ItemRow) => formatLookup(lookups["asset-categories"], row.category_id),
+    },
+    {
+      key: "subcategory_id",
+      header: "Subcategory",
+      render: (row: ItemRow) => formatLookup(lookups["asset-categories"], row.subcategory_id),
     },
     {
       key: "unit_id",
@@ -450,13 +487,36 @@ export default function ItemsPage() {
                         <select
                           className="form-select form-select-sm"
                           value={form.category_id}
-                          onChange={(event) => setFormField("category_id", event.target.value)}
+                          onChange={(event) => selectCategory(event.target.value)}
                           required
                         >
                           <option value="">Choose category</option>
-                          {lookups["asset-categories"].map((category) => (
+                          {parentCategories.map((category) => (
                             <option key={category.id} value={category.id}>
-                              {formatLookup(lookups["asset-categories"], category.id)}
+                              {formatLookup(parentCategories, category.id)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small">Subcategory</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={form.subcategory_id}
+                          onChange={(event) => setFormField("subcategory_id", event.target.value)}
+                          disabled={!form.category_id || subcategoryOptions.length === 0}
+                          required={subcategoryOptions.length > 0}
+                        >
+                          <option value="">
+                            {!form.category_id
+                              ? "Choose category first"
+                              : subcategoryOptions.length === 0
+                                ? "No subcategories configured"
+                                : "Choose subcategory"}
+                          </option>
+                          {subcategoryOptions.map((subcategory) => (
+                            <option key={subcategory.id} value={subcategory.id}>
+                              {formatLookup(subcategoryOptions, subcategory.id)}
                             </option>
                           ))}
                         </select>
