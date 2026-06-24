@@ -85,6 +85,8 @@ const createInitialForm = (defaults?: AssetCreateDefaults): AssetFormState => ({
 });
 
 const labelFor = (row: LookupRow) => String(row.code ?? row.item_code ?? row.project_code ?? row.id) + (row.name || row.title ? ` - ${row.name ?? row.title}` : "");
+const isParentCategory = (row: LookupRow) => !row.parent_category_id;
+const isChildOfCategory = (row: LookupRow, parentId: number | string | null | undefined) => String(row.parent_category_id ?? "") === String(parentId ?? "");
 
 export function AssetCreateDialog({
   open,
@@ -187,6 +189,7 @@ export function AssetCreateDialog({
     setForm((current) => ({
       ...current,
       category_code: categoryCode,
+      subcategory_code: "",
       useful_life_years: current.useful_life_years || (category?.useful_life_years ? String(category.useful_life_years) : ""),
       is_sensitive_controlled: Boolean(current.is_sensitive_controlled || category?.is_sensitive_controlled === 1 || category?.is_sensitive_controlled === "1"),
     }));
@@ -239,6 +242,12 @@ export function AssetCreateDialog({
     }
   };
 
+  const parentCategories = lookups["asset-categories"].filter(isParentCategory);
+  const selectedCategory = parentCategories.find((row) => String(row.code) === form.category_code);
+  const subcategoryOptions = selectedCategory
+    ? lookups["asset-categories"].filter((row) => isChildOfCategory(row, selectedCategory.id))
+    : [];
+
   return (
     <>
       <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
@@ -271,7 +280,7 @@ export function AssetCreateDialog({
                   <label className="form-label small">Category Code *</label>
                   <select className="form-select form-select-sm" value={form.category_code} onChange={(event) => selectCategory(event.target.value)} required>
                     <option value="">Choose category</option>
-                    {lookups["asset-categories"].map((category) => (
+                    {parentCategories.map((category) => (
                       <option key={category.id} value={String(category.code ?? "")}>
                         {labelFor(category)}
                       </option>
@@ -280,7 +289,25 @@ export function AssetCreateDialog({
                 </div>
                 <div className="col-12 col-md-3">
                   <label className="form-label small">Subcategory</label>
-                  <input className="form-control form-control-sm" value={form.subcategory_code} onChange={(event) => setFormField("subcategory_code", event.target.value)} placeholder="e.g. IT, LAB" />
+                  <select
+                    className="form-select form-select-sm"
+                    value={form.subcategory_code}
+                    onChange={(event) => setFormField("subcategory_code", event.target.value)}
+                    disabled={!form.category_code || subcategoryOptions.length === 0}
+                  >
+                    <option value="">
+                      {!form.category_code
+                        ? "Choose category first"
+                        : subcategoryOptions.length === 0
+                          ? "No subcategories configured"
+                          : "Choose subcategory"}
+                    </option>
+                    {subcategoryOptions.map((subcategory) => (
+                      <option key={subcategory.id} value={String(subcategory.code ?? "")}>
+                        {labelFor(subcategory)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="col-12 col-md-4">

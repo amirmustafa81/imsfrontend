@@ -31,6 +31,7 @@ type Lookup = {
   id: number;
   code?: string;
   name?: string;
+  parent_category_id?: number | string | null;
 };
 
 type LookupMap = Record<"asset-categories" | "units-of-measure", Lookup[]>;
@@ -153,7 +154,7 @@ export default function ItemsPage() {
           const response = await api.get<{ data: Lookup[] }>(`/master-data/${path}`, authHeaders);
           const payload = response.data?.data;
           if (Array.isArray(payload)) {
-            next[key] = payload;
+            next[key] = key === "asset-categories" ? payload.filter((row) => !row.parent_category_id) : payload;
           }
         }),
       );

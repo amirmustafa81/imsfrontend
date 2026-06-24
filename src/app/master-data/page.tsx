@@ -11,6 +11,7 @@ type ResourceKey =
   | "rooms"
   | "stores"
   | "asset-categories"
+  | "asset-subcategories"
   | "units-of-measure"
   | "funding-sources"
   | "suppliers"
@@ -34,6 +35,7 @@ type ResourceDef = {
   endpoint: string;
   tableColumns: string[];
   fields: FieldDef[];
+  rowFilter?: (row: RowData) => boolean;
 };
 
 type RowData = {
@@ -115,10 +117,32 @@ const resources: Record<ResourceKey, ResourceDef> = {
     label: "Asset Categories",
     endpoint: "asset-categories",
     tableColumns: ["id", "code", "name", "depreciation_method", "status"],
+    rowFilter: (row) => !row.parent_category_id,
     fields: [
       { key: "code", label: "Code", type: "text", required: true },
       { key: "name", label: "Name", type: "text", required: true },
-      { key: "parent_category_id", label: "Parent Category", type: "select", source: "asset-categories" },
+      { key: "useful_life_years", label: "Useful Life Years", type: "number" },
+      { key: "depreciation_method", label: "Depreciation", type: "select", required: true, options: [
+        { value: "straight_line", label: "Straight Line" },
+        { value: "reducing_balance", label: "Reducing Balance" },
+        { value: "none", label: "None" },
+      ] },
+      { key: "capitalization_threshold", label: "Capitalization Threshold", type: "number" },
+      { key: "is_sensitive_controlled", label: "Sensitive", type: "select", options: [{ value: "1", label: "Yes" }, { value: "0", label: "No" }] },
+      { key: "requires_serial_tracking", label: "Requires Serial", type: "select", options: [{ value: "1", label: "Yes" }, { value: "0", label: "No" }] },
+      { key: "requires_qr_tag", label: "Requires QR Tag", type: "select", options: [{ value: "1", label: "Yes" }, { value: "0", label: "No" }] },
+      { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
+    ],
+  },
+  "asset-subcategories": {
+    label: "Asset Subcategories",
+    endpoint: "asset-categories",
+    tableColumns: ["id", "parent_category_id", "code", "name", "depreciation_method", "status"],
+    rowFilter: (row) => Boolean(row.parent_category_id),
+    fields: [
+      { key: "parent_category_id", label: "Parent Category", type: "select", required: true, source: "asset-categories" },
+      { key: "code", label: "Subcategory Code", type: "text", required: true },
+      { key: "name", label: "Subcategory Name", type: "text", required: true },
       { key: "useful_life_years", label: "Useful Life Years", type: "number" },
       { key: "depreciation_method", label: "Depreciation", type: "select", required: true, options: [
         { value: "straight_line", label: "Straight Line" },
@@ -211,6 +235,22 @@ const resources: Record<ResourceKey, ResourceDef> = {
 
 const resourceEntries = Object.entries(resources) as [ResourceKey, ResourceDef][];
 
+const createEmptyLookups = (): Record<ResourceKey, RowData[]> => ({
+  departments: [],
+  buildings: [],
+  rooms: [],
+  stores: [],
+  "asset-categories": [],
+  "asset-subcategories": [],
+  "units-of-measure": [],
+  "funding-sources": [],
+  suppliers: [],
+  "research-projects": [],
+});
+
+const applyResourceFilter = (definition: ResourceDef, records: RowData[]) =>
+  definition.rowFilter ? records.filter(definition.rowFilter) : records;
+
 const initialFormFor = (fields: FieldDef[]): FormState =>
   fields.reduce<FormState>((acc, field) => {
     acc[field.key] = field.type === "checkbox" ? false : "";
@@ -247,7 +287,7 @@ const toDateInput = (value: unknown): string => {
 
 const getFieldPlaceholder = (field: FieldDef): string => {
   const examples: Record<string, string> = {
-    code: "e.g. CSE, BLK-01",
+    code: "e.g. CSE, BLK-01, LAP",
     name: "e.g. Civil Engineering",
     erp_department_id: "e.g. DEPT-1001",
     department_type: "e.g. Academic",
@@ -294,17 +334,7 @@ export default function MasterDataPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [lookups, setLookups] = useState<Record<ResourceKey, RowData[]>>({
-    departments: [],
-    buildings: [],
-    rooms: [],
-    stores: [],
-    "asset-categories": [],
-    "units-of-measure": [],
-    "funding-sources": [],
-    suppliers: [],
-    "research-projects": [],
-  });
+  const [lookups, setLookups] = useState<Record<ResourceKey, RowData[]>>(createEmptyLookups);
 
   const definition = resources[activeResource];
   const configColumns = definition.tableColumns;
@@ -330,7 +360,7 @@ export default function MasterDataPage() {
         const response = await api.get(`/master-data/${definition.endpoint}`, { params: query });
 
         const data = response.data?.data;
-        setRows(Array.isArray(data) ? data : []);
+        setRows(Array.isArray(data) ? applyResourceFilter(definition, data) : []);
         setError("");
       } catch {
         setRows([]);
@@ -343,7 +373,7 @@ export default function MasterDataPage() {
     };
 
     void reload();
-  }, [activeResource, definition.endpoint, authReady, search, statusFilter]);
+  }, [activeResource, definition, authReady, search, statusFilter]);
 
   useEffect(() => {
     if (!authReady) return;
@@ -351,17 +381,7 @@ export default function MasterDataPage() {
     const loadLookup = async () => {
       const required: ResourceKey[] = ["departments", "buildings", "rooms", "asset-categories", "funding-sources"];
       const updates: Array<Promise<void>> = [];
-      const copy: Record<ResourceKey, RowData[]> = {
-        departments: [],
-        buildings: [],
-        rooms: [],
-        stores: [],
-        "asset-categories": [],
-        "units-of-measure": [],
-        "funding-sources": [],
-        suppliers: [],
-        "research-projects": [],
-      };
+      const copy = createEmptyLookups();
 
       for (const resource of required) {
         updates.push(
@@ -389,7 +409,7 @@ export default function MasterDataPage() {
   const getLookupLabel = (source: ResourceKey, value: unknown) => {
     if (value === null || value === undefined || value === "") return "-";
 
-    const matches = lookups[source]?.find((item) => item.id === value);
+    const matches = lookups[source]?.find((item) => String(item.id) === String(value));
     if (!matches) return String(value);
 
     return `${matches.code ?? matches.project_code ?? matches.id} - ${matches.name ?? matches.title ?? ""}`;
@@ -462,7 +482,7 @@ export default function MasterDataPage() {
       });
 
       const nextRows = response.data?.data;
-      setRows(Array.isArray(nextRows) ? nextRows : []);
+      setRows(Array.isArray(nextRows) ? applyResourceFilter(definition, nextRows) : []);
       setError("");
       setEditingId(null);
       setForm(initialFormFor(definition.fields));
@@ -553,7 +573,9 @@ export default function MasterDataPage() {
         if (field.options) return field.options;
         if (!field.source) return [];
 
-        const list = lookups[field.source] ?? [];
+        const list = field.key === "parent_category_id"
+          ? (lookups[field.source] ?? []).filter((row) => !row.parent_category_id)
+          : lookups[field.source] ?? [];
         return list.map((row) => ({
           value: String(row.id),
           label: `${row.code ?? row.project_code ?? row.id} - ${row.name ?? row.title ?? ""}`,

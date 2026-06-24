@@ -262,7 +262,7 @@ export default function ProjectsPage() {
           open={assetDialogOpen}
           title="Register Project Asset"
           subtitle="Create a fixed asset record and link it with a research project."
-          defaults={{ project_id: projectId, subcategory_code: "PROJECT", status: "in_store" }}
+          defaults={{ project_id: projectId, status: "in_store" }}
           onClose={() => setAssetDialogOpen(false)}
           onCreated={loadRows}
         />

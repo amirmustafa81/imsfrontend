@@ -227,7 +227,7 @@ export default function LabInventoryPage() {
           open={assetDialogOpen}
           title="Register Lab Asset"
           subtitle="Create a lab equipment or laboratory inventory asset record."
-          defaults={{ subcategory_code: "LAB", status: "in_store", is_sensitive_controlled: true }}
+          defaults={{ status: "in_store", is_sensitive_controlled: true }}
           onClose={() => setAssetDialogOpen(false)}
           onCreated={loadRows}
         />

@@ -150,6 +150,9 @@ const toMoney = (value: number | null): string => {
   return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+const isParentCategory = (row: RowData) => !row.parent_category_id;
+const isChildOfCategory = (row: RowData, parentId: number | string | null | undefined) => String(row.parent_category_id ?? "") === String(parentId ?? "");
+
 export default function AssetsPage() {
   const { isAuthenticated } = useAuth();
   const [rows, setRows] = useState<AssetRow[]>([]);
@@ -335,10 +338,17 @@ export default function AssetsPage() {
     setForm((current) => ({
       ...current,
       category_code: categoryCode,
+      subcategory_code: "",
       useful_life_years: current.useful_life_years || (category?.useful_life_years ? String(category.useful_life_years) : ""),
       is_sensitive_controlled: Boolean(current.is_sensitive_controlled || category?.is_sensitive_controlled === 1 || category?.is_sensitive_controlled === "1"),
     }));
   };
+
+  const parentCategories = lookups["asset-categories"].filter(isParentCategory);
+  const selectedCategory = parentCategories.find((row) => String(row.code) === form.category_code);
+  const subcategoryOptions = selectedCategory
+    ? lookups["asset-categories"].filter((row) => isChildOfCategory(row, selectedCategory.id))
+    : [];
 
   const saveAsset = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -533,7 +543,7 @@ export default function AssetsPage() {
             <label className="form-label small">Category</label>
             <select className="form-select form-select-sm" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
               <option value="">All</option>
-              {lookups["asset-categories"].map((category) => (
+              {parentCategories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.code} - {category.name}
                 </option>
@@ -656,7 +666,7 @@ export default function AssetsPage() {
                         <label className="form-label small">Category Code <span className="text-danger">*</span></label>
                         <select className="form-select form-select-sm" value={form.category_code} onChange={(event) => selectCategory(event.target.value)} required>
                           <option value="">Choose category</option>
-                          {lookups["asset-categories"].map((category) => (
+                          {parentCategories.map((category) => (
                             <option key={category.id} value={String(category.code ?? "")}>
                               {category.code} - {category.name}
                             </option>
@@ -665,7 +675,25 @@ export default function AssetsPage() {
                       </div>
                       <div className="col-12 col-md-4">
                         <label className="form-label small">Subcategory Code</label>
-                        <input className="form-control form-control-sm" value={form.subcategory_code} onChange={(event) => setFormField("subcategory_code", event.target.value)} placeholder="e.g. LAP" />
+                        <select
+                          className="form-select form-select-sm"
+                          value={form.subcategory_code}
+                          onChange={(event) => setFormField("subcategory_code", event.target.value)}
+                          disabled={!form.category_code || subcategoryOptions.length === 0}
+                        >
+                          <option value="">
+                            {!form.category_code
+                              ? "Choose category first"
+                              : subcategoryOptions.length === 0
+                                ? "No subcategories configured"
+                                : "Choose subcategory"}
+                          </option>
+                          {subcategoryOptions.map((subcategory) => (
+                            <option key={subcategory.id} value={String(subcategory.code ?? "")}>
+                              {subcategory.code} - {subcategory.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div className="col-12 col-md-4">
                         <label className="form-label small">Department <span className="text-danger">*</span></label>
