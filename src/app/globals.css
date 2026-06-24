@@ -562,6 +562,42 @@ a {
   height: 84px;
 }
 
+.ims-tag-qr-box-sm {
+  width: 58px;
+  height: 58px;
+}
+
+.ims-tag-barcode-box {
+  width: 132px;
+  height: 64px;
+}
+
+.ims-tag-barcode-box-sm {
+  width: 96px;
+  height: 32px;
+}
+
+.ims-barcode-preview {
+  width: 104px;
+  height: 38px;
+  background: repeating-linear-gradient(
+    90deg,
+    #20242a 0,
+    #20242a 2px,
+    transparent 2px,
+    transparent 5px,
+    #20242a 5px,
+    #20242a 9px,
+    transparent 9px,
+    transparent 12px
+  );
+}
+
+.ims-barcode-preview-sm {
+  width: 76px;
+  height: 18px;
+}
+
 .ims-data-table tr.cursor-pointer > td {
   cursor: pointer;
 }

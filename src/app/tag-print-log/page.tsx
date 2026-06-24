@@ -43,6 +43,32 @@ const printFormatOptions = [
   { value: "COMBINED", label: "QR + Barcode" },
 ];
 
+type NormalizedPrintFormat = "QR" | "BARCODE" | "COMBINED";
+
+const normalizePrintFormat = (format: string | null | undefined): NormalizedPrintFormat => {
+  const normalized = (format ?? "").toLowerCase();
+
+  if (normalized.includes("qr") && normalized.includes("barcode")) return "COMBINED";
+  if (normalized.includes("barcode")) return "BARCODE";
+  if (normalized.includes("qr")) return "QR";
+
+  return "QR";
+};
+
+const qrSvgMarkup = `
+  <svg width="64" height="64" viewBox="0 0 64 64" role="img" xmlns="http://www.w3.org/2000/svg">
+    <rect width="64" height="64" fill="#fff"/>
+    <path fill="#20242a" d="M6 6h18v18H6zM10 10v10h10V10H10zm30-4h18v18H40zM44 10v10h10V10H44zM6 40h18v18H6zM10 44v10h10V44H10zm24-34h4v8h-4zM30 22h8v4h-8zM26 30h8v4h-8zM38 30h4v8h-4zM46 28h12v4H46zM46 36h4v8h-4zM54 36h4v4h-4zM30 42h8v4h-8zM42 46h16v4H42zM30 52h4v6h-4zM38 54h8v4h-8zM50 54h8v4h-8zM26 10h4v4h-4zM26 18h4v4h-4zM10 30h10v4H10z"/>
+  </svg>
+`;
+
+const barcodeSvgMarkup = `
+  <svg width="128" height="48" viewBox="0 0 128 48" role="img" xmlns="http://www.w3.org/2000/svg">
+    <rect width="128" height="48" fill="#fff"/>
+    <path fill="#20242a" d="M4 4h2v40H4zM9 4h4v40H9zM16 4h2v40h-2zM22 4h6v40h-6zM32 4h2v40h-2zM38 4h4v40h-4zM46 4h2v40h-2zM52 4h8v40h-8zM64 4h2v40h-2zM70 4h4v40h-4zM78 4h2v40h-2zM84 4h6v40h-6zM94 4h2v40h-2zM101 4h4v40h-4zM110 4h2v40h-2zM116 4h8v40h-8z"/>
+  </svg>
+`;
+
 export default function TagPrintLogPage() {
   return (
     <Suspense fallback={<main className="p-4 text-secondary">Loading tag print log...</main>}>
@@ -80,6 +106,7 @@ function TagPrintLogContent() {
     if (!selectedAsset) return "";
     return `${selectedAsset.asset_id || `FA-${selectedAsset.id}`}-TAG`;
   }, [selectedAsset]);
+  const selectedPrintFormat = normalizePrintFormat(form.print_format);
 
   const loadLookups = useCallback(async () => {
     if (authLoading || !isAuthenticated) {
@@ -204,6 +231,11 @@ function TagPrintLogContent() {
 
     const assetCode = selectedAsset?.asset_id ?? "No asset selected";
     const serialNumber = selectedAsset?.serial_number || "No serial recorded";
+    const visualMarkup = selectedPrintFormat === "BARCODE"
+      ? `<div class="barcode" aria-hidden="true">${barcodeSvgMarkup}</div>`
+      : selectedPrintFormat === "COMBINED"
+        ? `<div class="combined" aria-hidden="true"><div class="qr">${qrSvgMarkup}</div><div class="barcode">${barcodeSvgMarkup}</div></div>`
+        : `<div class="qr" aria-hidden="true">${qrSvgMarkup}</div>`;
     const frame = document.createElement("iframe");
     frame.setAttribute("title", "IMS tag print");
     frame.style.position = "fixed";
@@ -257,6 +289,46 @@ function TagPrintLogContent() {
               align-items: center;
               justify-content: center;
             }
+            .barcode {
+              width: 36mm;
+              height: 18mm;
+              flex: 0 0 36mm;
+              border: 1px solid #dfe3ea;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: #fff;
+            }
+            .barcode svg {
+              width: 32mm;
+              height: 12mm;
+            }
+            .combined {
+              width: 28mm;
+              flex: 0 0 28mm;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 2mm;
+            }
+            .combined .qr {
+              width: 20mm;
+              height: 20mm;
+              flex: 0 0 20mm;
+            }
+            .combined .qr svg {
+              width: 17mm;
+              height: 17mm;
+            }
+            .combined .barcode {
+              width: 28mm;
+              height: 10mm;
+              flex: 0 0 10mm;
+            }
+            .combined .barcode svg {
+              width: 25mm;
+              height: 7mm;
+            }
             .text {
               min-width: 0;
               flex: 1;
@@ -277,12 +349,7 @@ function TagPrintLogContent() {
         </head>
         <body>
           <div class="label">
-            <div class="qr" aria-hidden="true">
-              <svg width="64" height="64" viewBox="0 0 64 64" role="img" xmlns="http://www.w3.org/2000/svg">
-                <rect width="64" height="64" fill="#fff"/>
-                <path fill="#20242a" d="M6 6h18v18H6zM10 10v10h10V10H10zm30-4h18v18H40zM44 10v10h10V10H44zM6 40h18v18H6zM10 44v10h10V44H10zm24-34h4v8h-4zM30 22h8v4h-8zM26 30h8v4h-8zM38 30h4v8h-4zM46 28h12v4H46zM46 36h4v8h-4zM54 36h4v4h-4zM30 42h8v4h-8zM42 46h16v4H42zM30 52h4v6h-4zM38 54h8v4h-8zM50 54h8v4h-8zM26 10h4v4h-4zM26 18h4v4h-4zM10 30h10v4H10z"/>
-              </svg>
-            </div>
+            ${visualMarkup}
             <div class="text">
               <div class="tag">${escapeHtml(tagId)}</div>
               <div class="meta">${escapeHtml(assetCode)}</div>
@@ -300,7 +367,7 @@ function TagPrintLogContent() {
       frameWindow.print();
       window.setTimeout(() => frame.remove(), 1000);
     }, 100);
-  }, [form.printable_tag_id, selectedAsset]);
+  }, [form.printable_tag_id, selectedAsset, selectedPrintFormat]);
 
   const selectLogForPrinting = useCallback((row: TagPrintLog) => {
     const format = row.print_format?.toLowerCase() ?? "";
@@ -457,9 +524,24 @@ function TagPrintLogContent() {
                     <div className="border rounded bg-light p-3 ims-tag-print-area">
                       <div className="small text-secondary mb-2">Tag Preview</div>
                       <div className="d-flex align-items-center gap-3 ims-tag-print-label">
-                        <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-qr-box">
-                          <i className="bi bi-qr-code fs-1 text-dark" />
-                        </div>
+                        {selectedPrintFormat === "BARCODE" ? (
+                          <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-barcode-box">
+                            <span className="ims-barcode-preview" aria-hidden="true" />
+                          </div>
+                        ) : selectedPrintFormat === "COMBINED" ? (
+                          <div className="d-flex flex-column align-items-center gap-2">
+                            <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-qr-box ims-tag-qr-box-sm">
+                              <i className="bi bi-qr-code fs-2 text-dark" />
+                            </div>
+                            <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-barcode-box ims-tag-barcode-box-sm">
+                              <span className="ims-barcode-preview ims-barcode-preview-sm" aria-hidden="true" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-qr-box">
+                            <i className="bi bi-qr-code fs-1 text-dark" />
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <div className="fw-semibold text-truncate">{form.printable_tag_id || "Select asset to generate tag"}</div>
                           <div className="small text-secondary text-truncate">{selectedAsset?.asset_id ?? "No asset selected"}</div>
