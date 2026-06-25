@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, FilterBar, KpiCard, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "stores" | "items" | "research-projects";
 
@@ -204,6 +204,31 @@ export default function ControlledStationeryPage() {
   const [serialActionBusy, setSerialActionBusy] = useState<Record<number, boolean>>({});
 
   const authHeaders = useMemo(() => ({}), []);
+
+  const controlledStationeryItems = useMemo(() => {
+    const controlledItems = lookups.items.filter((item) => {
+      const haystack = `${item.item_code ?? ""} ${item.code ?? ""} ${item.name ?? ""} ${item.item_type ?? ""}`.toLowerCase();
+      return haystack.includes("controlled") || haystack.includes("stationery") || haystack.includes("answer") || haystack.includes("ctrl");
+    });
+
+    return controlledItems.length > 0 ? controlledItems : lookups.items;
+  }, [lookups.items]);
+
+  const kpis = useMemo(() => {
+    const activeBatches = batches.filter((batch) => batch.status === "active").length;
+    const inStock = serials.filter((serial) => serial.status === "in_stock").length;
+    const issuedOrConsumed = serials.filter((serial) => serial.status === "issued" || serial.status === "consumed").length;
+    const exceptions = serials.filter((serial) => serial.status === "missing" || serial.status === "damaged").length;
+
+    return {
+      totalBatches: batches.length,
+      activeBatches,
+      totalSerials: serials.length,
+      inStock,
+      issuedOrConsumed,
+      exceptions,
+    };
+  }, [batches, serials]);
 
   const loadLookups = useCallback(async () => {
     const next = {
@@ -694,6 +719,27 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
           </div>
         )}
 
+        <div className="row g-3 mb-3">
+          <div className="col-12 col-sm-6 col-xl">
+            <KpiCard icon="bi-stack" label="Batches" value={kpis.totalBatches} tone="primary" />
+          </div>
+          <div className="col-12 col-sm-6 col-xl">
+            <KpiCard icon="bi-check2-square" label="Active Batches" value={kpis.activeBatches} tone="success" />
+          </div>
+          <div className="col-12 col-sm-6 col-xl">
+            <KpiCard icon="bi-list-ol" label="Serials" value={kpis.totalSerials} tone="secondary" />
+          </div>
+          <div className="col-12 col-sm-6 col-xl">
+            <KpiCard icon="bi-box-seam" label="In Stock" value={kpis.inStock} tone="info" />
+          </div>
+          <div className="col-12 col-sm-6 col-xl">
+            <KpiCard icon="bi-send-check" label="Issued / Consumed" value={kpis.issuedOrConsumed} tone="warning" />
+          </div>
+          <div className="col-12 col-sm-6 col-xl">
+            <KpiCard icon="bi-exclamation-triangle" label="Missing / Damaged" value={kpis.exceptions} tone="danger" />
+          </div>
+        </div>
+
         <div className="row g-4">
           <div className="col-lg-5">
             <div className="card border-0 shadow-sm">
@@ -724,7 +770,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                         onChange={(event) => setBatchFormValue("item_id", event.target.value)}
                       >
                         <option value="">Select item</option>
-                        {lookups.items.map((item) => (
+                        {controlledStationeryItems.map((item) => (
                           <option key={item.id} value={item.id}>
                             {item.item_code ? `${item.item_code} - ${item.name}` : `${item.id} - ${item.name}`}
                           </option>
@@ -974,7 +1020,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
                 <label className="form-label small">Item</label>
                 <select className="form-select form-select-sm" value={batchItemFilter} onChange={(event) => setBatchItemFilter(event.target.value)}>
                   <option value="">All</option>
-                  {lookups.items.map((item) => (
+                  {controlledStationeryItems.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.item_code ? `${item.item_code} - ${item.name}` : `${item.id} - ${item.name}`}
                     </option>
@@ -1035,7 +1081,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
               <label className="form-label small">Item</label>
               <select className="form-select form-select-sm" value={serialItemFilter} onChange={(event) => setSerialItemFilter(event.target.value)}>
                 <option value="">All</option>
-                {lookups.items.map((item) => (
+                {controlledStationeryItems.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.item_code ? `${item.item_code} - ${item.name}` : `${item.id} - ${item.name}`}
                   </option>
