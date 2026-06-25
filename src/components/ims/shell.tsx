@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 import { isAuthBypassEnabled, useAuth } from "@/lib/auth";
 
 type SidebarItem = {
@@ -15,6 +16,15 @@ type SidebarItem = {
 type SidebarGroup = {
   title: string;
   items: SidebarItem[];
+};
+
+type NotificationPreview = {
+  id: number;
+  title: string;
+  message: string;
+  notification_type: string;
+  is_read: boolean;
+  created_at: string;
 };
 
 const NAV_GROUPS: SidebarGroup[] = [
@@ -90,6 +100,11 @@ export function ImsShell({ children }: { children: ReactNode }) {
   const { isAuthenticated, loading, logout, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationError, setNotificationError] = useState("");
+  const [notifications, setNotifications] = useState<NotificationPreview[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const isLoginPage = pathname === "/login";
   const isActive = (href: string) => pathname === href;
@@ -109,6 +124,38 @@ export function ImsShell({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, isLoginPage, loading, router]);
 
+  const loadNotifications = useCallback(async () => {
+    if (loading || !isAuthenticated) return;
+
+    setNotificationLoading(true);
+    try {
+      const [listResponse, countResponse] = await Promise.all([
+        api.get<{ data: NotificationPreview[] }>("/notifications", {
+          params: { is_read: "0" },
+        }),
+        api.get<{ unread_count: number }>("/notifications/unread-count"),
+      ]);
+
+      setNotifications((listResponse.data?.data ?? []).slice(0, 5));
+      setUnreadCount(Number(countResponse.data?.unread_count ?? 0));
+      setNotificationError("");
+    } catch {
+      setNotifications([]);
+      setUnreadCount(0);
+      setNotificationError("Unable to load notifications.");
+    } finally {
+      setNotificationLoading(false);
+    }
+  }, [isAuthenticated, loading]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadNotifications();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadNotifications]);
+
   const handleLogout = useCallback(async () => {
     await logout();
     if (isAuthBypassEnabled) {
@@ -118,6 +165,23 @@ export function ImsShell({ children }: { children: ReactNode }) {
 
     router.replace("/login");
   }, [logout, router]);
+
+  const openNotifications = () => {
+    setAccountOpen(false);
+    setNotificationOpen((current) => !current);
+    void loadNotifications();
+  };
+
+  const markAllNotificationsRead = async () => {
+    if (loading || !isAuthenticated) return;
+
+    try {
+      await api.post("/notifications/read-all", {});
+      await loadNotifications();
+    } catch {
+      setNotificationError("Unable to mark notifications as read.");
+    }
+  };
 
   if (isLoginPage) {
     return <>{children}</>;
@@ -189,16 +253,84 @@ export function ImsShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="d-flex align-items-center gap-2">
-            <button className="btn btn-outline-secondary ims-icon-button position-relative" type="button" aria-label="Notifications">
-              <i className="bi bi-bell" />
-              <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">3</span>
-            </button>
+            <div className="ims-notification-menu position-relative">
+              <button
+                className="btn btn-outline-secondary ims-icon-button position-relative"
+                type="button"
+                aria-label="Notifications"
+                aria-expanded={notificationOpen}
+                aria-haspopup="menu"
+                onClick={openNotifications}
+              >
+                <i className="bi bi-bell" />
+                {unreadCount > 0 ? (
+                  <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                ) : null}
+              </button>
+
+              {notificationOpen ? (
+                <div className="ims-notification-dropdown shadow-lg" role="menu">
+                  <div className="d-flex align-items-start justify-content-between gap-3 px-3 py-3 border-bottom">
+                    <div>
+                      <div className="fw-bold">Notifications</div>
+                      <div className="small text-secondary">{unreadCount} unread notification{unreadCount === 1 ? "" : "s"}</div>
+                    </div>
+                    <Link className="small fw-semibold text-decoration-none" href="/notifications" onClick={() => setNotificationOpen(false)}>
+                      View all
+                    </Link>
+                  </div>
+
+                  <div className="ims-notification-list">
+                    {notificationLoading ? (
+                      <div className="px-3 py-4 text-center small text-secondary">
+                        <span className="spinner-border spinner-border-sm me-2" role="status" />
+                        Loading notifications...
+                      </div>
+                    ) : notificationError ? (
+                      <div className="px-3 py-4 small text-danger">{notificationError}</div>
+                    ) : notifications.length === 0 ? (
+                      <div className="px-3 py-4 text-center small text-secondary">
+                        <i className="bi bi-check2-circle d-block fs-4 mb-1 text-success" />
+                        No unread notifications.
+                      </div>
+                    ) : (
+                      notifications.map((notification) => (
+                        <Link
+                          className="ims-notification-item text-decoration-none"
+                          href="/notifications"
+                          key={notification.id}
+                          onClick={() => setNotificationOpen(false)}
+                        >
+                          <span className="ims-notification-dot" />
+                          <span className="min-w-0">
+                            <span className="d-block fw-semibold text-body text-truncate">{notification.title}</span>
+                            <span className="d-block small text-secondary text-truncate">{notification.message}</span>
+                          </span>
+                        </Link>
+                      ))
+                    )}
+                  </div>
+
+                  {unreadCount > 0 ? (
+                    <button className="ims-notification-action" type="button" onClick={markAllNotificationsRead}>
+                      <i className="bi bi-check2-all" />
+                      Mark all as read
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
 
             <div className="ims-account-menu position-relative">
               <button
                 className="ims-user-menu btn border-0 d-flex align-items-center gap-2"
                 type="button"
-                onClick={() => setAccountOpen((current) => !current)}
+                onClick={() => {
+                  setNotificationOpen(false);
+                  setAccountOpen((current) => !current);
+                }}
                 aria-expanded={accountOpen}
                 aria-haspopup="menu"
               >
