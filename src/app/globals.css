@@ -338,6 +338,17 @@ a {
   min-height: 38px;
   background: #f7f8fb;
   font-size: 0.9rem;
+  border-radius: 10px;
+  padding: 4px 8px 4px 6px;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.ims-user-menu:hover,
+.ims-user-menu:focus-visible {
+  background: #eef3ff;
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.12);
 }
 
 .ims-avatar {
@@ -351,6 +362,45 @@ a {
   background: var(--ims-sidebar-active);
   color: #ffffff;
   font-weight: 700;
+}
+
+.ims-avatar-lg {
+  width: 40px;
+  height: 40px;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
+.ims-account-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1080;
+  width: min(280px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--ims-table-border);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.ims-account-action {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: #ffffff;
+  padding: 12px 16px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.ims-account-action:hover,
+.ims-account-action:focus-visible {
+  background: #fff1f2;
+  outline: none;
 }
 
 .ims-page-header {

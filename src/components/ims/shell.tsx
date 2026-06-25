@@ -89,6 +89,7 @@ export function ImsShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { isAuthenticated, loading, logout, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const isLoginPage = pathname === "/login";
   const isActive = (href: string) => pathname === href;
@@ -193,14 +194,39 @@ export function ImsShell({ children }: { children: ReactNode }) {
               <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">3</span>
             </button>
 
-            <button className="ims-user-menu btn border-0 d-flex align-items-center gap-2" type="button" onClick={handleLogout}>
-              <span className="ims-avatar">{initials}</span>
-              <span className="text-start lh-sm">
-                <span className="fw-semibold d-block">{userName}</span>
-                <span className="small text-secondary">{roleLabel} - Logout</span>
-              </span>
-              <i className="bi bi-caret-down-fill small" />
-            </button>
+            <div className="ims-account-menu position-relative">
+              <button
+                className="ims-user-menu btn border-0 d-flex align-items-center gap-2"
+                type="button"
+                onClick={() => setAccountOpen((current) => !current)}
+                aria-expanded={accountOpen}
+                aria-haspopup="menu"
+              >
+                <span className="ims-avatar">{initials}</span>
+                <span className="text-start lh-sm">
+                  <span className="fw-semibold d-block">{userName}</span>
+                  <span className="small text-secondary">{roleLabel}</span>
+                </span>
+                <i className={`bi bi-chevron-${accountOpen ? "up" : "down"} small text-secondary`} />
+              </button>
+
+              {accountOpen ? (
+                <div className="ims-account-dropdown shadow-lg" role="menu">
+                  <div className="d-flex align-items-center gap-2 px-3 py-3 border-bottom">
+                    <span className="ims-avatar ims-avatar-lg">{initials}</span>
+                    <div className="min-w-0">
+                      <div className="fw-semibold text-truncate">{userName}</div>
+                      <div className="small text-secondary text-truncate">{roleLabel}</div>
+                    </div>
+                  </div>
+
+                  <button className="ims-account-action text-danger" type="button" role="menuitem" onClick={handleLogout}>
+                    <i className="bi bi-box-arrow-right" />
+                    Logout
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 
