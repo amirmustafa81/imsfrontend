@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
@@ -298,6 +298,11 @@ const displayValue = (value: unknown) => {
   return String(value);
 };
 
+const assetCategoryLabel = (row: RowData) => `${row.code ?? row.id} - ${row.name ?? ""}`;
+
+const isAssetClassificationResource = (resource: ResourceKey) =>
+  resource === "asset-categories" || resource === "asset-subcategories" || resource === "asset-attribute-definitions";
+
 const toDateInput = (value: unknown): string => {
   if (value === null || value === undefined || value === "") {
     return "";
@@ -363,6 +368,8 @@ export default function MasterDataPage() {
   const [form, setForm] = useState<FormState>(initialFormFor(resources["departments"].fields));
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [categoryFilterId, setCategoryFilterId] = useState("");
+  const [subcategoryFilterId, setSubcategoryFilterId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -370,6 +377,37 @@ export default function MasterDataPage() {
 
   const definition = resources[activeResource];
   const configColumns = definition.tableColumns;
+  const categoryOptions = (lookups["asset-categories"] ?? []).filter((row) => !row.parent_category_id);
+  const subcategoryOptions = (lookups["asset-categories"] ?? []).filter((row) => {
+    if (!row.parent_category_id) return false;
+    if (!categoryFilterId) return true;
+    return String(row.parent_category_id) === categoryFilterId;
+  });
+
+  const applyClassificationFilters = useCallback((records: RowData[]) => {
+    if (!isAssetClassificationResource(activeResource)) return records;
+
+    return records.filter((row) => {
+      const rowId = String(row.id);
+      const parentCategoryId = String(row.parent_category_id ?? "");
+      const rowCategoryId = String(row.category_id ?? "");
+      const rowSubcategoryId = String(row.subcategory_id ?? "");
+
+      if (activeResource === "asset-categories") {
+        return categoryFilterId ? rowId === categoryFilterId : true;
+      }
+
+      if (activeResource === "asset-subcategories") {
+        if (categoryFilterId && parentCategoryId !== categoryFilterId) return false;
+        if (subcategoryFilterId && rowId !== subcategoryFilterId) return false;
+        return true;
+      }
+
+      if (categoryFilterId && rowCategoryId !== categoryFilterId) return false;
+      if (subcategoryFilterId && rowSubcategoryId !== subcategoryFilterId) return false;
+      return true;
+    });
+  }, [activeResource, categoryFilterId, subcategoryFilterId]);
 
   useEffect(() => {
     const loadRows = async () => {
@@ -392,7 +430,8 @@ export default function MasterDataPage() {
         const response = await api.get(`/master-data/${definition.endpoint}`, { params: query });
 
         const data = response.data?.data;
-        setRows(Array.isArray(data) ? applyResourceFilter(definition, data) : []);
+        const filteredRows = Array.isArray(data) ? applyResourceFilter(definition, data) : [];
+        setRows(applyClassificationFilters(filteredRows));
         setError("");
       } catch {
         setRows([]);
@@ -405,7 +444,7 @@ export default function MasterDataPage() {
     };
 
     void reload();
-  }, [activeResource, definition, authReady, search, statusFilter]);
+  }, [activeResource, applyClassificationFilters, authReady, definition, search, statusFilter]);
 
   useEffect(() => {
     if (!authReady) return;
@@ -522,7 +561,8 @@ export default function MasterDataPage() {
       });
 
       const nextRows = response.data?.data;
-      setRows(Array.isArray(nextRows) ? applyResourceFilter(definition, nextRows) : []);
+      const filteredRows = Array.isArray(nextRows) ? applyResourceFilter(definition, nextRows) : [];
+      setRows(applyClassificationFilters(filteredRows));
       setError("");
       setEditingId(null);
       setForm(initialFormFor(definition.fields));
@@ -669,6 +709,8 @@ export default function MasterDataPage() {
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("");
+    setCategoryFilterId("");
+    setSubcategoryFilterId("");
   };
 
   const tableColumns = [
@@ -769,11 +811,13 @@ export default function MasterDataPage() {
                   key={key}
                   type="button"
                   className={`btn btn-sm ${activeResource === key ? "btn-primary" : "btn-outline-primary"}`}
-              onClick={() => {
+                  onClick={() => {
                     setActiveResource(key);
                     setEditingId(null);
                     setForm(initialFormFor(resources[key].fields));
                     setDialogOpen(false);
+                    setCategoryFilterId("");
+                    setSubcategoryFilterId("");
                   }}
                 >
                   {item.label}
@@ -806,6 +850,47 @@ export default function MasterDataPage() {
                 placeholder="Search common fields"
               />
             </div>
+
+            {isAssetClassificationResource(activeResource) ? (
+              <>
+                <div className="col-12 col-md-3">
+                  <label className="form-label small">Category</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={categoryFilterId}
+                    onChange={(event) => {
+                      setCategoryFilterId(event.target.value);
+                      setSubcategoryFilterId("");
+                    }}
+                  >
+                    <option value="">All Categories</option>
+                    {categoryOptions.map((category) => (
+                      <option key={category.id} value={String(category.id)}>
+                        {assetCategoryLabel(category)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {activeResource !== "asset-categories" ? (
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small">Subcategory</label>
+                    <select
+                      className="form-select form-select-sm"
+                      value={subcategoryFilterId}
+                      onChange={(event) => setSubcategoryFilterId(event.target.value)}
+                    >
+                      <option value="">All Subcategories</option>
+                      {subcategoryOptions.map((subcategory) => (
+                        <option key={subcategory.id} value={String(subcategory.id)}>
+                          {assetCategoryLabel(subcategory)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
           </FilterBar>
         </div>
 
