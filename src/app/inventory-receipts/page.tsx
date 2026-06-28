@@ -192,6 +192,7 @@ export default function InventoryReceiptsPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<number, ReceiptItem[]>>({});
   const [expandedLoading, setExpandedLoading] = useState<Record<number, boolean>>({});
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const [isPostingReceipt, setIsPostingReceipt] = useState(false);
 
@@ -346,6 +347,38 @@ export default function InventoryReceiptsPage() {
 
   const removeAttachment = (index: number) => {
     setAttachmentFiles((current) => current.filter((_, idx) => idx !== index));
+  };
+
+  const resetReceiptForm = () => {
+    const nextForm = { ...defaultForm, receipt_date: new Date().toISOString().slice(0, 10) };
+    setForm(nextForm);
+    setApprovalReference({
+      ref: nextForm.manual_approval_ref,
+      authority: nextForm.manual_approved_by,
+      date: nextForm.manual_approval_date,
+      remarks: "",
+    });
+    setItems([{ ...emptyItem }]);
+    setAttachmentFiles([]);
+    setIsPostingReceipt(false);
+  };
+
+  const openCreateDialog = () => {
+    resetReceiptForm();
+    setError("");
+    setDialogOpen(true);
+  };
+
+  const closeCreateDialog = () => {
+    setDialogOpen(false);
+    setIsPostingReceipt(false);
+  };
+
+  const resetFilters = () => {
+    setSearch("");
+    setStatusFilter("");
+    setStoreFilter("");
+    setDepartmentFilter("");
   };
 
   const handleAttachmentChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -541,6 +574,7 @@ export default function InventoryReceiptsPage() {
       });
       setItems([{ ...emptyItem }]);
       setAttachmentFiles([]);
+      setDialogOpen(false);
       await refreshRows();
     } catch {
       setError("Could not create receipt. Verify required fields.");
@@ -604,7 +638,12 @@ export default function InventoryReceiptsPage() {
         <PageHeader
           title="Receipts / GRN"
           subtitle="Create and post goods receipts"
-          
+          actions={
+            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+              <i className="bi bi-plus-lg me-1" />
+              Create Receipt
+            </button>
+          }
         />
 
         {(message || error) && (
@@ -614,12 +653,28 @@ export default function InventoryReceiptsPage() {
           </div>
         )}
 
-        <div className="row g-4">
-          <section className="col-12 col-xl-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body">
-                <h2 className="h5 mb-3">Create Receipt</h2>
-                <form className="row g-2" onSubmit={saveReceipt}>
+        {dialogOpen ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+              <div
+                className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+                style={{ maxWidth: "min(1120px, 92vw)" }}
+              >
+                <form className="modal-content border-0 shadow-lg" onSubmit={saveReceipt}>
+                  <div className="modal-header px-4 py-3">
+                    <div>
+                      <h2 className="h5 mb-1">Create Receipt</h2>
+                      <p className="text-secondary mb-0">Record a GRN, add received items, and optionally post stock.</p>
+                    </div>
+                    <button
+                      className="btn-close"
+                      type="button"
+                      aria-label="Close"
+                      onClick={closeCreateDialog}
+                    />
+                  </div>
+                  <div className="modal-body px-4 py-4">
+                    <div className="row g-3">
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Receipt No.</label>
                     <input
@@ -1015,82 +1070,90 @@ export default function InventoryReceiptsPage() {
                     </label>
                   </div>
 
-                  <div className="col-12">
+                    </div>
+                  </div>
+                  <div className="modal-footer px-4 py-3">
+                    <button className="btn btn-outline-secondary" type="button" onClick={closeCreateDialog}>
+                      Cancel
+                    </button>
                     <button className="btn btn-primary" type="submit" disabled={isPostingReceipt}>
+                      <i className="bi bi-receipt me-1" />
                       {isPostingReceipt ? "Saving..." : "Save Receipt"}
                     </button>
                   </div>
                 </form>
               </div>
             </div>
-          </section>
+            <div className="modal-backdrop fade show" />
+          </>
+        ) : null}
 
-          <section className="col-12 col-xl-7">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body">
-                <h2 className="h5 mb-3">Receipt List</h2>
+        <section className="col-12">
+          <div className="card border-0 shadow-sm mb-3">
+            <div className="card-body">
+              <FilterBar onReset={resetFilters}>
+                <div className="col-12 col-lg-4">
+                  <label className="form-label small">Search</label>
+                  <input
+                    className="form-control form-control-sm"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Receipt no / PO / invoice / challan"
+                  />
+                </div>
+                <div className="col-12 col-md-4 col-lg-2">
+                  <label className="form-label small">Status</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                  >
+                    <option value="">All</option>
+                    {statusOptions.map((status) => (
+                      <option key={status} value={status}>
+                        {status.replace("_", " ").replace(/\b\w/g, (match) => match.toUpperCase())}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-12 col-md-4 col-lg-3">
+                  <label className="form-label small">Store</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={storeFilter}
+                    onChange={(event) => setStoreFilter(event.target.value)}
+                  >
+                    <option value="">All stores</option>
+                    {lookups.stores.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.code ?? row.id} - {row.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-12 col-md-4 col-lg-3">
+                  <label className="form-label small">Department</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={departmentFilter}
+                    onChange={(event) => setDepartmentFilter(event.target.value)}
+                  >
+                    <option value="">All departments</option>
+                    {lookups.departments.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.code ?? row.id} - {row.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </FilterBar>
+            </div>
+          </div>
 
-                <FilterBar onReset={() => {
-                  setSearch("");
-                  setStatusFilter("");
-                  setStoreFilter("");
-                  setDepartmentFilter("");
-                }}>
-                  <div className="col-12 col-md-4">
-                    <label className="form-label small">Search</label>
-                    <input
-                      className="form-control form-control-sm"
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Receipt no / PO / invoice / challan"
-                    />
-                  </div>
-                  <div className="col-12 col-md-2">
-                    <label className="form-label small">Status</label>
-                    <select
-                      className="form-select form-select-sm"
-                      value={statusFilter}
-                      onChange={(event) => setStatusFilter(event.target.value)}
-                    >
-                      <option value="">All</option>
-                      {statusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {status.replace("_", " ").replace(/\b\w/g, (match) => match.toUpperCase())}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-12 col-md-3">
-                    <label className="form-label small">Store</label>
-                    <select
-                      className="form-select form-select-sm"
-                      value={storeFilter}
-                      onChange={(event) => setStoreFilter(event.target.value)}
-                    >
-                      <option value="">All stores</option>
-                      {lookups.stores.map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {row.code ?? row.id} - {row.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-12 col-md-3">
-                    <label className="form-label small">Department</label>
-                    <select
-                      className="form-select form-select-sm"
-                      value={departmentFilter}
-                      onChange={(event) => setDepartmentFilter(event.target.value)}
-                    >
-                      <option value="">All departments</option>
-                      {lookups.departments.map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {row.code ?? row.id} - {row.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </FilterBar>
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <h2 className="h6 fw-semibold mb-0">Receipt list</h2>
+            <span className="small text-secondary">{rows.length} record{rows.length === 1 ? "" : "s"}</span>
+          </div>
 
                 {rows.length > 0 ? (
                   <>
@@ -1182,11 +1245,8 @@ export default function InventoryReceiptsPage() {
                     message="No receipts match the selected filters."
                     icon="bi-receipt"
                   />
-                )}
-              </div>
-            </div>
-          </section>
-        </div>
+          )}
+        </section>
       </div>
     </main>
   );
