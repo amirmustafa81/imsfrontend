@@ -698,22 +698,20 @@ a {
 .ims-barcode-preview {
   width: 104px;
   height: 38px;
-  background: repeating-linear-gradient(
-    90deg,
-    #20242a 0,
-    #20242a 2px,
-    transparent 2px,
-    transparent 5px,
-    #20242a 5px,
-    #20242a 9px,
-    transparent 9px,
-    transparent 12px
-  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ims-barcode-preview-sm {
   width: 76px;
   height: 18px;
+}
+
+.ims-code128-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .ims-data-table tr.cursor-pointer > td {

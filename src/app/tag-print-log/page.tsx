@@ -4,6 +4,7 @@ import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "
 import { useSearchParams } from "next/navigation";
 import QRCode from "qrcode";
 import { api } from "@/lib/api";
+import { createCode128SvgMarkup } from "@/lib/barcode";
 import { useAuth } from "@/lib/auth";
 import { DataTable, FieldLabel, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
@@ -63,13 +64,6 @@ const normalizePrintFormat = (format: string | null | undefined): NormalizedPrin
   return "QR";
 };
 
-const barcodeSvgMarkup = `
-  <svg width="128" height="48" viewBox="0 0 128 48" role="img" xmlns="http://www.w3.org/2000/svg">
-    <rect width="128" height="48" fill="#fff"/>
-    <path fill="#20242a" d="M4 4h2v40H4zM9 4h4v40H9zM16 4h2v40h-2zM22 4h6v40h-6zM32 4h2v40h-2zM38 4h4v40h-4zM46 4h2v40h-2zM52 4h8v40h-8zM64 4h2v40h-2zM70 4h4v40h-4zM78 4h2v40h-2zM84 4h6v40h-6zM94 4h2v40h-2zM101 4h4v40h-4zM110 4h2v40h-2zM116 4h8v40h-8z"/>
-  </svg>
-`;
-
 export default function TagPrintLogPage() {
   return (
     <Suspense fallback={<main className="p-4 text-secondary">Loading tag print log...</main>}>
@@ -116,6 +110,10 @@ function TagPrintLogContent() {
 
     return new URL(`/assets/${form.asset_id}`, window.location.origin).toString();
   }, [form.asset_id]);
+  const barcodeSvgMarkup = useMemo(
+    () => createCode128SvgMarkup(form.printable_tag_id, { height: 64, moduleWidth: 2 }),
+    [form.printable_tag_id],
+  );
 
   const loadLookups = useCallback(async () => {
     if (authLoading || !isAuthenticated) {
@@ -274,10 +272,11 @@ function TagPrintLogContent() {
     const qrImageMarkup = qrDataUrl
       ? `<img src="${escapeHtml(qrDataUrl)}" alt="QR code for ${escapeHtml(tagId)}" />`
       : `<span class="unavailable">QR unavailable</span>`;
+    const barcodeMarkup = barcodeSvgMarkup || `<span class="unavailable">Barcode unavailable</span>`;
     const visualMarkup = selectedPrintFormat === "BARCODE"
-      ? `<div class="barcode" aria-hidden="true">${barcodeSvgMarkup}</div>`
+      ? `<div class="barcode">${barcodeMarkup}</div>`
       : selectedPrintFormat === "COMBINED"
-        ? `<div class="combined"><div class="qr">${qrImageMarkup}</div><div class="barcode" aria-hidden="true">${barcodeSvgMarkup}</div></div>`
+        ? `<div class="combined"><div class="qr">${qrImageMarkup}</div><div class="barcode">${barcodeMarkup}</div></div>`
         : `<div class="qr">${qrImageMarkup}</div>`;
     const frame = document.createElement("iframe");
     frame.setAttribute("title", "IMS tag print");
@@ -424,7 +423,7 @@ function TagPrintLogContent() {
       frameWindow.print();
       window.setTimeout(() => frame.remove(), 1000);
     }, 100);
-  }, [form.printable_tag_id, qrDataUrl, selectedAsset, selectedPrintFormat]);
+  }, [barcodeSvgMarkup, form.printable_tag_id, qrDataUrl, selectedAsset, selectedPrintFormat]);
 
   const selectLogForPrinting = useCallback((row: TagPrintLog) => {
     const format = row.print_format?.toLowerCase() ?? "";
@@ -583,7 +582,11 @@ function TagPrintLogContent() {
                       <div className="d-flex align-items-center gap-3 ims-tag-print-label">
                         {selectedPrintFormat === "BARCODE" ? (
                           <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-barcode-box">
-                            <span className="ims-barcode-preview" aria-hidden="true" />
+                            {barcodeSvgMarkup ? (
+                              <span className="ims-barcode-preview" dangerouslySetInnerHTML={{ __html: barcodeSvgMarkup }} />
+                            ) : (
+                              <span className="small text-secondary text-center">Barcode</span>
+                            )}
                           </div>
                         ) : selectedPrintFormat === "COMBINED" ? (
                           <div className="d-flex flex-column align-items-center gap-2">
@@ -596,7 +599,11 @@ function TagPrintLogContent() {
                               )}
                             </div>
                             <div className="border bg-white d-flex align-items-center justify-content-center ims-tag-barcode-box ims-tag-barcode-box-sm">
-                              <span className="ims-barcode-preview ims-barcode-preview-sm" aria-hidden="true" />
+                              {barcodeSvgMarkup ? (
+                                <span className="ims-barcode-preview ims-barcode-preview-sm" dangerouslySetInnerHTML={{ __html: barcodeSvgMarkup }} />
+                              ) : (
+                                <span className="small text-secondary text-center">Barcode</span>
+                              )}
                             </div>
                           </div>
                         ) : (
