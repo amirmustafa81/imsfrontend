@@ -658,7 +658,7 @@ export default function InventoryReceiptsPage() {
             <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
               <div
                 className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
-                style={{ maxWidth: "min(1120px, 92vw)" }}
+                style={{ width: "min(62vw, 980px)", maxWidth: "min(62vw, 980px)" }}
               >
                 <form className="modal-content border-0 shadow-lg" onSubmit={saveReceipt}>
                   <div className="modal-header px-4 py-3">
@@ -673,8 +673,8 @@ export default function InventoryReceiptsPage() {
                       onClick={closeCreateDialog}
                     />
                   </div>
-                  <div className="modal-body px-4 py-4">
-                    <div className="row g-3">
+                  <div className="modal-body px-4 py-3">
+                    <div className="row g-2">
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Receipt No.</label>
                     <input
@@ -726,7 +726,7 @@ export default function InventoryReceiptsPage() {
                     </select>
                   </div>
 
-                  <div className="col-12">
+                  <div className="col-12 col-md-6">
                     <label className="form-label small">Store</label>
                     <select
                       className="form-select form-select-sm"
@@ -743,7 +743,7 @@ export default function InventoryReceiptsPage() {
                     </select>
                   </div>
 
-                  <div className="col-12">
+                  <div className="col-12 col-md-6">
                     <label className="form-label small">Department</label>
                     <select
                       className="form-select form-select-sm"
