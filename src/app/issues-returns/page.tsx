@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -559,10 +560,12 @@ function IssuesReturnsContent() {
       header: "Voucher",
       render: (row: Transaction) => (
         <>
-          <button className="btn btn-link p-0" onClick={() => toggleExpand(row.id)} type="button">
-            <i className="bi bi-list me-2" />
+          <div className="d-flex align-items-center gap-2">
+            <i className="bi bi-receipt text-primary" />
+            <Link className="fw-semibold" href={`/issues-returns/${row.id}`}>
             {row.transaction_no}
-          </button>
+            </Link>
+          </div>
           <div className="small text-secondary">{row.purpose ?? "-"}</div>
         </>
       ),
