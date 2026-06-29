@@ -169,6 +169,7 @@ function IssuesReturnsContent() {
   const [expandedLoading, setExpandedLoading] = useState<Record<number, boolean>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
   const searchParams = useSearchParams();
   const queryAssetId = useMemo(() => {
     const assetIdFromQuery = searchParams.get("asset_id");
@@ -359,8 +360,18 @@ function IssuesReturnsContent() {
   };
 
   const resetForm = () => {
-    setForm(defaultForm);
-    setItems([emptyItem]);
+    setForm({ ...defaultForm, transaction_date: new Date().toISOString().slice(0, 10) });
+    setItems([{ ...emptyItem }]);
+  };
+
+  const openCreateDialog = () => {
+    resetForm();
+    setError("");
+    setDialogOpen(true);
+  };
+
+  const closeCreateDialog = () => {
+    setDialogOpen(false);
   };
 
   const canSubmitType = (type: TransactionType, adjustmentDirection: TransactionForm["adjustment_direction"]): string[] => {
@@ -452,6 +463,7 @@ function IssuesReturnsContent() {
       }
 
       resetForm();
+      setDialogOpen(false);
       await loadRows();
     } catch (error: unknown) {
       const apiErrorMessage =
@@ -618,7 +630,12 @@ function IssuesReturnsContent() {
         <PageHeader
           title="Issue / Return / Transfer / Adjustment"
           subtitle="Create stock movement vouchers and post to update balances for issue, return, transfer, adjustment, and consumption."
-          
+          actions={
+            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+              <i className="bi bi-plus-lg me-1" />
+              New Voucher
+            </button>
+          }
         />
 
         {(message || error) && (
@@ -628,13 +645,28 @@ function IssuesReturnsContent() {
           </div>
         )}
 
-        <div className="row g-4">
-          <section className="col-12 col-xxl-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">New Voucher</div>
-              <div className="card-body">
-                <form onSubmit={saveTransaction}>
-                  <div className="row g-3">
+        {dialogOpen ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+              <div
+                className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+                style={{ width: "min(62vw, 980px)", maxWidth: "min(62vw, 980px)" }}
+              >
+                <form className="modal-content border-0 shadow-lg" onSubmit={saveTransaction}>
+                  <div className="modal-header px-4 py-3">
+                    <div>
+                      <h2 className="h5 mb-1">New Voucher</h2>
+                      <p className="text-secondary mb-0">Create an issue, return, transfer, adjustment, or consumption voucher.</p>
+                    </div>
+                    <button
+                      className="btn-close"
+                      type="button"
+                      aria-label="Close"
+                      onClick={closeCreateDialog}
+                    />
+                  </div>
+                  <div className="modal-body px-4 py-3">
+                    <div className="row g-2">
                     <div className="col-12">
                       <label className="form-label">Voucher type</label>
                       <select
@@ -963,23 +995,27 @@ function IssuesReturnsContent() {
                         Post immediately after save
                       </label>
                     </div>
-
-                    <div className="col-12 d-flex justify-content-end">
-                      <button type="submit" className="btn btn-primary">
-                        <i className="bi bi-save me-2" />
-                        Save Transaction
-                      </button>
-                    </div>
+                  </div>
+                  </div>
+                  <div className="modal-footer px-4 py-3">
+                    <button type="button" className="btn btn-outline-secondary" onClick={closeCreateDialog}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary">
+                      <i className="bi bi-save me-2" />
+                      Save Transaction
+                    </button>
                   </div>
                 </form>
               </div>
             </div>
-          </section>
+            <div className="modal-backdrop fade show" />
+          </>
+        ) : null}
 
-          <section className="col-12 col-xxl-7">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">Transaction List</div>
-              <div className="card-body">
+        <section className="col-12">
+          <div className="card border-0 shadow-sm mb-3">
+            <div className="card-body">
                 <FilterBar onReset={clearFilters}>
                   <div className="col-12 col-md-5">
                     <label className="form-label small mb-1">Search</label>
@@ -1044,28 +1080,32 @@ function IssuesReturnsContent() {
                       ))}
                     </select>
                   </div>
-                </FilterBar>
-
-                {rows.length === 0 ? (
-                  <EmptyState title="No transactions found" message="No records match the current filters." icon="bi-receipt" />
-                ) : (
-                  <DataTable columns={transactionColumns} rows={rows} />
-                )}
-
-                {expandedId && (
-                  <div className="mt-3">
-                    <h3 className="h6">Transaction items for #{expandedId}</h3>
-                    {expandedLoading[expandedId] ? (
-                      <div className="text-secondary">Loading items...</div>
-                    ) : (
-                      <DataTable columns={expandedItemColumns} rows={expandedItems[expandedId] ?? []} empty="No item rows returned by backend." />
-                    )}
-                  </div>
-                )}
-              </div>
+              </FilterBar>
             </div>
-          </section>
-        </div>
+          </div>
+
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <h2 className="h6 fw-semibold mb-0">Transaction list</h2>
+            <span className="small text-secondary">{rows.length} record{rows.length === 1 ? "" : "s"}</span>
+          </div>
+
+          {rows.length === 0 ? (
+            <EmptyState title="No transactions found" message="No records match the current filters." icon="bi-receipt" />
+          ) : (
+            <DataTable columns={transactionColumns} rows={rows} />
+          )}
+
+          {expandedId && (
+            <div className="mt-3">
+              <h3 className="h6">Transaction items for #{expandedId}</h3>
+              {expandedLoading[expandedId] ? (
+                <div className="text-secondary">Loading items...</div>
+              ) : (
+                <DataTable columns={expandedItemColumns} rows={expandedItems[expandedId] ?? []} empty="No item rows returned by backend." />
+              )}
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );
