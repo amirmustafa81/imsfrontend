@@ -202,6 +202,8 @@ export default function ControlledStationeryPage() {
 
   const [serialActions, setSerialActions] = useState<Record<number, SerialActionPayload>>({});
   const [serialActionBusy, setSerialActionBusy] = useState<Record<number, boolean>>({});
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [activeView, setActiveView] = useState<"batches" | "serials">("batches");
 
   const authHeaders = useMemo(() => ({}), []);
 
@@ -356,6 +358,11 @@ export default function ControlledStationeryPage() {
     setSerialRows([defaultSerialInput]);
   };
 
+  const closeDialog = () => {
+    setDialogOpen(false);
+    resetBatchForm();
+  };
+
 const loadActionDraft = (serialId: number): SerialActionPayload => {
   return serialActions[serialId] ?? defaultSerialAction;
 };
@@ -450,6 +457,7 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
         setMessage("Batch created.");
       }
       resetBatchForm();
+      setDialogOpen(false);
       await loadBatches();
       await loadSerials();
     } catch {
@@ -709,7 +717,12 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
         <PageHeader
           title="Controlled Stationery"
           subtitle="Track controlled stationery by batch and serial number for issue, consume, return, missing, and damage actions."
-          
+          actions={
+            <button className="btn btn-primary btn-sm" type="button" onClick={() => setDialogOpen(true)}>
+              <i className="bi bi-plus-lg me-1" />
+              Create Batch
+            </button>
+          }
         />
 
         {(message || error) && (
@@ -740,258 +753,298 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
           </div>
         </div>
 
-        <div className="row g-4">
-          <div className="col-lg-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-4">
-                <h2 className="h5 mb-3">Create Controlled Stationery Batch</h2>
-                <form onSubmit={submitBatch} className="vstack gap-3">
-                  <div className="row g-2">
-                    <div className="col-12">
-                      <label htmlFor="batch-no" className="form-label">
-                        Batch No.
-                      </label>
-                      <input
-                        id="batch-no"
-                        className="form-control form-control-sm"
-                        value={batchForm.batch_no}
-                        onChange={(event) => setBatchFormValue("batch_no", event.target.value)}
-                        placeholder="e.g. CS-2026-001"
-                      />
+        {dialogOpen ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+              <div
+                className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+                style={{ width: "min(92vw, 980px)", maxWidth: "980px" }}
+              >
+                <form className="modal-content border-0 shadow-lg" onSubmit={submitBatch}>
+                  <div className="modal-header px-4 py-3">
+                    <div>
+                      <h5 className="modal-title mb-1">Create Controlled Stationery Batch</h5>
+                      <div className="text-secondary">Record a batch and generate its serial numbers.</div>
                     </div>
-                    <div className="col-md-6">
-                      <label htmlFor="batch-item" className="form-label">
-                        Item
-                      </label>
-                      <select
-                        id="batch-item"
-                        className="form-select form-select-sm"
-                        value={batchForm.item_id}
-                        onChange={(event) => setBatchFormValue("item_id", event.target.value)}
-                      >
-                        <option value="">Select item</option>
-                        {controlledStationeryItems.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.item_code ? `${item.item_code} - ${item.name}` : `${item.id} - ${item.name}`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-md-6">
-                      <label htmlFor="batch-receipt" className="form-label">
-                        Receipt Item ID (optional)
-                      </label>
-                      <input
-                        id="batch-receipt"
-                        className="form-control form-control-sm"
-                        value={batchForm.receipt_item_id}
-                        onChange={(event) => setBatchFormValue("receipt_item_id", event.target.value)}
-                        placeholder="optional"
-                      />
-                    </div>
+                    <button className="btn-close" type="button" aria-label="Close" onClick={closeDialog} />
                   </div>
-
-                  <div className="row g-2">
-                    <div className="col-md-6">
-                      <label htmlFor="batch-department" className="form-label">
-                        Department
-                      </label>
-                      <select
-                        id="batch-department"
-                        className="form-select form-select-sm"
-                        value={batchForm.department_id}
-                        onChange={(event) => setBatchFormValue("department_id", event.target.value)}
-                      >
-                        <option value="">Select department</option>
-                        {lookups.departments.map((department) => (
-                          <option key={department.id} value={department.id}>
-                            {department.code} - {department.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-md-6">
-                      <label htmlFor="batch-store" className="form-label">
-                        Store (optional)
-                      </label>
-                      <select
-                        id="batch-store"
-                        className="form-select form-select-sm"
-                        value={batchForm.store_id}
-                        onChange={(event) => setBatchFormValue("store_id", event.target.value)}
-                      >
-                        <option value="">Select store</option>
-                        {lookups.stores.map((store) => (
-                          <option key={store.id} value={store.id}>
-                            {store.code ?? store.id} - {store.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="row g-2">
-                    <div className="col-md-4">
-                      <label htmlFor="batch-received-date" className="form-label">
-                        Received Date
-                      </label>
-                      <input
-                        id="batch-received-date"
-                        type="date"
-                        className="form-control form-control-sm"
-                        value={batchForm.received_date}
-                        onChange={(event) => setBatchFormValue("received_date", event.target.value)}
-                      />
-                    </div>
-                    <div className="col-md-4">
-                      <label htmlFor="batch-status" className="form-label">
-                        Batch Status
-                      </label>
-                      <select
-                        id="batch-status"
-                        className="form-select form-select-sm"
-                        value={batchForm.status}
-                        onChange={(event) => setBatchFormValue("status", event.target.value as BatchStatus)}
-                      >
-                        <option value="active">Active</option>
-                        <option value="closed">Closed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
-                    </div>
-                    <div className="col-md-4">
-                      <label htmlFor="batch-qty" className="form-label">
-                        Total Quantity
-                      </label>
-                      <input
-                        id="batch-qty"
-                        className="form-control form-control-sm"
-                        value={batchForm.total_quantity}
-                        onChange={(event) => setBatchFormValue("total_quantity", event.target.value)}
-                        placeholder="e.g. 100"
-                        inputMode="numeric"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="row g-2 align-items-end">
-                    <div className="col-md-4">
-                      <label className="form-label">Serialing Method</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={batchForm.use_range ? "range" : "manual"}
-                        onChange={(event) => setBatchFormValue("use_range", event.target.value === "range")}
-                      >
-                        <option value="range">Numeric Range</option>
-                        <option value="manual">Manual Serial List</option>
-                      </select>
-                    </div>
-                    <div className="col-md-4">
-                      <label htmlFor="batch-prefix" className="form-label">
-                        Serial Prefix
-                      </label>
-                      <input
-                        id="batch-prefix"
-                        className="form-control form-control-sm"
-                        value={batchForm.serial_prefix}
-                        onChange={(event) => setBatchFormValue("serial_prefix", event.target.value)}
-                      />
-                    </div>
-                    <div className="col-md-4">
-                      <label htmlFor="batch-remarks" className="form-label">
-                        Remarks
-                      </label>
-                      <input
-                        id="batch-remarks"
-                        className="form-control form-control-sm"
-                        value={batchForm.remarks}
-                        onChange={(event) => setBatchFormValue("remarks", event.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  {batchForm.use_range ? (
-                    <div className="row g-2">
-                      <div className="col-md-6">
-                        <label htmlFor="serial-from" className="form-label">
-                          Serial From
-                        </label>
-                        <input
-                          id="serial-from"
-                          className="form-control form-control-sm"
-                          value={batchForm.serial_from}
-                          onChange={(event) => setBatchFormValue("serial_from", event.target.value)}
-                        />
+                  <div className="modal-body px-4 py-4">
+                    <div className="vstack gap-3">
+                      <div className="row g-3">
+                        <div className="col-12">
+                          <label htmlFor="batch-no" className="form-label">
+                            Batch No.
+                          </label>
+                          <input
+                            id="batch-no"
+                            className="form-control"
+                            value={batchForm.batch_no}
+                            onChange={(event) => setBatchFormValue("batch_no", event.target.value)}
+                            placeholder="e.g. CS-2026-001"
+                          />
+                        </div>
+                        <div className="col-md-6">
+                          <label htmlFor="batch-item" className="form-label">
+                            Item
+                          </label>
+                          <select
+                            id="batch-item"
+                            className="form-select"
+                            value={batchForm.item_id}
+                            onChange={(event) => setBatchFormValue("item_id", event.target.value)}
+                          >
+                            <option value="">Select item</option>
+                            {controlledStationeryItems.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.item_code ? `${item.item_code} - ${item.name}` : `${item.id} - ${item.name}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-md-6">
+                          <label htmlFor="batch-receipt" className="form-label">
+                            Receipt Item ID (optional)
+                          </label>
+                          <input
+                            id="batch-receipt"
+                            className="form-control"
+                            value={batchForm.receipt_item_id}
+                            onChange={(event) => setBatchFormValue("receipt_item_id", event.target.value)}
+                            placeholder="optional"
+                          />
+                        </div>
                       </div>
-                      <div className="col-md-6">
-                        <label htmlFor="serial-to" className="form-label">
-                          Serial To
-                        </label>
-                        <input
-                          id="serial-to"
-                          className="form-control form-control-sm"
-                          value={batchForm.serial_to}
-                          onChange={(event) => setBatchFormValue("serial_to", event.target.value)}
-                        />
+
+                      <div className="row g-3">
+                        <div className="col-md-6">
+                          <label htmlFor="batch-department" className="form-label">
+                            Department
+                          </label>
+                          <select
+                            id="batch-department"
+                            className="form-select"
+                            value={batchForm.department_id}
+                            onChange={(event) => setBatchFormValue("department_id", event.target.value)}
+                          >
+                            <option value="">Select department</option>
+                            {lookups.departments.map((department) => (
+                              <option key={department.id} value={department.id}>
+                                {department.code} - {department.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-md-6">
+                          <label htmlFor="batch-store" className="form-label">
+                            Store (optional)
+                          </label>
+                          <select
+                            id="batch-store"
+                            className="form-select"
+                            value={batchForm.store_id}
+                            onChange={(event) => setBatchFormValue("store_id", event.target.value)}
+                          >
+                            <option value="">Select store</option>
+                            {lookups.stores.map((store) => (
+                              <option key={store.id} value={store.id}>
+                                {store.code ?? store.id} - {store.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="border rounded p-3 bg-body-tertiary">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <span className="fw-semibold">Serial Entries</span>
-                        <button className="btn btn-outline-secondary btn-sm" type="button" onClick={addSerialRow}>
-                          <i className="bi bi-plus-lg me-1" />
-                          Add Serial Row
-                        </button>
+
+                      <div className="row g-3">
+                        <div className="col-md-4">
+                          <label htmlFor="batch-received-date" className="form-label">
+                            Received Date
+                          </label>
+                          <input
+                            id="batch-received-date"
+                            type="date"
+                            className="form-control"
+                            value={batchForm.received_date}
+                            onChange={(event) => setBatchFormValue("received_date", event.target.value)}
+                          />
+                        </div>
+                        <div className="col-md-4">
+                          <label htmlFor="batch-status" className="form-label">
+                            Batch Status
+                          </label>
+                          <select
+                            id="batch-status"
+                            className="form-select"
+                            value={batchForm.status}
+                            onChange={(event) => setBatchFormValue("status", event.target.value as BatchStatus)}
+                          >
+                            <option value="active">Active</option>
+                            <option value="closed">Closed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        </div>
+                        <div className="col-md-4">
+                          <label htmlFor="batch-qty" className="form-label">
+                            Total Quantity
+                          </label>
+                          <input
+                            id="batch-qty"
+                            className="form-control"
+                            value={batchForm.total_quantity}
+                            onChange={(event) => setBatchFormValue("total_quantity", event.target.value)}
+                            placeholder="e.g. 100"
+                            inputMode="numeric"
+                          />
+                        </div>
                       </div>
-                      {serialRows.map((serialRow, index) => (
-                        <div key={serialRow.serial_no || `serial-${index}`} className="row g-2 align-items-end mb-2">
-                          <div className="col-md-5">
-                            <label className="form-label">Serial No.</label>
+
+                      <div className="row g-3 align-items-end">
+                        <div className="col-md-4">
+                          <label className="form-label">Serialing Method</label>
+                          <select
+                            className="form-select"
+                            value={batchForm.use_range ? "range" : "manual"}
+                            onChange={(event) => setBatchFormValue("use_range", event.target.value === "range")}
+                          >
+                            <option value="range">Numeric Range</option>
+                            <option value="manual">Manual Serial List</option>
+                          </select>
+                        </div>
+                        <div className="col-md-4">
+                          <label htmlFor="batch-prefix" className="form-label">
+                            Serial Prefix
+                          </label>
+                          <input
+                            id="batch-prefix"
+                            className="form-control"
+                            value={batchForm.serial_prefix}
+                            onChange={(event) => setBatchFormValue("serial_prefix", event.target.value)}
+                          />
+                        </div>
+                        <div className="col-md-4">
+                          <label htmlFor="batch-remarks" className="form-label">
+                            Remarks
+                          </label>
+                          <input
+                            id="batch-remarks"
+                            className="form-control"
+                            value={batchForm.remarks}
+                            onChange={(event) => setBatchFormValue("remarks", event.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {batchForm.use_range ? (
+                        <div className="row g-3">
+                          <div className="col-md-6">
+                            <label htmlFor="serial-from" className="form-label">
+                              Serial From
+                            </label>
                             <input
-                              className="form-control form-control-sm"
-                              value={serialRow.serial_no}
-                              onChange={(event) => setSerialRowValue(index, "serial_no", event.target.value)}
-                              placeholder="e.g. ANS-001"
+                              id="serial-from"
+                              className="form-control"
+                              value={batchForm.serial_from}
+                              onChange={(event) => setBatchFormValue("serial_from", event.target.value)}
                             />
                           </div>
-                          <div className="col-md-5">
-                            <label className="form-label">Remarks</label>
+                          <div className="col-md-6">
+                            <label htmlFor="serial-to" className="form-label">
+                              Serial To
+                            </label>
                             <input
-                              className="form-control form-control-sm"
-                              value={serialRow.remarks}
-                              onChange={(event) => setSerialRowValue(index, "remarks", event.target.value)}
+                              id="serial-to"
+                              className="form-control"
+                              value={batchForm.serial_to}
+                              onChange={(event) => setBatchFormValue("serial_to", event.target.value)}
                             />
-                          </div>
-                          <div className="col-md-2">
-                            <button
-                              className="btn btn-outline-danger w-100"
-                              type="button"
-                              onClick={() => removeSerialRow(index)}
-                              disabled={serialRows.length <= 1}
-                            >
-                              <i className="bi bi-trash me-1" />
-                              Remove
-                            </button>
                           </div>
                         </div>
-                      ))}
+                      ) : (
+                        <div className="border rounded p-3 bg-body-tertiary">
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <span className="fw-semibold">Serial Entries</span>
+                            <button className="btn btn-outline-secondary btn-sm" type="button" onClick={addSerialRow}>
+                              <i className="bi bi-plus-lg me-1" />
+                              Add Serial Row
+                            </button>
+                          </div>
+                          {serialRows.map((serialRow, index) => (
+                            <div key={serialRow.serial_no || `serial-${index}`} className="row g-2 align-items-end mb-2">
+                              <div className="col-md-5">
+                                <label className="form-label">Serial No.</label>
+                                <input
+                                  className="form-control form-control-sm"
+                                  value={serialRow.serial_no}
+                                  onChange={(event) => setSerialRowValue(index, "serial_no", event.target.value)}
+                                  placeholder="e.g. ANS-001"
+                                />
+                              </div>
+                              <div className="col-md-5">
+                                <label className="form-label">Remarks</label>
+                                <input
+                                  className="form-control form-control-sm"
+                                  value={serialRow.remarks}
+                                  onChange={(event) => setSerialRowValue(index, "remarks", event.target.value)}
+                                />
+                              </div>
+                              <div className="col-md-2">
+                                <button
+                                  className="btn btn-outline-danger w-100"
+                                  type="button"
+                                  onClick={() => removeSerialRow(index)}
+                                  disabled={serialRows.length <= 1}
+                                >
+                                  <i className="bi bi-trash me-1" />
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-
-                  <div className="d-flex justify-content-end gap-2">
-                    <button className="btn btn-outline-secondary" type="button" onClick={resetBatchForm}>
-                      Reset
+                  </div>
+                  <div className="modal-footer px-4 py-3">
+                    <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
+                      Cancel
                     </button>
                     <button className="btn btn-primary" type="submit">
+                      <i className="bi bi-save me-1" />
                       Save Batch
                     </button>
                   </div>
                 </form>
               </div>
             </div>
-          </div>
+            <div className="modal-backdrop fade show" onClick={closeDialog} />
+          </>
+        ) : null}
 
-          <div className="col-lg-7">
+        <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <div className="btn-group" role="tablist" aria-label="Controlled stationery views">
+            <button
+              className={`btn btn-sm ${activeView === "batches" ? "btn-primary" : "btn-outline-primary"}`}
+              type="button"
+              onClick={() => setActiveView("batches")}
+              aria-pressed={activeView === "batches"}
+            >
+              Batches
+            </button>
+            <button
+              className={`btn btn-sm ${activeView === "serials" ? "btn-primary" : "btn-outline-primary"}`}
+              type="button"
+              onClick={() => setActiveView("serials")}
+              aria-pressed={activeView === "serials"}
+            >
+              Serial Numbers
+            </button>
+          </div>
+          <div className="small text-secondary">
+            {activeView === "batches" ? `${batches.length} batch records` : `${serials.length} serial records`}
+          </div>
+        </div>
+
+        {activeView === "batches" ? (
+          <div className="mb-4">
             <FilterBar onReset={resetBatchFilters}>
               <div className="col-12 col-md-4">
                 <label className="form-label small">Search</label>
@@ -1055,68 +1108,75 @@ const loadActionDraft = (serialId: number): SerialActionPayload => {
               </div>
             </FilterBar>
 
-            <h2 className="h5 mb-2">Controlled Stationery Batches</h2>
+            <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
+              <h2 className="h5 mb-0">Controlled Stationery Batches</h2>
+              <span className="small text-secondary">{batches.length} records</span>
+            </div>
             <DataTable columns={batchColumns} rows={batches} empty="No batch records." />
           </div>
-        </div>
-        <div className="mb-4">
-          <h2 className="h5 mb-2">Serials Filter & Actions</h2>
-          <FilterBar onReset={resetSerialFilters}>
-            <div className="col-12 col-md-3">
-              <label className="form-label small">Search</label>
-              <input className="form-control form-control-sm" value={serialSearch} onChange={(event) => setSerialSearch(event.target.value)} />
+        ) : (
+          <div className="mb-4">
+            <FilterBar onReset={resetSerialFilters}>
+              <div className="col-12 col-md-3">
+                <label className="form-label small">Search</label>
+                <input className="form-control form-control-sm" value={serialSearch} onChange={(event) => setSerialSearch(event.target.value)} />
+              </div>
+              <div className="col-12 col-md-2">
+                <label className="form-label small">Status</label>
+                <select className="form-select form-select-sm" value={serialStatusFilter} onChange={(event) => setSerialStatusFilter(event.target.value)}>
+                  <option value="">All</option>
+                  {serialStatusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {toSerialStatusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-12 col-md-3">
+                <label className="form-label small">Item</label>
+                <select className="form-select form-select-sm" value={serialItemFilter} onChange={(event) => setSerialItemFilter(event.target.value)}>
+                  <option value="">All</option>
+                  {controlledStationeryItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.item_code ? `${item.item_code} - ${item.name}` : `${item.id} - ${item.name}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-12 col-md-2">
+                <label className="form-label small">Department</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={serialDepartmentFilter}
+                  onChange={(event) => setSerialDepartmentFilter(event.target.value)}
+                >
+                  <option value="">All</option>
+                  {lookups.departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.code} - {department.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-12 col-md-2">
+                <label className="form-label small">Store</label>
+                <select className="form-select form-select-sm" value={serialStoreFilter} onChange={(event) => setSerialStoreFilter(event.target.value)}>
+                  <option value="">All</option>
+                  {lookups.stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.code ?? store.id} - {store.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </FilterBar>
+            <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
+              <h2 className="h5 mb-0">Serial Numbers & Actions</h2>
+              <span className="small text-secondary">{serials.length} records</span>
             </div>
-            <div className="col-12 col-md-2">
-              <label className="form-label small">Status</label>
-              <select className="form-select form-select-sm" value={serialStatusFilter} onChange={(event) => setSerialStatusFilter(event.target.value)}>
-                <option value="">All</option>
-                {serialStatusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {toSerialStatusLabel(status)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-12 col-md-3">
-              <label className="form-label small">Item</label>
-              <select className="form-select form-select-sm" value={serialItemFilter} onChange={(event) => setSerialItemFilter(event.target.value)}>
-                <option value="">All</option>
-                {controlledStationeryItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.item_code ? `${item.item_code} - ${item.name}` : `${item.id} - ${item.name}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-12 col-md-2">
-              <label className="form-label small">Department</label>
-              <select
-                className="form-select form-select-sm"
-                value={serialDepartmentFilter}
-                onChange={(event) => setSerialDepartmentFilter(event.target.value)}
-              >
-                <option value="">All</option>
-                {lookups.departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.code} - {department.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-12 col-md-2">
-              <label className="form-label small">Store</label>
-              <select className="form-select form-select-sm" value={serialStoreFilter} onChange={(event) => setSerialStoreFilter(event.target.value)}>
-                <option value="">All</option>
-                {lookups.stores.map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.code ?? store.id} - {store.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </FilterBar>
-          <DataTable columns={serialColumns} rows={serials} empty="No serial records." />
-        </div>
+            <DataTable columns={serialColumns} rows={serials} empty="No serial records." />
+          </div>
+        )}
       </div>
     </main>
   );

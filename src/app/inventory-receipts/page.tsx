@@ -117,6 +117,18 @@ const statusOptions: ReceiptStatus[] = [
   "cancelled",
 ];
 
+const inspectionStatusDisplay: Record<string, string> = {
+  pending: "Pending",
+  accepted: "Accepted",
+  partially_accepted: "Partially Accepted",
+  rejected: "Rejected",
+};
+
+const extractApiMessage = (error: unknown, fallback: string) => {
+  const message = (error as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+  return typeof message === "string" && message.trim() ? message : fallback;
+};
+
 type ApprovalReferenceState = {
   ref: string;
   authority: string;
@@ -424,7 +436,7 @@ export default function InventoryReceiptsPage() {
       header: "Inspection",
       render: (receiptItem: ReceiptItem) => (
         <span className="d-flex align-items-center gap-2">
-          <StatusBadge status={receiptItem.inspection_status || "-"} />
+          <StatusBadge status={inspectionStatusDisplay[receiptItem.inspection_status] ?? receiptItem.inspection_status ?? "-"} />
           <span className="text-secondary small">{receiptItem.inspection_remarks ?? ""}</span>
         </span>
       ),
@@ -576,8 +588,8 @@ export default function InventoryReceiptsPage() {
       setAttachmentFiles([]);
       setDialogOpen(false);
       await refreshRows();
-    } catch {
-      setError("Could not create receipt. Verify required fields.");
+    } catch (saveError) {
+      setError(extractApiMessage(saveError, "Could not create receipt. Verify required fields."));
       setIsPostingReceipt(false);
       return;
     }
@@ -591,9 +603,15 @@ export default function InventoryReceiptsPage() {
     try {
       await postReceipt(receiptId);
       setMessage("Receipt posted and stock updated.");
+      setError("");
       await refreshRows();
-    } catch {
-      setError("Could not post receipt.");
+      if (expandedId === receiptId) {
+        const response = await api.get(`/inventory-receipts/${receiptId}`);
+        const itemsData = response.data?.items;
+        setExpandedItems((current) => ({ ...current, [receiptId]: Array.isArray(itemsData) ? itemsData : [] }));
+      }
+    } catch (postError) {
+      setError(extractApiMessage(postError, "Could not post receipt."));
     }
   };
 

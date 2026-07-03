@@ -88,6 +88,8 @@ const STATUS_TONES: Record<string, string> = {
   "Written Off": "bg-dark",
   Draft: "bg-secondary",
   Posted: "bg-success",
+  Accepted: "bg-success",
+  Pending: "bg-secondary",
   "Partially Accepted": "bg-warning text-dark",
   Rejected: "bg-danger",
   Active: "bg-success",
