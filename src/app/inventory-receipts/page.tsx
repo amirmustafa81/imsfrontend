@@ -207,6 +207,7 @@ export default function InventoryReceiptsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const [isPostingReceipt, setIsPostingReceipt] = useState(false);
+  const [uploadingAttachmentId, setUploadingAttachmentId] = useState<number | null>(null);
 
   const attachmentTotalBytes = useMemo(
     () => attachmentFiles.reduce((acc, item) => acc + item.size, 0),
@@ -477,6 +478,35 @@ export default function InventoryReceiptsPage() {
     formData.append("file", file);
 
     await api.post("/documents", formData);
+  };
+
+  const handleSavedReceiptAttachment = async (receiptId: number, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    if (file.size === 0) {
+      setError("Attachment must be greater than 0 bytes.");
+      return;
+    }
+
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      setError("Attachment must be 10 MB or less.");
+      return;
+    }
+
+    try {
+      setUploadingAttachmentId(receiptId);
+      await uploadReceiptAttachment(receiptId, file);
+      setMessage("Supporting document attached. You can now post the receipt.");
+      setError("");
+      await refreshRows();
+    } catch (attachmentError) {
+      setError(extractApiMessage(attachmentError, "Could not attach supporting document."));
+    } finally {
+      setUploadingAttachmentId(null);
+    }
   };
 
   const saveReceipt = async (event: FormEvent<HTMLFormElement>) => {
@@ -1216,6 +1246,21 @@ export default function InventoryReceiptsPage() {
                                 {expandedLoading[row.id] ? "Loading" : expandedId === row.id ? "Hide Items" : "Items"}
                               </button>
                               {row.status !== "posted" ? (
+                                <>
+                                  <label
+                                    className={`btn btn-outline-secondary ${uploadingAttachmentId === row.id ? "disabled" : ""}`}
+                                    title="Attach supporting document required before posting"
+                                  >
+                                    <i className="bi bi-paperclip me-1" />
+                                    {uploadingAttachmentId === row.id ? "Attaching" : "Attach"}
+                                    <input
+                                      className="visually-hidden"
+                                      type="file"
+                                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                                      disabled={uploadingAttachmentId === row.id}
+                                      onChange={(event) => handleSavedReceiptAttachment(row.id, event)}
+                                    />
+                                  </label>
                                 <button
                                   className="btn btn-outline-success"
                                   type="button"
@@ -1223,6 +1268,7 @@ export default function InventoryReceiptsPage() {
                                 >
                                   Post
                                 </button>
+                                </>
                               ) : null}
                               {(row.status === "draft" || row.status === "cancelled") ? (
                                 <button
