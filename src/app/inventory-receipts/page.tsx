@@ -20,6 +20,11 @@ type RowData = {
   [key: string]: string | number | null | undefined;
 };
 
+type SystemSetting = {
+  setting_key: string;
+  setting_value: string | null;
+};
+
 type Receipt = {
   id: number;
   receipt_no: string;
@@ -149,6 +154,26 @@ const rejectedQuantityFor = (receivedValue: string, acceptedValue: string) => {
   return formatQuantityInput(Math.max(0, received - accepted));
 };
 
+const normalizeMoneyInput = (value: string) => {
+  if (value === "") return "";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "";
+  return String(Math.max(0, amount));
+};
+
+const formatMoneyInput = (value: number) => {
+  if (!Number.isFinite(value)) return "";
+  const fixed = value.toFixed(2);
+  return fixed.replace(/\.?0+$/, "");
+};
+
+const totalCostFor = (acceptedValue: string, unitCostValue: string) => {
+  const accepted = Number(acceptedValue || 0);
+  const unitCost = Number(unitCostValue || 0);
+  if (!Number.isFinite(accepted) || !Number.isFinite(unitCost) || accepted <= 0 || unitCost < 0) return "";
+  return formatMoneyInput(accepted * unitCost);
+};
+
 type ApprovalReferenceState = {
   ref: string;
   authority: string;
@@ -210,6 +235,7 @@ export default function InventoryReceiptsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [storeFilter, setStoreFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
+  const [currency, setCurrency] = useState("PKR");
   const [form, setForm] = useState<ReceiptForm>(defaultForm);
   const [approvalReference, setApprovalReference] = useState<ApprovalReferenceState>({
     ref: defaultForm.manual_approval_ref,
@@ -244,6 +270,25 @@ export default function InventoryReceiptsPage() {
   };
 
   const authReady = useMemo(() => isAuthenticated && !loading, [isAuthenticated, loading]);
+
+  useEffect(() => {
+    if (!authReady) {
+      return;
+    }
+
+    const loadCurrency = async () => {
+      try {
+        const response = await api.get<{ data: SystemSetting[] }>("/system-settings");
+        const settings = response.data?.data ?? [];
+        const currencySetting = settings.find((setting) => setting.setting_key === "finance.default_currency");
+        setCurrency(currencySetting?.setting_value || "PKR");
+      } catch {
+        setCurrency("PKR");
+      }
+    };
+
+    void loadCurrency();
+  }, [authReady]);
 
   const lookupLabel = (source: LookupKey, value: unknown) => {
     if (value === null || value === undefined || value === "") {
@@ -379,6 +424,7 @@ export default function InventoryReceiptsPage() {
             quantity_received: quantityReceived,
             quantity_accepted: quantityAccepted,
             quantity_rejected: rejectedQuantityFor(quantityReceived, quantityAccepted),
+            total_cost: totalCostFor(quantityAccepted, row.unit_cost),
           };
         }
 
@@ -395,6 +441,7 @@ export default function InventoryReceiptsPage() {
             ...row,
             quantity_accepted: quantityAccepted,
             quantity_rejected: rejectedQuantityFor(row.quantity_received, quantityAccepted),
+            total_cost: totalCostFor(quantityAccepted, row.unit_cost),
           };
         }
 
@@ -413,6 +460,20 @@ export default function InventoryReceiptsPage() {
             ...row,
             quantity_rejected: quantityRejected,
           };
+        }
+
+        if (key === "unit_cost") {
+          const unitCost = normalizeMoneyInput(value);
+
+          return {
+            ...row,
+            unit_cost: unitCost,
+            total_cost: totalCostFor(row.quantity_accepted, unitCost),
+          };
+        }
+
+        if (key === "total_cost") {
+          return { ...row, total_cost: normalizeMoneyInput(value) };
         }
 
         return { ...row, [key]: value };
@@ -500,8 +561,8 @@ export default function InventoryReceiptsPage() {
     { key: "qty", header: "Qty Rec", render: (receiptItem: ReceiptItem) => receiptItem.quantity_received },
     { key: "accepted", header: "Accepted", render: (receiptItem: ReceiptItem) => receiptItem.quantity_accepted },
     { key: "rejected", header: "Rejected", render: (receiptItem: ReceiptItem) => receiptItem.quantity_rejected },
-    { key: "unitCost", header: "Unit Cost", render: (receiptItem: ReceiptItem) => receiptItem.unit_cost ?? "-" },
-    { key: "totalCost", header: "Total Cost", render: (receiptItem: ReceiptItem) => receiptItem.total_cost ?? "-" },
+    { key: "unitCost", header: `Unit Cost (${currency})`, render: (receiptItem: ReceiptItem) => receiptItem.unit_cost ?? "-" },
+    { key: "totalCost", header: `Total Cost (${currency})`, render: (receiptItem: ReceiptItem) => receiptItem.total_cost ?? "-" },
     {
       key: "inspection",
       header: "Inspection",
@@ -1064,7 +1125,7 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label small">Unit Cost</label>
+                          <label className="form-label small">Unit Cost ({currency})</label>
                           <input
                             className="form-control form-control-sm"
                             type="number"
@@ -1076,7 +1137,7 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label small">Total Cost</label>
+                          <label className="form-label small">Total Cost ({currency})</label>
                           <input
                             className="form-control form-control-sm"
                             type="number"

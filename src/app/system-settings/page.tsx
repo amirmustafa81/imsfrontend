@@ -14,6 +14,8 @@ type Setting = {
   updated_at: string;
 };
 
+const currencyOptions = ["PKR", "USD", "EUR", "GBP", "AED", "SAR"];
+
 export default function SystemSettingsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
@@ -76,7 +78,21 @@ export default function SystemSettingsPage() {
       key: "setting_value",
       header: "Value",
       render: (row: Setting) =>
-        editingId === row.id ? (
+        editingId === row.id && row.setting_key === "finance.default_currency" ? (
+          <select
+            className="form-select form-select-sm"
+            value={values[row.id] ?? "PKR"}
+            onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+              setValues((current) => ({ ...current, [row.id]: event.target.value }))
+            }
+          >
+            {currencyOptions.map((currency) => (
+              <option key={currency} value={currency}>
+                {currency}
+              </option>
+            ))}
+          </select>
+        ) : editingId === row.id ? (
           <input
             className="form-control form-control-sm"
             value={values[row.id] ?? ""}
