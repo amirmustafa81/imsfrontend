@@ -129,6 +129,26 @@ const extractApiMessage = (error: unknown, fallback: string) => {
   return typeof message === "string" && message.trim() ? message : fallback;
 };
 
+const normalizeQuantityInput = (value: string) => {
+  if (value === "") return "";
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity)) return "";
+  return String(Math.max(0, quantity));
+};
+
+const formatQuantityInput = (value: number) => {
+  if (!Number.isFinite(value)) return "";
+  const fixed = value.toFixed(3);
+  return fixed.replace(/\.?0+$/, "");
+};
+
+const rejectedQuantityFor = (receivedValue: string, acceptedValue: string) => {
+  const received = Number(receivedValue || 0);
+  const accepted = Number(acceptedValue || 0);
+  if (!Number.isFinite(received) || received <= 0) return "";
+  return formatQuantityInput(Math.max(0, received - accepted));
+};
+
 type ApprovalReferenceState = {
   ref: string;
   authority: string;
@@ -345,6 +365,56 @@ export default function InventoryReceiptsPage() {
     setItems((current) =>
       current.map((row, idx) => {
         if (idx !== index) return row;
+        if (key === "quantity_received") {
+          const quantityReceived = normalizeQuantityInput(value);
+          const received = Number(quantityReceived || 0);
+          const currentAccepted = Number(row.quantity_accepted || 0);
+          const quantityAccepted =
+            quantityReceived === ""
+              ? ""
+              : formatQuantityInput(Math.min(Math.max(0, currentAccepted), received));
+
+          return {
+            ...row,
+            quantity_received: quantityReceived,
+            quantity_accepted: quantityAccepted,
+            quantity_rejected: rejectedQuantityFor(quantityReceived, quantityAccepted),
+          };
+        }
+
+        if (key === "quantity_accepted") {
+          const acceptedInput = normalizeQuantityInput(value);
+          const received = Number(row.quantity_received || 0);
+          const accepted = Number(acceptedInput || 0);
+          const quantityAccepted =
+            acceptedInput === ""
+              ? ""
+              : formatQuantityInput(Math.min(Math.max(0, accepted), Math.max(0, received)));
+
+          return {
+            ...row,
+            quantity_accepted: quantityAccepted,
+            quantity_rejected: rejectedQuantityFor(row.quantity_received, quantityAccepted),
+          };
+        }
+
+        if (key === "quantity_rejected") {
+          const rejectedInput = normalizeQuantityInput(value);
+          const received = Number(row.quantity_received || 0);
+          const accepted = Number(row.quantity_accepted || 0);
+          const maximumRejected = Math.max(0, received - accepted);
+          const rejected = Number(rejectedInput || 0);
+          const quantityRejected =
+            rejectedInput === ""
+              ? ""
+              : formatQuantityInput(Math.min(Math.max(0, rejected), maximumRejected));
+
+          return {
+            ...row,
+            quantity_rejected: quantityRejected,
+          };
+        }
+
         return { ...row, [key]: value };
       }),
     );
@@ -582,6 +652,20 @@ export default function InventoryReceiptsPage() {
 
     if (receiptItems.some((row) => Number(row.quantity_received || 0) <= 0)) {
       setError("All item rows must include quantity received greater than 0.");
+      return;
+    }
+
+    if (receiptItems.some((row) => Number(row.quantity_accepted || 0) > Number(row.quantity_received || 0))) {
+      setError("Qty Accepted cannot be greater than Qty Received.");
+      return;
+    }
+
+    if (
+      receiptItems.some(
+        (row) => Number(row.quantity_accepted || 0) + Number(row.quantity_rejected || 0) > Number(row.quantity_received || 0),
+      )
+    ) {
+      setError("Qty Accepted plus Qty Rejected cannot be greater than Qty Received.");
       return;
     }
 
@@ -959,6 +1043,7 @@ export default function InventoryReceiptsPage() {
                             value={item.quantity_accepted}
                             step="0.001"
                             min="0"
+                            max={item.quantity_received || undefined}
                             onChange={(event) => setItemValue(index, "quantity_accepted", event.target.value)}
                           />
                         </div>
@@ -971,6 +1056,9 @@ export default function InventoryReceiptsPage() {
                             value={item.quantity_rejected}
                             step="0.001"
                             min="0"
+                            max={formatQuantityInput(
+                              Math.max(0, Number(item.quantity_received || 0) - Number(item.quantity_accepted || 0)),
+                            ) || undefined}
                             onChange={(event) => setItemValue(index, "quantity_rejected", event.target.value)}
                           />
                         </div>

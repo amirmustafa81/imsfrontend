@@ -48,7 +48,7 @@ export const matchingAttributeDefinitions = (
       if (definition.status && definition.status !== "active") return false;
       if (String(definition.category_id) !== String(categoryId ?? "")) return false;
       if (definition.subcategory_id && String(definition.subcategory_id) !== String(subcategoryId ?? "")) return false;
-      return definition.applies_to === appliesTo || definition.applies_to === "both";
+      return definition.applies_to === appliesTo;
     })
     .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0) || a.label.localeCompare(b.label));
 

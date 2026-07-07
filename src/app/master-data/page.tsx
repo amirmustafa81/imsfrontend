@@ -177,8 +177,6 @@ const resources: Record<ResourceKey, ResourceDef> = {
       { key: "is_required", label: "Required", type: "select", options: [{ value: "1", label: "Yes" }, { value: "0", label: "No" }] },
       { key: "applies_to", label: "Applies To", type: "select", required: true, options: [
         { value: "item", label: "Item Master" },
-        { value: "asset", label: "Fixed Asset" },
-        { value: "both", label: "Both" },
       ] },
       { key: "sort_order", label: "Sort Order", type: "number" },
       { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
@@ -282,7 +280,7 @@ const applyResourceFilter = (definition: ResourceDef, records: RowData[]) =>
 
 const initialFormFor = (fields: FieldDef[]): FormState =>
   fields.reduce<FormState>((acc, field) => {
-    acc[field.key] = field.type === "checkbox" ? false : "";
+    acc[field.key] = field.key === "applies_to" ? "item" : field.type === "checkbox" ? false : "";
     return acc;
   }, {});
 
@@ -334,7 +332,7 @@ const getFieldPlaceholder = (field: FieldDef): string => {
     requires_serial_tracking: "e.g. Yes / No",
     requires_qr_tag: "e.g. Yes / No",
     options: "For dropdown fields, enter one option per line or comma separated",
-    applies_to: "Choose where this specification field appears",
+    applies_to: "Attribute fields are maintained at Item Master level",
     sort_order: "e.g. 10",
     sponsor_type: "e.g. Government",
     ntn: "e.g. 1234567-8",
@@ -513,6 +511,11 @@ export default function MasterDataPage() {
     const payload: Record<string, unknown> = {};
 
     for (const field of definition.fields) {
+      if (activeResource === "asset-attribute-definitions" && field.key === "applies_to") {
+        payload[field.key] = "item";
+        continue;
+      }
+
       const raw = form[field.key];
 
       if (raw === "" || raw === null || raw === undefined) {
@@ -597,8 +600,12 @@ export default function MasterDataPage() {
       } else if (Array.isArray(value)) {
         next[field.key] = value.join("\n");
       } else {
-        next[field.key] = String(value);
+        next[field.key] = field.key === "applies_to" ? "item" : String(value);
       }
+    }
+
+    if (activeResource === "asset-attribute-definitions") {
+      next.applies_to = "item";
     }
 
     setEditingId(typeof row.id === "number" ? row.id : Number(row.id));
@@ -669,6 +676,7 @@ export default function MasterDataPage() {
           className="form-select form-select-sm"
           value={String(value)}
           onChange={(event) => setFieldValue(field.key, event.target.value)}
+          disabled={activeResource === "asset-attribute-definitions" && field.key === "applies_to"}
         >
           <option value="">Select</option>
           {options.map((option) => (
@@ -748,6 +756,10 @@ export default function MasterDataPage() {
 
         if (column === "status") {
           return <StatusBadge status={String(row[column] ?? "inactive")} />;
+        }
+
+        if (column === "applies_to") {
+          return <>Item Master</>;
         }
 
         return <>{displayValue(row[column])}</>;
