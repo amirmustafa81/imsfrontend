@@ -37,7 +37,7 @@ const displayValue = (value: PrintValue): string => {
 
 const toTitle = (value: PrintValue): string => displayValue(value).replaceAll("_", " ");
 
-export const printTransactionDocument = <T,>({
+const buildPrintHtml = <T,>({
   title,
   subtitle,
   reference,
@@ -46,12 +46,7 @@ export const printTransactionDocument = <T,>({
   columns,
   rows,
   note,
-}: PrintDocumentOptions<T>): boolean => {
-  if (typeof window === "undefined") return false;
-
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=800");
-  if (!printWindow) return false;
-
+}: PrintDocumentOptions<T>): string => {
   const generatedAt = new Date().toLocaleString();
   const metaRows = meta
     .filter((field) => displayValue(field.value) !== "-")
@@ -78,7 +73,7 @@ export const printTransactionDocument = <T,>({
         .join("")
     : `<tr><td colspan="${columns.length}" class="empty">No item lines found.</td></tr>`;
 
-  printWindow.document.write(`
+  return `
     <!doctype html>
     <html>
       <head>
@@ -225,8 +220,47 @@ export const printTransactionDocument = <T,>({
         </script>
       </body>
     </html>
-  `);
-  printWindow.document.close();
-  printWindow.focus();
+  `;
+};
+
+export const printTransactionDocument = <T,>(options: PrintDocumentOptions<T>): boolean => {
+  if (typeof window === "undefined" || typeof document === "undefined") return false;
+
+  const printFrame = document.createElement("iframe");
+  printFrame.setAttribute("title", `${displayValue(options.title)} print frame`);
+  printFrame.style.position = "fixed";
+  printFrame.style.right = "0";
+  printFrame.style.bottom = "0";
+  printFrame.style.width = "0";
+  printFrame.style.height = "0";
+  printFrame.style.border = "0";
+  printFrame.style.opacity = "0";
+
+  document.body.appendChild(printFrame);
+
+  const frameWindow = printFrame.contentWindow;
+  const frameDocument = frameWindow?.document;
+  if (!frameWindow || !frameDocument) {
+    printFrame.remove();
+    return false;
+  }
+
+  const cleanup = () => {
+    window.setTimeout(() => {
+      printFrame.remove();
+    }, 1000);
+  };
+
+  frameWindow.addEventListener("afterprint", cleanup, { once: true });
+  frameDocument.open();
+  frameDocument.write(buildPrintHtml(options));
+  frameDocument.close();
+
+  window.setTimeout(() => {
+    frameWindow.focus();
+    frameWindow.print();
+    cleanup();
+  }, 150);
+
   return true;
 };
