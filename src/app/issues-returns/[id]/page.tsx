@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { printTransactionDocument } from "@/lib/transaction-print";
 import { DataTable, EmptyState, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "stores" | "items" | "funding-sources" | "research-projects" | "storage-bins";
@@ -179,6 +180,48 @@ export default function TransactionDetailPage() {
     [lookupLabel],
   );
 
+  const printVoucher = () => {
+    if (!transaction) return;
+
+    const printed = printTransactionDocument<TransactionItem>({
+      title: `${toTitle(transaction.transaction_type)} Voucher`,
+      subtitle: "Inventory movement voucher details and item lines.",
+      reference: transaction.transaction_no,
+      status: transaction.status,
+      meta: [
+        { label: "Voucher No", value: transaction.transaction_no },
+        { label: "Type", value: toTitle(transaction.transaction_type) },
+        { label: "Date", value: toDate(transaction.transaction_date) },
+        { label: "From Department", value: lookupLabel("departments", transaction.from_department_id) },
+        { label: "From Store", value: lookupLabel("stores", transaction.from_store_id) },
+        { label: "From Bin", value: lookupLabel("storage-bins", transaction.from_storage_bin_id) },
+        { label: "To Department", value: lookupLabel("departments", transaction.to_department_id) },
+        { label: "To Store", value: lookupLabel("stores", transaction.to_store_id) },
+        { label: "To Bin", value: lookupLabel("storage-bins", transaction.to_storage_bin_id) },
+        { label: "Funding", value: lookupLabel("funding-sources", transaction.funding_source_id) },
+        { label: "Project", value: lookupLabel("research-projects", transaction.project_id) },
+        { label: "Approval Ref", value: transaction.manual_approval_ref },
+        { label: "Approved By", value: transaction.manual_approved_by },
+        { label: "Approval Date", value: toDate(transaction.manual_approval_date) },
+        { label: "Posted At", value: toDate(transaction.posted_at) },
+      ],
+      columns: [
+        { header: "Item", render: (row) => lookupLabel("items", row.item_id) },
+        { header: "Asset", render: (row) => (row.asset_id ? `#${row.asset_id}` : "-") },
+        { header: "Quantity", render: (row) => row.quantity },
+        { header: "Unit Cost", render: (row) => toMoney(row.unit_cost) },
+        { header: "Total", render: (row) => toMoney(row.unit_cost === null ? null : Number(row.quantity) * Number(row.unit_cost)) },
+        { header: "Remarks", render: (row) => row.remarks },
+      ],
+      rows: items,
+      note: transaction.remarks ?? transaction.purpose,
+    });
+
+    if (!printed) {
+      setError("Popup blocked. Please allow popups to print this voucher.");
+    }
+  };
+
   if (Number.isNaN(id) || id <= 0) {
     return (
       <main className="min-vh-100 bg-body-tertiary">
@@ -202,6 +245,10 @@ export default function TransactionDetailPage() {
               <button className="btn btn-sm btn-outline-secondary" type="button" onClick={() => router.back()}>
                 <i className="bi bi-arrow-left me-1" />
                 Back
+              </button>
+              <button className="btn btn-sm btn-outline-secondary" type="button" onClick={printVoucher} disabled={!transaction}>
+                <i className="bi bi-printer me-1" />
+                Print
               </button>
               <Link className="btn btn-sm btn-primary" href="/issues-returns">
                 Transaction List

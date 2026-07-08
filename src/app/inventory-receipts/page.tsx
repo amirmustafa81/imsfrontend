@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { printTransactionDocument } from "@/lib/transaction-print";
 import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey =
@@ -790,6 +791,12 @@ export default function InventoryReceiptsPage() {
     }
   };
 
+  const fetchReceiptItems = async (receiptId: number): Promise<ReceiptItem[]> => {
+    const response = await api.get(`/inventory-receipts/${receiptId}`);
+    const itemsData = response.data?.items;
+    return Array.isArray(itemsData) ? itemsData : [];
+  };
+
   const loadReceiptItems = async (receiptId: number) => {
     if (expandedItems[receiptId]) {
       setExpandedId((current) => (current === receiptId ? null : receiptId));
@@ -798,15 +805,62 @@ export default function InventoryReceiptsPage() {
 
     try {
       setExpandedLoading((current) => ({ ...current, [receiptId]: true }));
-      const response = await api.get(`/inventory-receipts/${receiptId}`);
-      const itemsData = response.data?.items;
-      const normalized = Array.isArray(itemsData) ? itemsData : [];
+      const normalized = await fetchReceiptItems(receiptId);
       setExpandedItems((current) => ({ ...current, [receiptId]: normalized }));
       setExpandedId(receiptId);
       setExpandedLoading((current) => ({ ...current, [receiptId]: false }));
     } catch {
       setExpandedLoading((current) => ({ ...current, [receiptId]: false }));
       setError("Could not load receipt items.");
+    }
+  };
+
+  const printReceipt = async (receipt: Receipt) => {
+    try {
+      const itemRows = expandedItems[receipt.id] ?? (await fetchReceiptItems(receipt.id));
+      setExpandedItems((current) => ({ ...current, [receipt.id]: itemRows }));
+      const printed = printTransactionDocument<ReceiptItem>({
+        title: "Goods Receipt Note",
+        subtitle: "Inventory receipt voucher with received, accepted, and rejected quantities.",
+        reference: receipt.receipt_no,
+        status: receipt.status,
+        meta: [
+          { label: "Receipt No", value: receipt.receipt_no },
+          { label: "Receipt Type", value: receipt.receipt_type },
+          { label: "Receipt Date", value: String(receipt.receipt_date).split("T")[0] },
+          { label: "Store", value: lookupLabel("stores", receipt.store_id) },
+          { label: "Department", value: lookupLabel("departments", receipt.department_id) },
+          { label: "Supplier", value: lookupLabel("suppliers", receipt.supplier_id) },
+          { label: "Funding Source", value: lookupLabel("funding-sources", receipt.funding_source_id) },
+          { label: "Project", value: lookupLabel("research-projects", receipt.project_id) },
+          { label: "PO Reference", value: receipt.po_reference },
+          { label: "Invoice No", value: receipt.invoice_no },
+          { label: "Challan No", value: receipt.challan_no },
+          { label: "Approval Ref", value: receipt.manual_approval_ref },
+          { label: "Approved By", value: receipt.manual_approved_by },
+          { label: "Approval Date", value: receipt.manual_approval_date },
+        ],
+        columns: [
+          { header: "Item", render: (item) => lookupLabel("items", item.item_id) },
+          { header: "Description", render: (item) => item.description },
+          { header: "Qty Received", render: (item) => item.quantity_received },
+          { header: "Qty Accepted", render: (item) => item.quantity_accepted },
+          { header: "Qty Rejected", render: (item) => item.quantity_rejected },
+          { header: `Unit Cost (${currency})`, render: (item) => item.unit_cost },
+          { header: `Total Cost (${currency})`, render: (item) => item.total_cost },
+          { header: "Batch", render: (item) => item.batch_no },
+          { header: "Expiry", render: (item) => item.expiry_date },
+          { header: "Inspection", render: (item) => inspectionStatusDisplay[item.inspection_status] ?? item.inspection_status },
+        ],
+        rows: itemRows,
+        note: receipt.remarks,
+      });
+
+      if (!printed) {
+        setError("Popup blocked. Please allow popups to print this receipt.");
+      }
+    } catch {
+      setError("Could not prepare receipt print view.");
     }
   };
 
@@ -1393,6 +1447,10 @@ export default function InventoryReceiptsPage() {
                                 }}
                               >
                                 {expandedLoading[row.id] ? "Loading" : expandedId === row.id ? "Hide Items" : "Items"}
+                              </button>
+                              <button className="btn btn-outline-secondary" type="button" onClick={() => printReceipt(row)}>
+                                <i className="bi bi-printer me-1" />
+                                Print
                               </button>
                               {row.status !== "posted" ? (
                                 <>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { printTransactionDocument } from "@/lib/transaction-print";
 import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey =
@@ -497,6 +498,55 @@ function IssuesReturnsContent() {
     }
   };
 
+  const fetchTransactionItems = async (transactionId: number): Promise<TransactionItem[]> => {
+    const response = await api.get(`/inventory-transactions/${transactionId}`);
+    const data = response.data?.data ?? response.data?.transaction;
+    const itemRows = response.data?.items ?? data?.items;
+    return Array.isArray(itemRows) ? itemRows : [];
+  };
+
+  const printTransaction = async (transaction: Transaction) => {
+    try {
+      const itemRows = expandedItems[transaction.id] ?? (await fetchTransactionItems(transaction.id));
+      setExpandedItems((prev) => ({ ...prev, [transaction.id]: itemRows }));
+
+      const printed = printTransactionDocument<TransactionItem>({
+        title: `${toTransactionTypeLabel(transaction.transaction_type)} Voucher`,
+        subtitle: "Inventory movement voucher for stock issue, return, transfer, consumption, or adjustment.",
+        reference: transaction.transaction_no,
+        status: transaction.status,
+        meta: [
+          { label: "Voucher No", value: transaction.transaction_no },
+          { label: "Type", value: toTransactionTypeLabel(transaction.transaction_type) },
+          { label: "Date", value: transaction.transaction_date },
+          { label: "From Department", value: lookupLabel("departments", transaction.from_department_id) },
+          { label: "From Store", value: lookupLabel("stores", transaction.from_store_id) },
+          { label: "To Department", value: lookupLabel("departments", transaction.to_department_id) },
+          { label: "To Store", value: lookupLabel("stores", transaction.to_store_id) },
+          { label: "Funding Source", value: lookupLabel("funding-sources", transaction.funding_source_id) },
+          { label: "Research Project", value: lookupLabel("research-projects", transaction.project_id) },
+          { label: "Posted At", value: transaction.posted_at },
+        ],
+        columns: [
+          { header: "Item", render: (item) => lookupLabel("items", item.item_id) },
+          { header: "Asset", render: (item) => item.asset_id ? `#${item.asset_id}` : "-" },
+          { header: "Quantity", render: (item) => item.quantity },
+          { header: "Unit Cost", render: (item) => item.unit_cost },
+          { header: "Total", render: (item) => item.unit_cost === null ? null : Number(item.quantity) * Number(item.unit_cost) },
+          { header: "Remarks", render: (item) => item.remarks },
+        ],
+        rows: itemRows,
+        note: transaction.remarks ?? transaction.purpose,
+      });
+
+      if (!printed) {
+        setError("Popup blocked. Please allow popups to print this voucher.");
+      }
+    } catch {
+      setError("Could not prepare transaction print view.");
+    }
+  };
+
   const toggleExpand = async (transactionId: number) => {
     if (expandedId === transactionId) {
       setExpandedId(null);
@@ -603,6 +653,9 @@ function IssuesReturnsContent() {
         <div className="btn-group">
           <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(row.id)} title="View items">
             <i className="bi bi-eye" />
+          </button>
+          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => printTransaction(row)} title="Print voucher">
+            <i className="bi bi-printer" />
           </button>
           {row.status !== "posted" && (
             <>

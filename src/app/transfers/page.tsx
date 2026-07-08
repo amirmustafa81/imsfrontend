@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { printTransactionDocument } from "@/lib/transaction-print";
 import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "stores" | "items" | "funding-sources" | "research-projects";
@@ -379,6 +380,53 @@ export default function TransfersPage() {
     setStatusFilter("");
   };
 
+  const printTransfer = async (transfer: Transfer) => {
+    try {
+      const itemRows = expandedItems[transfer.id] ?? (await (async () => {
+        const response = await api.get(`/inventory-transactions/${transfer.id}`, {
+          ...authHeaders,
+        });
+        const rows = response.data?.items ?? response.data?.data?.items;
+        return Array.isArray(rows) ? rows : [];
+      })());
+
+      setExpandedItems((prev) => ({ ...prev, [transfer.id]: itemRows }));
+
+      const printed = printTransactionDocument<TransferItem>({
+        title: "Transfer Voucher",
+        subtitle: "Internal stock transfer voucher between departments and stores.",
+        reference: transfer.transaction_no,
+        status: transfer.status,
+        meta: [
+          { label: "Transfer No", value: transfer.transaction_no },
+          { label: "Date", value: transfer.transaction_date },
+          { label: "From Department", value: lookupLabel("departments", transfer.from_department_id) },
+          { label: "From Store", value: lookupLabel("stores", transfer.from_store_id) },
+          { label: "To Department", value: lookupLabel("departments", transfer.to_department_id) },
+          { label: "To Store", value: lookupLabel("stores", transfer.to_store_id) },
+          { label: "Funding Source", value: lookupLabel("funding-sources", transfer.funding_source_id) },
+          { label: "Research Project", value: lookupLabel("research-projects", transfer.project_id) },
+        ],
+        columns: [
+          { header: "Item", render: (item) => lookupLabel("items", item.item_id) },
+          { header: "Asset", render: (item) => item.asset_id ? `#${item.asset_id}` : "-" },
+          { header: "Quantity", render: (item) => item.quantity },
+          { header: "Unit Cost", render: (item) => item.unit_cost },
+          { header: "Total", render: (item) => item.unit_cost === null ? null : Number(item.quantity) * Number(item.unit_cost) },
+          { header: "Remarks", render: (item) => item.remarks },
+        ],
+        rows: itemRows,
+        note: transfer.remarks ?? transfer.purpose,
+      });
+
+      if (!printed) {
+        setError("Popup blocked. Please allow popups to print this transfer.");
+      }
+    } catch {
+      setError("Could not prepare transfer print view.");
+    }
+  };
+
   const transferColumns = [
     {
       key: "transfer",
@@ -421,6 +469,9 @@ export default function TransfersPage() {
         <div className="btn-group">
           <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(row.id)} title="View items">
             <i className="bi bi-eye" />
+          </button>
+          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => printTransfer(row)} title="Print transfer">
+            <i className="bi bi-printer" />
           </button>
           {row.status !== "posted" && (
             <>

@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { printTransactionDocument } from "@/lib/transaction-print";
 import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type LookupKey = "fixedAssets";
@@ -364,6 +365,37 @@ export default function DisposalsPage() {
     return labelFromAsset(match as FixedAsset);
   };
 
+  const printDisposal = (disposal: Disposal) => {
+    const printed = printTransactionDocument<DisposalItem>({
+      title: "Asset Disposal Voucher",
+      subtitle: "Disposal, write-off, auction, transfer, or destruction record with approval details.",
+      reference: disposal.disposal_no,
+      status: disposal.status,
+      meta: [
+        { label: "Disposal No", value: disposal.disposal_no },
+        { label: "Disposal Type", value: disposal.disposal_type },
+        { label: "Request Date", value: toDisplayDate(disposal.request_date) },
+        { label: "Approval Ref", value: disposal.approval_ref },
+        { label: "Approved By", value: disposal.approved_by },
+        { label: "Approval Date", value: toDisplayDate(disposal.approval_date) },
+        { label: "Completed At", value: toDisplayDate(disposal.completed_at) },
+        { label: "Items", value: disposal.items_count },
+      ],
+      columns: [
+        { header: "Asset", render: (item) => renderAssetLabel(item.asset_id) },
+        { header: "Book Value", render: (item) => toMoney(item.book_value) },
+        { header: "Disposal Value", render: (item) => toMoney(item.disposal_value) },
+        { header: "Reason", render: (item) => item.reason },
+      ],
+      rows: disposal.items ?? [],
+      note: [disposal.committee_recommendation, disposal.remarks].filter(Boolean).join("\n\n"),
+    });
+
+    if (!printed) {
+      setError("Popup blocked. Please allow popups to print this disposal.");
+    }
+  };
+
   const clearFilters = () => {
     setFilter(initialFilters);
   };
@@ -399,6 +431,9 @@ export default function DisposalsPage() {
         <div className="btn-group">
           <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setExpandedId((current) => (current === row.id ? null : row.id))} title="View items">
             <i className="bi bi-eye" />
+          </button>
+          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => printDisposal(row)} title="Print disposal">
+            <i className="bi bi-printer" />
           </button>
           {row.status !== "completed" ? (
             <button type="button" className="btn btn-sm btn-outline-success" onClick={() => postDisposal(row)} title="Post">
