@@ -98,6 +98,12 @@ type ReceiptForm = {
   post_now: boolean;
 };
 
+type SearchableOption = {
+  value: string;
+  label: string;
+  keywords: string;
+};
+
 type PendingAttachment = {
   file: File;
   name: string;
@@ -174,6 +180,97 @@ const totalCostFor = (acceptedValue: string, unitCostValue: string) => {
   if (!Number.isFinite(accepted) || !Number.isFinite(unitCost) || accepted <= 0 || unitCost < 0) return "";
   return formatMoneyInput(accepted * unitCost);
 };
+
+const itemOptionLabel = (row: RowData) =>
+  `${row.item_code ?? row.code ?? row.id} - ${row.name ?? row.title ?? ""}`.trim();
+
+function SearchableItemSelect({
+  id,
+  value,
+  options,
+  onChange,
+  placeholder,
+}: {
+  id: string;
+  value: string;
+  options: SearchableOption[];
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  const selected = options.find((option) => option.value === value);
+  const selectedLabel = selected?.label ?? "";
+  const [query, setQuery] = useState(selectedLabel);
+  const [open, setOpen] = useState(false);
+  const displayValue = open ? query : selectedLabel;
+
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = displayValue.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return options.slice(0, 50);
+    }
+
+    return options
+      .filter((option) => `${option.label} ${option.keywords}`.toLowerCase().includes(normalizedQuery))
+      .slice(0, 50);
+  }, [displayValue, options]);
+
+  return (
+    <div className="position-relative">
+      <input
+        id={id}
+        className="form-control form-control-sm"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={`${id}-options`}
+        placeholder={placeholder}
+        value={displayValue}
+        onFocus={() => {
+          setQuery(selectedLabel);
+          setOpen(true);
+        }}
+        onBlur={() => {
+          window.setTimeout(() => setOpen(false), 120);
+        }}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          onChange("");
+          setOpen(true);
+        }}
+      />
+      {open ? (
+        <div
+          id={`${id}-options`}
+          className="dropdown-menu show w-100 shadow-sm"
+          role="listbox"
+          style={{ maxHeight: "240px", overflowY: "auto", zIndex: 1080 }}
+        >
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`dropdown-item small ${option.value === value ? "active" : ""}`}
+                role="option"
+                aria-selected={option.value === value}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  onChange(option.value);
+                  setQuery(option.label);
+                  setOpen(false);
+                }}
+              >
+                {option.label}
+              </button>
+            ))
+          ) : (
+            <div className="dropdown-item-text small text-secondary">No items found.</div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 type ApprovalReferenceState = {
   ref: string;
@@ -305,6 +402,16 @@ export default function InventoryReceiptsPage() {
 
     return `${match.code ?? match.project_code ?? match.id} - ${match.name ?? match.title ?? ""}`;
   };
+
+  const itemOptions = useMemo(
+    () =>
+      lookups.items.map((row) => ({
+        value: String(row.id),
+        label: itemOptionLabel(row),
+        keywords: [row.item_code, row.code, row.name, row.title].filter(Boolean).join(" "),
+      })),
+    [lookups.items],
+  );
 
   useEffect(() => {
     if (!authReady) {
@@ -1114,19 +1221,13 @@ export default function InventoryReceiptsPage() {
                       <div className="row g-2">
                         <div className="col-12 col-md-6">
                           <label className="form-label small">Item</label>
-                          <select
-                            className="form-select form-select-sm"
+                          <SearchableItemSelect
+                            id={`receipt-item-${index}`}
                             value={item.item_id}
-                            onChange={(event) => setItemValue(index, "item_id", event.target.value)}
-                            required
-                          >
-                            <option value="">Select item</option>
-                            {lookups.items.map((row) => (
-                              <option key={row.id} value={row.id}>
-                                {row.item_code} - {row.name}
-                              </option>
-                            ))}
-                          </select>
+                            options={itemOptions}
+                            placeholder="Search item code or name"
+                            onChange={(value) => setItemValue(index, "item_id", value)}
+                          />
                         </div>
 
                         <div className="col-12 col-md-6">
