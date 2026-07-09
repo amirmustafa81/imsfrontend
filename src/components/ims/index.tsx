@@ -2,8 +2,11 @@
 
 import { type ReactNode, useState } from "react";
 import { FieldLabel } from "./FieldLabel";
+import { SearchableSelect } from "./SearchableSelect";
 
 export { FieldLabel };
+export { SearchableSelect };
+export type { SearchableSelectOption } from "./SearchableSelect";
 
 export function PageHeader({
   title,

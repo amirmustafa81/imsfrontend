@@ -4,7 +4,16 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { printTransactionDocument } from "@/lib/transaction-print";
-import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import {
+  ApprovalReferenceFields,
+  DataTable,
+  EmptyState,
+  FilterBar,
+  PageHeader,
+  SearchableSelect,
+  StatusBadge,
+  type SearchableSelectOption,
+} from "@/components/ims";
 
 type LookupKey =
   | "departments"
@@ -98,12 +107,6 @@ type ReceiptForm = {
   post_now: boolean;
 };
 
-type SearchableOption = {
-  value: string;
-  label: string;
-  keywords: string;
-};
-
 type PendingAttachment = {
   file: File;
   name: string;
@@ -184,93 +187,7 @@ const totalCostFor = (acceptedValue: string, unitCostValue: string) => {
 const itemOptionLabel = (row: RowData) =>
   `${row.item_code ?? row.code ?? row.id} - ${row.name ?? row.title ?? ""}`.trim();
 
-function SearchableItemSelect({
-  id,
-  value,
-  options,
-  onChange,
-  placeholder,
-}: {
-  id: string;
-  value: string;
-  options: SearchableOption[];
-  onChange: (value: string) => void;
-  placeholder: string;
-}) {
-  const selected = options.find((option) => option.value === value);
-  const selectedLabel = selected?.label ?? "";
-  const [query, setQuery] = useState(selectedLabel);
-  const [open, setOpen] = useState(false);
-  const displayValue = open ? query : selectedLabel;
-
-  const filteredOptions = useMemo(() => {
-    const normalizedQuery = displayValue.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return options.slice(0, 50);
-    }
-
-    return options
-      .filter((option) => `${option.label} ${option.keywords}`.toLowerCase().includes(normalizedQuery))
-      .slice(0, 50);
-  }, [displayValue, options]);
-
-  return (
-    <div className="position-relative">
-      <input
-        id={id}
-        className="form-control form-control-sm"
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls={`${id}-options`}
-        placeholder={placeholder}
-        value={displayValue}
-        onFocus={() => {
-          setQuery(selectedLabel);
-          setOpen(true);
-        }}
-        onBlur={() => {
-          window.setTimeout(() => setOpen(false), 120);
-        }}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          onChange("");
-          setOpen(true);
-        }}
-      />
-      {open ? (
-        <div
-          id={`${id}-options`}
-          className="dropdown-menu show w-100 shadow-sm"
-          role="listbox"
-          style={{ maxHeight: "240px", overflowY: "auto", zIndex: 1080 }}
-        >
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`dropdown-item small ${option.value === value ? "active" : ""}`}
-                role="option"
-                aria-selected={option.value === value}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  onChange(option.value);
-                  setQuery(option.label);
-                  setOpen(false);
-                }}
-              >
-                {option.label}
-              </button>
-            ))
-          ) : (
-            <div className="dropdown-item-text small text-secondary">No items found.</div>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
+const statusOptionLabel = (status: string) => status.replace("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
 
 type ApprovalReferenceState = {
   ref: string;
@@ -411,6 +328,90 @@ export default function InventoryReceiptsPage() {
         keywords: [row.item_code, row.code, row.name, row.title].filter(Boolean).join(" "),
       })),
     [lookups.items],
+  );
+
+  const receiptTypeOptions = useMemo<SearchableSelectOption[]>(
+    () => receiptTypes.map((type) => ({ value: type.value, label: type.label })),
+    [],
+  );
+
+  const receiptStatusOptions = useMemo<SearchableSelectOption[]>(
+    () => statusOptions.map((status) => ({ value: status, label: statusOptionLabel(status) })),
+    [],
+  );
+
+  const filterStatusOptions = useMemo<SearchableSelectOption[]>(
+    () => [{ value: "", label: "All" }, ...receiptStatusOptions],
+    [receiptStatusOptions],
+  );
+
+  const storeOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups.stores.map((row) => ({
+        value: String(row.id),
+        label: `${row.code ?? row.id} - ${row.name ?? ""}`.trim(),
+        keywords: [row.code, row.name].filter(Boolean).join(" "),
+      })),
+    [lookups.stores],
+  );
+
+  const filterStoreOptions = useMemo<SearchableSelectOption[]>(
+    () => [{ value: "", label: "All stores" }, ...storeOptions],
+    [storeOptions],
+  );
+
+  const departmentOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups.departments.map((row) => ({
+        value: String(row.id),
+        label: `${row.code ?? row.id} - ${row.name ?? ""}`.trim(),
+        keywords: [row.code, row.name].filter(Boolean).join(" "),
+      })),
+    [lookups.departments],
+  );
+
+  const filterDepartmentOptions = useMemo<SearchableSelectOption[]>(
+    () => [{ value: "", label: "All departments" }, ...departmentOptions],
+    [departmentOptions],
+  );
+
+  const supplierOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups.suppliers.map((row) => ({
+        value: String(row.id),
+        label: String(row.name ?? row.code ?? row.id),
+        keywords: [row.code, row.name].filter(Boolean).join(" "),
+      })),
+    [lookups.suppliers],
+  );
+
+  const fundingSourceOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups["funding-sources"].map((row) => ({
+        value: String(row.id),
+        label: String(row.name ?? row.code ?? row.id),
+        keywords: [row.code, row.name].filter(Boolean).join(" "),
+      })),
+    [lookups],
+  );
+
+  const projectOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups["research-projects"].map((row) => ({
+        value: String(row.id),
+        label: `${row.project_code ?? row.code ?? row.id} - ${row.title ?? row.name ?? ""}`.trim(),
+        keywords: [row.project_code, row.code, row.title, row.name].filter(Boolean).join(" "),
+      })),
+    [lookups],
+  );
+
+  const inspectionStatusOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      Object.entries(inspectionStatusDisplay).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    [],
   );
 
   useEffect(() => {
@@ -1041,17 +1042,13 @@ export default function InventoryReceiptsPage() {
 
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Receipt Type</label>
-                    <select
-                      className="form-select form-select-sm"
+                    <SearchableSelect
+                      id="receipt-type"
                       value={form.receipt_type}
-                      onChange={(event) => setFormValue("receipt_type", event.target.value)}
-                    >
-                      {receiptTypes.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
+                      options={receiptTypeOptions}
+                      placeholder="Search receipt type"
+                      onChange={(value) => setFormValue("receipt_type", value)}
+                    />
                   </div>
 
                   <div className="col-12 col-md-6">
@@ -1067,99 +1064,68 @@ export default function InventoryReceiptsPage() {
 
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Status</label>
-                    <select
-                      className="form-select form-select-sm"
+                    <SearchableSelect
+                      id="receipt-status"
                       value={form.status}
-                      onChange={(event) => setFormValue("status", event.target.value as ReceiptStatus)}
-                    >
-                      {statusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {status.replace("_", " ").replace(/\b\w/g, (match) => match.toUpperCase())}
-                        </option>
-                      ))}
-                    </select>
+                      options={receiptStatusOptions}
+                      placeholder="Search status"
+                      onChange={(value) => setFormValue("status", value as ReceiptStatus)}
+                    />
                   </div>
 
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Store</label>
-                    <select
-                      className="form-select form-select-sm"
+                    <SearchableSelect
+                      id="receipt-store"
                       value={form.store_id}
-                      onChange={(event) => setFormValue("store_id", event.target.value)}
-                      required
-                    >
-                      <option value="">Select store</option>
-                      {lookups.stores.map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {row.code ?? row.id} - {row.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={storeOptions}
+                      placeholder="Search store"
+                      onChange={(value) => setFormValue("store_id", value)}
+                    />
                   </div>
 
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Department</label>
-                    <select
-                      className="form-select form-select-sm"
+                    <SearchableSelect
+                      id="receipt-department"
                       value={form.department_id}
-                      onChange={(event) => setFormValue("department_id", event.target.value)}
-                      required
-                    >
-                      <option value="">Select department</option>
-                      {lookups.departments.map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {row.code ?? row.id} - {row.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={departmentOptions}
+                      placeholder="Search department"
+                      onChange={(value) => setFormValue("department_id", value)}
+                    />
                   </div>
 
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Supplier</label>
-                    <select
-                      className="form-select form-select-sm"
+                    <SearchableSelect
+                      id="receipt-supplier"
                       value={form.supplier_id}
-                      onChange={(event) => setFormValue("supplier_id", event.target.value)}
-                    >
-                      <option value="">Select supplier</option>
-                      {lookups.suppliers.map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {row.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={supplierOptions}
+                      placeholder="Search supplier"
+                      onChange={(value) => setFormValue("supplier_id", value)}
+                    />
                   </div>
 
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Funding Source</label>
-                    <select
-                      className="form-select form-select-sm"
+                    <SearchableSelect
+                      id="receipt-funding-source"
                       value={form.funding_source_id}
-                      onChange={(event) => setFormValue("funding_source_id", event.target.value)}
-                    >
-                      <option value="">Select funding source</option>
-                      {lookups["funding-sources"].map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {row.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={fundingSourceOptions}
+                      placeholder="Search funding source"
+                      onChange={(value) => setFormValue("funding_source_id", value)}
+                    />
                   </div>
 
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Project</label>
-                    <select
-                      className="form-select form-select-sm"
+                    <SearchableSelect
+                      id="receipt-project"
                       value={form.project_id}
-                      onChange={(event) => setFormValue("project_id", event.target.value)}
-                    >
-                      <option value="">Select project</option>
-                      {lookups["research-projects"].map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {row.project_code} - {row.title}
-                        </option>
-                      ))}
-                    </select>
+                      options={projectOptions}
+                      placeholder="Search project"
+                      onChange={(value) => setFormValue("project_id", value)}
+                    />
                   </div>
 
                   <div className="col-12 col-md-6">
@@ -1221,7 +1187,7 @@ export default function InventoryReceiptsPage() {
                       <div className="row g-2">
                         <div className="col-12 col-md-6">
                           <label className="form-label small">Item</label>
-                          <SearchableItemSelect
+                          <SearchableSelect
                             id={`receipt-item-${index}`}
                             value={item.item_id}
                             options={itemOptions}
@@ -1324,16 +1290,13 @@ export default function InventoryReceiptsPage() {
 
                         <div className="col-12 col-md-3">
                           <label className="form-label small">Inspection Status</label>
-                          <select
-                            className="form-select form-select-sm"
+                          <SearchableSelect
+                            id={`receipt-inspection-status-${index}`}
                             value={item.inspection_status}
-                            onChange={(event) => setItemValue(index, "inspection_status", event.target.value)}
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="accepted">Accepted</option>
-                            <option value="partially_accepted">Partially Accepted</option>
-                            <option value="rejected">Rejected</option>
-                          </select>
+                            options={inspectionStatusOptions}
+                            placeholder="Search inspection status"
+                            onChange={(value) => setItemValue(index, "inspection_status", value)}
+                          />
                         </div>
 
                         <div className="col-12">
@@ -1455,48 +1418,33 @@ export default function InventoryReceiptsPage() {
                 </div>
                 <div className="col-12 col-md-4 col-lg-2">
                   <label className="form-label small">Status</label>
-                  <select
-                    className="form-select form-select-sm"
+                  <SearchableSelect
+                    id="receipt-filter-status"
                     value={statusFilter}
-                    onChange={(event) => setStatusFilter(event.target.value)}
-                  >
-                    <option value="">All</option>
-                    {statusOptions.map((status) => (
-                      <option key={status} value={status}>
-                        {status.replace("_", " ").replace(/\b\w/g, (match) => match.toUpperCase())}
-                      </option>
-                    ))}
-                  </select>
+                    options={filterStatusOptions}
+                    placeholder="Search status"
+                    onChange={setStatusFilter}
+                  />
                 </div>
                 <div className="col-12 col-md-4 col-lg-3">
                   <label className="form-label small">Store</label>
-                  <select
-                    className="form-select form-select-sm"
+                  <SearchableSelect
+                    id="receipt-filter-store"
                     value={storeFilter}
-                    onChange={(event) => setStoreFilter(event.target.value)}
-                  >
-                    <option value="">All stores</option>
-                    {lookups.stores.map((row) => (
-                      <option key={row.id} value={row.id}>
-                        {row.code ?? row.id} - {row.name}
-                      </option>
-                    ))}
-                  </select>
+                    options={filterStoreOptions}
+                    placeholder="Search store"
+                    onChange={setStoreFilter}
+                  />
                 </div>
                 <div className="col-12 col-md-4 col-lg-3">
                   <label className="form-label small">Department</label>
-                  <select
-                    className="form-select form-select-sm"
+                  <SearchableSelect
+                    id="receipt-filter-department"
                     value={departmentFilter}
-                    onChange={(event) => setDepartmentFilter(event.target.value)}
-                  >
-                    <option value="">All departments</option>
-                    {lookups.departments.map((row) => (
-                      <option key={row.id} value={row.id}>
-                        {row.code ?? row.id} - {row.name}
-                      </option>
-                    ))}
-                  </select>
+                    options={filterDepartmentOptions}
+                    placeholder="Search department"
+                    onChange={setDepartmentFilter}
+                  />
                 </div>
               </FilterBar>
             </div>
