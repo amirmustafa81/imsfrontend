@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AttributeFields, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
-import { DataTable, FieldLabel, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, FieldLabel, FilterBar, PageHeader, SearchableSelect, StatusBadge, type SearchableSelectOption } from "@/components/ims";
 
 type ItemType =
   | "consumable"
@@ -106,6 +106,12 @@ const formatLookup = (lookupRows: Lookup[], id: number | null) => {
   if (!row) return `#${id}`;
   return `${row.code ?? ""}${row.code && row.name ? " - " : ""}${row.name ?? ""}`.trim() || `#${id}`;
 };
+
+const toLookupOption = (row: Lookup): SearchableSelectOption => ({
+  value: String(row.id),
+  label: `${row.code ?? ""}${row.code && row.name ? " - " : ""}${row.name ?? ""}`.trim() || `#${row.id}`,
+  keywords: `${row.code ?? ""} ${row.name ?? ""}`,
+});
 
 const toNumericString = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined || value === "") return "0";
@@ -289,6 +295,17 @@ export default function ItemsPage() {
       ? lookups["asset-categories"].filter((category) => String(category.parent_category_id ?? "") === String(selectedCategory.id))
       : [],
     [lookups, selectedCategory],
+  );
+  const categorySelectOptions = useMemo(() => parentCategories.map(toLookupOption), [parentCategories]);
+  const subcategorySelectOptions = useMemo(() => subcategoryOptions.map(toLookupOption), [subcategoryOptions]);
+  const unitSelectOptions = useMemo(() => lookups["units-of-measure"].map(toLookupOption), [lookups]);
+  const activeItemTypeOptions = useMemo(
+    () => itemTypeOptions.filter((option) => option.value) as SearchableSelectOption[],
+    [],
+  );
+  const activeStatusOptions = useMemo(
+    () => statusOptions.filter((option) => option.value) as SearchableSelectOption[],
+    [],
   );
 
   const selectCategory = (categoryId: string) => {
@@ -476,23 +493,11 @@ export default function ItemsPage() {
           </div>
           <div className="col-12 col-lg-3">
             <label className="form-label fw-semibold">Type</label>
-            <select className="form-select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-              {itemTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect id="item-filter-type" value={typeFilter} options={itemTypeOptions} onChange={setTypeFilter} placeholder="Search type" />
           </div>
           <div className="col-12 col-lg-3">
             <label className="form-label fw-semibold">Status</label>
-            <select className="form-select" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect id="item-filter-status" value={statusFilter} options={statusOptions} onChange={setStatusFilter} placeholder="Search status" />
           </div>
         </FilterBar>
 
@@ -543,75 +548,27 @@ export default function ItemsPage() {
                       </div>
                       <div className="col-12 col-md-4">
                         <FieldLabel required info={infoText.itemType}>Item Type</FieldLabel>
-                        <select
-                          className="form-select form-select-sm"
-                          value={form.item_type}
-                          onChange={(event) => setFormField("item_type", event.target.value as ItemType)}
-                          required
-                        >
-                          {itemTypeOptions
-                            .filter((option) => option.value)
-                            .map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                        </select>
+                        <SearchableSelect id="item-type" value={form.item_type} options={activeItemTypeOptions} onChange={(value) => setFormField("item_type", value as ItemType)} placeholder="Search item type" />
                       </div>
                       <div className="col-12 col-md-4">
                         <FieldLabel required info={infoText.category}>Category</FieldLabel>
-                        <select
-                          className="form-select form-select-sm"
-                          value={form.category_id}
-                          onChange={(event) => selectCategory(event.target.value)}
-                          required
-                        >
-                          <option value="">Choose category</option>
-                          {parentCategories.map((category) => (
-                            <option key={category.id} value={category.id}>
-                              {formatLookup(parentCategories, category.id)}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect id="item-category" value={form.category_id} options={categorySelectOptions} onChange={selectCategory} placeholder="Search category" />
                       </div>
                       <div className="col-12 col-md-4">
                         <FieldLabel info={infoText.subcategory}>Subcategory</FieldLabel>
-                        <select
-                          className="form-select form-select-sm"
+                        <SearchableSelect
+                          id="item-subcategory"
                           value={form.subcategory_id}
-                          onChange={(event) => setFormField("subcategory_id", event.target.value)}
+                          options={subcategorySelectOptions}
+                          onChange={(value) => setFormField("subcategory_id", value)}
+                          placeholder={!form.category_id ? "Choose category first" : "Search subcategory"}
+                          emptyLabel="No subcategories configured."
                           disabled={!form.category_id || subcategoryOptions.length === 0}
-                          required={subcategoryOptions.length > 0}
-                        >
-                          <option value="">
-                            {!form.category_id
-                              ? "Choose category first"
-                              : subcategoryOptions.length === 0
-                                ? "No subcategories configured"
-                                : "Choose subcategory"}
-                          </option>
-                          {subcategoryOptions.map((subcategory) => (
-                            <option key={subcategory.id} value={subcategory.id}>
-                              {formatLookup(subcategoryOptions, subcategory.id)}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </div>
                       <div className="col-12 col-md-4">
                         <FieldLabel required info={infoText.unit}>Unit of Measure</FieldLabel>
-                        <select
-                          className="form-select form-select-sm"
-                          value={form.unit_id}
-                          onChange={(event) => setFormField("unit_id", event.target.value)}
-                          required
-                        >
-                          <option value="">Choose UoM</option>
-                          {lookups["units-of-measure"].map((unit) => (
-                            <option key={unit.id} value={unit.id}>
-                              {formatLookup(lookups["units-of-measure"], unit.id)}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect id="item-unit" value={form.unit_id} options={unitSelectOptions} onChange={(value) => setFormField("unit_id", value)} placeholder="Search UoM" />
                       </div>
                       <div className="col-12 col-md-4">
                         <label className="form-label small">Brand</label>
@@ -689,14 +646,7 @@ export default function ItemsPage() {
                       </div>
                       <div className="col-12 col-md-4">
                         <FieldLabel info={infoText.status}>Status</FieldLabel>
-                        <select
-                          className="form-select form-select-sm"
-                          value={form.status}
-                          onChange={(event) => setFormField("status", event.target.value as ItemFormState["status"])}
-                        >
-                          <option value="active">Active</option>
-                          <option value="inactive">Inactive</option>
-                        </select>
+                        <SearchableSelect id="item-status" value={form.status} options={activeStatusOptions} onChange={(value) => setFormField("status", value as ItemFormState["status"])} placeholder="Search status" />
                       </div>
                     </div>
                   </div>

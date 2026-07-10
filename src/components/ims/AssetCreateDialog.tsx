@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AttributeFields, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
 import { FieldLabel } from "@/components/ims/FieldLabel";
+import { SearchableSelect, type SearchableSelectOption } from "@/components/ims/SearchableSelect";
 
 type LookupKey =
   | "departments"
@@ -91,6 +92,29 @@ const createInitialForm = (defaults?: AssetCreateDefaults): AssetFormState => ({
 const labelFor = (row: LookupRow) => String(row.code ?? row.item_code ?? row.project_code ?? row.id) + (row.name || row.title ? ` - ${row.name ?? row.title}` : "");
 const isParentCategory = (row: LookupRow) => !row.parent_category_id;
 const isChildOfCategory = (row: LookupRow, parentId: number | string | null | undefined) => String(row.parent_category_id ?? "") === String(parentId ?? "");
+const toOption = (row: LookupRow, valueKey: "id" | "code" = "id"): SearchableSelectOption => ({
+  value: String(row[valueKey] ?? ""),
+  label: labelFor(row),
+  keywords: Object.values(row).filter((value) => typeof value === "string" || typeof value === "number").join(" "),
+});
+
+const assetStatusOptions: SearchableSelectOption[] = [
+  { value: "in_store", label: "In Store" },
+  { value: "issued", label: "Issued" },
+  { value: "in_use", label: "In Use" },
+  { value: "under_repair", label: "Under Repair" },
+  { value: "missing_under_investigation", label: "Missing / Under Investigation" },
+  { value: "damaged", label: "Damaged" },
+  { value: "obsolete", label: "Obsolete" },
+];
+
+const conditionOptions: SearchableSelectOption[] = [
+  { value: "new", label: "New" },
+  { value: "good", label: "Good" },
+  { value: "needs_repair", label: "Needs Repair" },
+  { value: "damaged", label: "Damaged" },
+  { value: "obsolete", label: "Obsolete" },
+];
 
 const assetFieldInfo = {
   item: "Select the item master record this asset belongs to. The item controls category defaults and specifications.",
@@ -285,6 +309,18 @@ export function AssetCreateDialog({
   const itemOptions = selectedCategory
     ? lookups.items.filter((item) => String(item.category_id ?? "") === String(selectedCategory.id))
     : lookups.items;
+  const itemSelectOptions = itemOptions.map((item) => toOption(item));
+  const categorySelectOptions = parentCategories.map((category) => toOption(category, "code"));
+  const subcategorySelectOptions = subcategoryOptions.map((subcategory) => toOption(subcategory, "code"));
+  const departmentSelectOptions = lookups.departments.map((department) => toOption(department));
+  const buildingSelectOptions = lookups.buildings.map((building) => toOption(building));
+  const roomSelectOptions = lookups.rooms.map((room) => toOption(room));
+  const storeSelectOptions = lookups.stores.map((store) => toOption(store));
+  const projectSelectOptions = [
+    { value: "", label: "No project" },
+    ...lookups["research-projects"].map((project) => toOption(project)),
+  ];
+  const fundingSelectOptions = lookups["funding-sources"].map((source) => toOption(source));
 
   const selectItem = (itemId: string) => {
     const item = lookups.items.find((row) => String(row.id) === itemId);
@@ -328,115 +364,49 @@ export function AssetCreateDialog({
               <div className="row g-3">
                 <div className="col-12 col-md-6">
                   <FieldLabel required info={assetFieldInfo.item}>Item</FieldLabel>
-                  <select className="form-select form-select-sm" value={form.item_id} onChange={(event) => selectItem(event.target.value)} required>
-                    <option value="">Choose item</option>
-                    {itemOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {labelFor(item)}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect id="asset-item" value={form.item_id} options={itemSelectOptions} onChange={selectItem} placeholder="Search item" />
                 </div>
                 <div className="col-12 col-md-3">
                   <FieldLabel required info={assetFieldInfo.category}>Category Code</FieldLabel>
-                  <select className="form-select form-select-sm" value={form.category_code} onChange={(event) => selectCategory(event.target.value)} required>
-                    <option value="">Choose category</option>
-                    {parentCategories.map((category) => (
-                      <option key={category.id} value={String(category.code ?? "")}>
-                        {labelFor(category)}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect id="asset-category" value={form.category_code} options={categorySelectOptions} onChange={selectCategory} placeholder="Search category" />
                 </div>
                 <div className="col-12 col-md-3">
                   <FieldLabel info={assetFieldInfo.subcategory}>Subcategory</FieldLabel>
-                  <select
-                    className="form-select form-select-sm"
+                  <SearchableSelect
+                    id="asset-subcategory"
                     value={form.subcategory_code}
-                    onChange={(event) => setFormField("subcategory_code", event.target.value)}
+                    options={subcategorySelectOptions}
+                    onChange={(value) => setFormField("subcategory_code", value)}
+                    placeholder={!form.category_code ? "Choose category first" : "Search subcategory"}
+                    emptyLabel="No subcategories configured."
                     disabled={!form.category_code || subcategoryOptions.length === 0}
-                  >
-                    <option value="">
-                      {!form.category_code
-                        ? "Choose category first"
-                        : subcategoryOptions.length === 0
-                          ? "No subcategories configured"
-                          : "Choose subcategory"}
-                    </option>
-                    {subcategoryOptions.map((subcategory) => (
-                      <option key={subcategory.id} value={String(subcategory.code ?? "")}>
-                        {labelFor(subcategory)}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 <div className="col-12 col-md-4">
                   <FieldLabel required info={assetFieldInfo.department}>Department</FieldLabel>
-                  <select className="form-select form-select-sm" value={form.department_id} onChange={(event) => selectDepartment(event.target.value)} required>
-                    <option value="">Choose department</option>
-                    {lookups.departments.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {labelFor(department)}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect id="asset-department" value={form.department_id} options={departmentSelectOptions} onChange={selectDepartment} placeholder="Search department" />
                 </div>
                 <div className="col-12 col-md-4">
                   <FieldLabel info={assetFieldInfo.building}>Building</FieldLabel>
-                  <select className="form-select form-select-sm" value={form.building_id} onChange={(event) => selectBuilding(event.target.value)}>
-                    <option value="">Choose building</option>
-                    {lookups.buildings.map((building) => (
-                      <option key={building.id} value={building.id}>
-                        {labelFor(building)}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect id="asset-building" value={form.building_id} options={buildingSelectOptions} onChange={selectBuilding} placeholder="Search building" />
                 </div>
                 <div className="col-12 col-md-4">
                   <FieldLabel info={assetFieldInfo.room}>Room</FieldLabel>
-                  <select className="form-select form-select-sm" value={form.room_id} onChange={(event) => selectRoom(event.target.value)}>
-                    <option value="">Choose room</option>
-                    {lookups.rooms.map((room) => (
-                      <option key={room.id} value={room.id}>
-                        {labelFor(room)}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect id="asset-room" value={form.room_id} options={roomSelectOptions} onChange={selectRoom} placeholder="Search room" />
                 </div>
 
                 <div className="col-12 col-md-4">
                   <FieldLabel info={assetFieldInfo.store}>Store</FieldLabel>
-                  <select className="form-select form-select-sm" value={form.store_id} onChange={(event) => setFormField("store_id", event.target.value)}>
-                    <option value="">Choose store</option>
-                    {lookups.stores.map((store) => (
-                      <option key={store.id} value={store.id}>
-                        {labelFor(store)}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect id="asset-store" value={form.store_id} options={storeSelectOptions} onChange={(value) => setFormField("store_id", value)} placeholder="Search store" />
                 </div>
                 <div className="col-12 col-md-4">
                   <FieldLabel info={assetFieldInfo.project}>Project</FieldLabel>
-                  <select className="form-select form-select-sm" value={form.project_id} onChange={(event) => setFormField("project_id", event.target.value)}>
-                    <option value="">No project</option>
-                    {lookups["research-projects"].map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {labelFor(project)}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect id="asset-project" value={form.project_id} options={projectSelectOptions} onChange={(value) => setFormField("project_id", value)} placeholder="Search project" />
                 </div>
                 <div className="col-12 col-md-4">
                   <FieldLabel info={assetFieldInfo.funding}>Funding Source</FieldLabel>
-                  <select className="form-select form-select-sm" value={form.funding_source_id} onChange={(event) => setFormField("funding_source_id", event.target.value)}>
-                    <option value="">Choose funding</option>
-                    {lookups["funding-sources"].map((source) => (
-                      <option key={source.id} value={source.id}>
-                        {labelFor(source)}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect id="asset-funding-source" value={form.funding_source_id} options={fundingSelectOptions} onChange={(value) => setFormField("funding_source_id", value)} placeholder="Search funding" />
                 </div>
 
                 <div className="col-12 col-md-4">
@@ -487,25 +457,11 @@ export function AssetCreateDialog({
                 </div>
                 <div className="col-12 col-md-4">
                   <FieldLabel info={assetFieldInfo.status}>Status</FieldLabel>
-                  <select className="form-select form-select-sm" value={form.status} onChange={(event) => setFormField("status", event.target.value as AssetFormState["status"])}>
-                    <option value="in_store">In Store</option>
-                    <option value="issued">Issued</option>
-                    <option value="in_use">In Use</option>
-                    <option value="under_repair">Under Repair</option>
-                    <option value="missing_under_investigation">Missing / Under Investigation</option>
-                    <option value="damaged">Damaged</option>
-                    <option value="obsolete">Obsolete</option>
-                  </select>
+                  <SearchableSelect id="asset-status" value={form.status} options={assetStatusOptions} onChange={(value) => setFormField("status", value as AssetFormState["status"])} placeholder="Search status" />
                 </div>
                 <div className="col-12 col-md-4">
                   <FieldLabel info={assetFieldInfo.condition}>Condition</FieldLabel>
-                  <select className="form-select form-select-sm" value={form.condition_status} onChange={(event) => setFormField("condition_status", event.target.value as AssetFormState["condition_status"])}>
-                    <option value="new">New</option>
-                    <option value="good">Good</option>
-                    <option value="needs_repair">Needs Repair</option>
-                    <option value="damaged">Damaged</option>
-                    <option value="obsolete">Obsolete</option>
-                  </select>
+                  <SearchableSelect id="asset-condition" value={form.condition_status} options={conditionOptions} onChange={(value) => setFormField("condition_status", value as AssetFormState["condition_status"])} placeholder="Search condition" />
                 </div>
 
                 <div className="col-12">
