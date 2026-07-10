@@ -6,7 +6,16 @@ import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { printTransactionDocument } from "@/lib/transaction-print";
-import { ApprovalReferenceFields, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import {
+  ApprovalReferenceFields,
+  DataTable,
+  EmptyState,
+  FilterBar,
+  PageHeader,
+  SearchableSelect,
+  StatusBadge,
+  type SearchableSelectOption,
+} from "@/components/ims";
 
 type LookupKey =
   | "departments"
@@ -14,7 +23,8 @@ type LookupKey =
   | "items"
   | "funding-sources"
   | "research-projects"
-  | "storage-bins";
+  | "storage-bins"
+  | "users";
 
 type TransactionType = "issue" | "return" | "transfer" | "consumption" | "adjustment";
 
@@ -35,6 +45,7 @@ type Transaction = {
   to_department_id: number | null;
   from_store_id: number | null;
   to_store_id: number | null;
+  recipient_user_id: number | null;
   project_id: number | null;
   funding_source_id: number | null;
   purpose: string | null;
@@ -72,6 +83,7 @@ type TransactionForm = {
   to_store_id: string;
   from_storage_bin_id: string;
   to_storage_bin_id: string;
+  recipient_user_id: string;
   funding_source_id: string;
   project_id: string;
   manual_approval_ref: string;
@@ -119,6 +131,7 @@ const defaultForm: TransactionForm = {
   to_store_id: "",
   from_storage_bin_id: "",
   to_storage_bin_id: "",
+  recipient_user_id: "",
   funding_source_id: "",
   project_id: "",
   manual_approval_ref: "",
@@ -158,6 +171,7 @@ function IssuesReturnsContent() {
     "funding-sources": [],
     "research-projects": [],
     "storage-bins": [],
+    users: [],
   });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -229,6 +243,7 @@ function IssuesReturnsContent() {
       "funding-sources",
       "research-projects",
       "storage-bins",
+      "users",
     ];
 
     const loadLookups = async () => {
@@ -244,11 +259,12 @@ function IssuesReturnsContent() {
           "funding-sources": [],
           "research-projects": [],
           "storage-bins": [],
+          users: [],
         },
       );
 
       const requests = requiredLookups.map(async (key) => {
-        const response = await api.get(`/master-data/${key}`);
+        const response = await api.get(key === "users" ? "/users" : `/master-data/${key}`);
         const payload = response.data?.data;
         if (Array.isArray(payload)) {
           next[key] = payload;
@@ -283,6 +299,9 @@ function IssuesReturnsContent() {
           next.to_store_id = "";
           next.to_storage_bin_id = "";
           next.adjustment_direction = "decrease";
+          if (value === "consumption") {
+            next.recipient_user_id = "";
+          }
         }
 
         if (value === "adjustment") {
@@ -292,6 +311,7 @@ function IssuesReturnsContent() {
           next.to_department_id = "";
           next.to_store_id = "";
           next.to_storage_bin_id = "";
+          next.recipient_user_id = "";
           next.adjustment_direction = "increase";
         }
 
@@ -361,8 +381,24 @@ function IssuesReturnsContent() {
     setItems((current) => current.filter((_, idx) => idx !== index));
   };
 
+  const resolveMainStoreDefaults = () => {
+    const mainStore = lookups.stores.find((store) => {
+      const haystack = `${store.code ?? ""} ${store.name ?? ""} ${store.store_type ?? ""}`.toLowerCase();
+      return haystack.includes("main") || haystack.includes("central");
+    });
+
+    return {
+      from_store_id: mainStore ? String(mainStore.id) : "",
+      from_department_id: mainStore?.department_id ? String(mainStore.department_id) : "",
+    };
+  };
+
   const resetForm = () => {
-    setForm({ ...defaultForm, transaction_date: new Date().toISOString().slice(0, 10) });
+    setForm({
+      ...defaultForm,
+      ...resolveMainStoreDefaults(),
+      transaction_date: new Date().toISOString().slice(0, 10),
+    });
     setItems([{ ...emptyItem }]);
   };
 
@@ -377,7 +413,11 @@ function IssuesReturnsContent() {
   };
 
   const canSubmitType = (type: TransactionType, adjustmentDirection: TransactionForm["adjustment_direction"]): string[] => {
-    if (type === "issue" || type === "consumption") {
+    if (type === "issue") {
+      return ["from_department_id", "from_store_id", "recipient_user_id"];
+    }
+
+    if (type === "consumption") {
       return ["from_department_id", "from_store_id"];
     }
 
@@ -386,7 +426,7 @@ function IssuesReturnsContent() {
     }
 
     if (type === "return") {
-      return ["to_department_id", "to_store_id"];
+      return ["to_department_id", "to_store_id", "recipient_user_id"];
     }
 
     return ["from_department_id", "from_store_id", "to_department_id", "to_store_id"];
@@ -397,6 +437,23 @@ function IssuesReturnsContent() {
 
     return lookups["storage-bins"].filter((bin) => String(bin.store_id ?? "") === String(storeId));
   };
+
+  const toSearchOption = (row: RowData, fallbackLabel = "Record"): SearchableSelectOption => ({
+    value: String(row.id),
+    label: String(row.employee_code ? `${row.employee_code} - ${row.name ?? row.email ?? fallbackLabel}` : row.name ?? row.email ?? fallbackLabel),
+    keywords: `${row.email ?? ""} ${row.phone ?? ""} ${row.department_id ?? ""}`,
+  });
+
+  const employeeOptions = useMemo(() => lookups.users.map((user) => toSearchOption(user, "Employee")), [lookups.users]);
+  const itemOptions = useMemo(
+    () =>
+      lookups.items.map((item) => ({
+        value: String(item.id),
+        label: `${item.item_code ?? item.code ?? item.id} - ${item.name ?? ""}`,
+        keywords: `${item.category_code ?? ""} ${item.subcategory_code ?? ""} ${item.type ?? ""}`,
+      })),
+    [lookups.items],
+  );
 
   const saveTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -440,6 +497,7 @@ function IssuesReturnsContent() {
       to_storage_bin_id: numberOrNull(form.to_storage_bin_id),
       funding_source_id: numberOrNull(form.funding_source_id),
       project_id: numberOrNull(form.project_id),
+      recipient_user_id: numberOrNull(form.recipient_user_id),
       manual_approval_ref: form.manual_approval_ref.trim() || null,
       manual_approval_date: toPayloadDate(form.manual_approval_date),
       manual_approved_by: form.manual_approved_by.trim() || null,
@@ -523,6 +581,10 @@ function IssuesReturnsContent() {
           { label: "From Store", value: lookupLabel("stores", transaction.from_store_id) },
           { label: "To Department", value: lookupLabel("departments", transaction.to_department_id) },
           { label: "To Store", value: lookupLabel("stores", transaction.to_store_id) },
+          {
+            label: transaction.transaction_type === "return" ? "Returned By Employee" : "Issued To / Recipient",
+            value: lookupLabel("users", transaction.recipient_user_id),
+          },
           { label: "Funding Source", value: lookupLabel("funding-sources", transaction.funding_source_id) },
           { label: "Research Project", value: lookupLabel("research-projects", transaction.project_id) },
           { label: "Posted At", value: transaction.posted_at },
@@ -584,10 +646,12 @@ function IssuesReturnsContent() {
 
   const renderScopeHint = () => {
     if (form.transaction_type === "issue" || form.transaction_type === "consumption") {
-      return "Issue/consumption uses source department/store only.";
+      return form.transaction_type === "issue"
+        ? "Issue uses source department/store and records the employee receiving the item."
+        : "Consumption uses source department/store only.";
     }
     if (form.transaction_type === "return") {
-      return "Return uses destination department/store only.";
+      return "Return uses destination department/store and records the employee returning the item.";
     }
     if (form.transaction_type === "adjustment") {
       return form.adjustment_direction === "increase" ? "Adjustment increase uses destination department/store only." : "Adjustment decrease uses source department/store only.";
@@ -637,6 +701,12 @@ function IssuesReturnsContent() {
           <div>
             <strong>To:</strong> {lookupLabel("departments", row.to_department_id)} / {lookupLabel("stores", row.to_store_id)}
           </div>
+          {row.recipient_user_id ? (
+            <div>
+              <strong>{row.transaction_type === "return" ? "Returned by" : "Employee"}:</strong>{" "}
+              {lookupLabel("users", row.recipient_user_id)}
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -759,6 +829,32 @@ function IssuesReturnsContent() {
                         onChange={(e) => setFormValue("transaction_date", e.target.value)}
                       />
                     </div>
+
+                    {(form.transaction_type === "issue" || form.transaction_type === "return" || form.transaction_type === "transfer") && (
+                      <div className="col-12 col-md-6">
+                        <label className="form-label">
+                          {form.transaction_type === "return"
+                            ? "Returned By Employee"
+                            : form.transaction_type === "transfer"
+                              ? "Recipient / Custodian (optional)"
+                              : "Issued To Employee"}
+                          {form.transaction_type === "issue" || form.transaction_type === "return" ? " *" : ""}
+                        </label>
+                        <SearchableSelect
+                          id="transaction-recipient-user"
+                          value={form.recipient_user_id}
+                          options={employeeOptions}
+                          onChange={(value) => setFormValue("recipient_user_id", value)}
+                          placeholder="Search employee by name, code, or email"
+                          emptyLabel="No employee found."
+                        />
+                        <div className="form-text">
+                          {form.transaction_type === "return"
+                            ? "Select the employee returning the item to store."
+                            : "Select the employee who will be accountable for the issued item."}
+                        </div>
+                      </div>
+                    )}
 
                     {form.transaction_type === "adjustment" && (
                       <div className="col-12">
@@ -969,18 +1065,14 @@ function IssuesReturnsContent() {
                     <div className="row g-2 align-items-end mb-3" key={`${index}-${item.item_id || "new"}`}>
                       <div className="col-12 col-xl-3">
                         <label className="form-label mb-1 small">Item</label>
-                        <select
-                          className="form-select form-select-sm"
+                        <SearchableSelect
+                          id={`transaction-item-${index}`}
                           value={item.item_id}
-                          onChange={(e) => setItemValue(index, "item_id", e.target.value)}
-                        >
-                          <option value="">Select item</option>
-                          {lookups.items.map((i) => (
-                            <option key={i.id} value={i.id}>
-                              {i.item_code} - {i.name}
-                            </option>
-                          ))}
-                        </select>
+                          options={itemOptions}
+                          onChange={(value) => setItemValue(index, "item_id", value)}
+                          placeholder="Search item by code or name"
+                          emptyLabel="No item found."
+                        />
                       </div>
                       <div className="col-12 col-xl-3">
                         <label className="form-label mb-1 small">Asset ID (optional)</label>

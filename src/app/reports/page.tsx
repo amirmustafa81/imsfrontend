@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { DataTable, ExportButtons, FileAttachmentList, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import {
+  DataTable,
+  ExportButtons,
+  FileAttachmentList,
+  FilterBar,
+  PageHeader,
+  SearchableSelect,
+  StatusBadge,
+  type SearchableSelectOption,
+} from "@/components/ims";
 
 type ReportType =
   | "controlled_stationery_batches"
@@ -52,7 +61,8 @@ type LookupKey =
   | "buildings"
   | "rooms"
   | "funding-sources"
-  | "suppliers";
+  | "suppliers"
+  | "users";
 
 type RowData = {
   id: number;
@@ -736,6 +746,7 @@ const emptyLookups: Record<LookupKey, RowData[]> = {
   rooms: [],
   "funding-sources": [],
   suppliers: [],
+  users: [],
 };
 
 const emptyFilters: ReportFilters = {
@@ -872,11 +883,12 @@ export default function ReportsPage() {
       { key: "rooms", path: "rooms" },
       { key: "funding-sources", path: "funding-sources" },
       { key: "suppliers", path: "suppliers" },
+      { key: "users", path: "users" },
     ];
 
     await Promise.all(
       loadables.map(async (lookup) => {
-        const response = await api.get(`/master-data/${lookup.path}`);
+        const response = await api.get(lookup.key === "users" ? "/users" : `/master-data/${lookup.path}`);
         const payload = response.data?.data;
         if (Array.isArray(payload)) {
           next[lookup.key] = payload;
@@ -1022,21 +1034,32 @@ export default function ReportsPage() {
     </div>
   );
 
+  const toLookupOption = (rows: RowData[], row: RowData, includeCode = true): SearchableSelectOption => {
+    const userLabel =
+      row.employee_code || row.email
+        ? `${row.employee_code ? `${row.employee_code} - ` : ""}${row.name ?? row.email ?? row.id}`
+        : null;
+    const fallback = String(row.name ?? row.title ?? row.email ?? row.id);
+    const label = userLabel ?? (includeCode ? lookupLabel(rows, row.id, fallback) : fallback);
+
+    return {
+      value: String(row.id),
+      label,
+      keywords: `${row.code ?? ""} ${row.project_code ?? ""} ${row.email ?? ""} ${row.phone ?? ""} ${row.department_id ?? ""}`,
+    };
+  };
+
   const renderLookupSelect = (label: string, key: keyof ReportFilters, rows: RowData[], emptyLabel: string, includeCode = true) => (
     <div className="col-6 col-lg-2">
       <label className="form-label small">{label}</label>
-      <select
-        className="form-select form-select-sm"
+      <SearchableSelect
+        id={`report-filter-${String(key)}`}
         value={currentFilters[key]}
-        onChange={(event) => updateFilter(key, event.target.value)}
-      >
-        <option value="">{emptyLabel}</option>
-        {rows.map((row) => (
-          <option key={row.id} value={row.id}>
-            {includeCode ? lookupLabel(rows, row.id) : lookupLabel(rows, row.id, `${row.name ?? row.title ?? row.id}`)}
-          </option>
-        ))}
-      </select>
+        options={rows.map((row) => toLookupOption(rows, row, includeCode))}
+        onChange={(value) => updateFilter(key, value)}
+        placeholder={emptyLabel}
+        emptyLabel="No records found."
+      />
     </div>
   );
 
@@ -1174,7 +1197,7 @@ export default function ReportsPage() {
           {reportConfig.filters.includeSupplier &&
             renderLookupSelect("Supplier", "supplier_id", lookups.suppliers, "All Suppliers", false)}
           {reportConfig.filters.includeCustodian &&
-            renderFilterInput("Custodian ID", "custodian_id", "number", 1)}
+            renderLookupSelect("Employee / Custodian", "custodian_id", lookups.users, "All Employees", false)}
           {reportConfig.filters.includeBatch &&
             renderFilterInput("Batch ID", "batch_id", "number", 1)}
           {reportConfig.filters.includeSerial &&
