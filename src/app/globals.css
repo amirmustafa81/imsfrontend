@@ -211,7 +211,9 @@ a {
 
 .ims-sidebar {
   width: 224px;
-  min-height: 100vh;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   flex: 0 0 auto;
   overflow-y: auto;
   background: var(--ims-sidebar-bg);
