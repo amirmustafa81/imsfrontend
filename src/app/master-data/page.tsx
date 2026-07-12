@@ -15,6 +15,7 @@ type ResourceKey =
   | "asset-attribute-definitions"
   | "units-of-measure"
   | "funding-sources"
+  | "document-entity-types"
   | "suppliers"
   | "research-projects";
 
@@ -38,6 +39,17 @@ type ResourceDef = {
   fields: FieldDef[];
   rowFilter?: (row: RowData) => boolean;
 };
+
+const documentEntityTypeOptions: Option[] = [
+  { value: "asset", label: "Asset" },
+  { value: "user_delegation", label: "User Delegation" },
+  { value: "inventory_transaction", label: "Inventory Transaction" },
+  { value: "inventory_receipt", label: "Inventory Receipt / GRN" },
+  { value: "physical_verification", label: "Physical Verification" },
+  { value: "disposal", label: "Disposal / Write-Off" },
+  { value: "maintenance_record", label: "Maintenance Record" },
+  { value: "asset_investigation", label: "Asset Investigation" },
+];
 
 type RowData = {
   id: number;
@@ -212,6 +224,17 @@ const resources: Record<ResourceKey, ResourceDef> = {
       { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
     ],
   },
+  "document-entity-types": {
+    label: "Document Entity Types",
+    endpoint: "document-entity-types",
+    tableColumns: ["id", "code", "name", "description", "status"],
+    fields: [
+      { key: "code", label: "Code", type: "select", required: true, options: documentEntityTypeOptions },
+      { key: "name", label: "Display Name", type: "text", required: true },
+      { key: "description", label: "Description", type: "textarea" },
+      { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
+    ],
+  },
   suppliers: {
     label: "Suppliers",
     endpoint: "suppliers",
@@ -271,6 +294,7 @@ const createEmptyLookups = (): Record<ResourceKey, RowData[]> => ({
   "asset-attribute-definitions": [],
   "units-of-measure": [],
   "funding-sources": [],
+  "document-entity-types": [],
   suppliers: [],
   "research-projects": [],
 });

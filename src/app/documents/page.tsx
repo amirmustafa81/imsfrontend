@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { DataTable, EmptyState, FilterBar, PageHeader } from "@/components/ims";
+import { DataTable, EmptyState, FilterBar, PageHeader, SearchableSelect, type SearchableSelectOption } from "@/components/ims";
 
 type DocRow = {
   id: number;
@@ -18,18 +18,9 @@ type DocRow = {
 
 type Filters = { entity_type: string; document_type: string; entity_id: string };
 type UploadForm = { entity_type: string; entity_id: string; document_type: string; file: File | null };
+type DocumentEntityType = { id: number; code: string; name: string; description?: string | null; status: string };
 
 const emptyForm: UploadForm = { entity_type: "asset", entity_id: "", document_type: "", file: null };
-const entityTypes = [
-  "asset",
-  "user_delegation",
-  "inventory_transaction",
-  "inventory_receipt",
-  "physical_verification",
-  "disposal",
-  "maintenance_record",
-  "asset_investigation",
-];
 
 export default function DocumentsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -37,6 +28,7 @@ export default function DocumentsPage() {
   const headers = useMemo(() => ({}), []);
 
   const [rows, setRows] = useState<DocRow[]>([]);
+  const [entityTypes, setEntityTypes] = useState<DocumentEntityType[]>([]);
   const [form, setForm] = useState<UploadForm>(emptyForm);
   const [filters, setFilters] = useState<Filters>({ entity_type: "", document_type: "", entity_id: "" });
   const [error, setError] = useState("");
@@ -59,10 +51,53 @@ export default function DocumentsPage() {
     }
   }, [headers, authReady, filters.entity_type, filters.document_type, filters.entity_id]);
 
+  const loadEntityTypes = useCallback(async () => {
+    if (!authReady) return;
+
+    try {
+      const response = await api.get<{ data: DocumentEntityType[] }>("/master-data/document-entity-types", {
+        ...headers,
+        params: { status: "active" },
+      });
+      const data = response.data?.data ?? [];
+      setEntityTypes(data);
+      setForm((current) => {
+        if (current.entity_type && data.some((type) => type.code === current.entity_type)) {
+          return current;
+        }
+
+        return { ...current, entity_type: data[0]?.code ?? "" };
+      });
+    } catch {
+      setEntityTypes([]);
+      setError("Unable to load document entity types.");
+    }
+  }, [authReady, headers]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadRows();
   }, [loadRows]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadEntityTypes();
+  }, [loadEntityTypes]);
+
+  const entityTypeOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      entityTypes.map((type) => ({
+        value: type.code,
+        label: `${type.name} (${type.code})`,
+        keywords: `${type.code} ${type.description ?? ""}`,
+      })),
+    [entityTypes],
+  );
+
+  const entityTypeLabel = useCallback(
+    (code: string) => entityTypes.find((type) => type.code === code)?.name ?? code,
+    [entityTypes],
+  );
 
   const upload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -84,7 +119,7 @@ export default function DocumentsPage() {
     try {
       await api.post("/documents", payload, headers);
       setMessage("Document uploaded.");
-      setForm(emptyForm);
+      setForm((current) => ({ ...emptyForm, entity_type: current.entity_type || entityTypeOptions[0]?.value || "asset" }));
       await loadRows();
     } catch {
       setError("Upload failed.");
@@ -103,7 +138,7 @@ export default function DocumentsPage() {
 
   const columns = [
     { key: "document_type", header: "Type" },
-    { key: "entity_type", header: "Entity Type" },
+    { key: "entity_type", header: "Entity Type", render: (row: DocRow) => <>{entityTypeLabel(row.entity_type)}</> },
     { key: "entity_id", header: "Entity ID" },
     { key: "original_file_name", header: "File" },
     { key: "mime_type", header: "MIME" },
@@ -140,17 +175,14 @@ export default function DocumentsPage() {
                 <form className="row g-3" onSubmit={upload}>
                   <div className="col-12">
                     <label className="form-label small">Entity Type</label>
-                    <select
-                      className="form-select form-select-sm"
+                    <SearchableSelect
+                      id="document-entity-type"
+                      options={entityTypeOptions}
                       value={form.entity_type}
-                      onChange={(event) => setForm((current) => ({ ...current, entity_type: event.target.value }))}
-                    >
-                      {entityTypes.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Search entity type"
+                      emptyLabel="No active document entity types found."
+                      onChange={(value) => setForm((current) => ({ ...current, entity_type: value }))}
+                    />
                   </div>
                   <div className="col-12">
                     <label className="form-label small">Entity ID</label>
@@ -193,10 +225,13 @@ export default function DocumentsPage() {
             <FilterBar onReset={() => setFilters({ entity_type: "", document_type: "", entity_id: "" })}>
               <div className="col-12 col-md-4">
                 <label className="form-label small mb-1">Entity Type</label>
-                <input
-                  className="form-control form-control-sm"
+                <SearchableSelect
+                  id="documents-filter-entity-type"
+                  options={entityTypeOptions}
                   value={filters.entity_type}
-                  onChange={(event) => setFilters((current) => ({ ...current, entity_type: event.target.value }))}
+                  placeholder="All entity types"
+                  emptyLabel="No active document entity types found."
+                  onChange={(value) => setFilters((current) => ({ ...current, entity_type: value }))}
                 />
               </div>
               <div className="col-12 col-md-4">
