@@ -3,9 +3,17 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { DataTable, EmptyState, FilterBar, PageHeader, SearchableSelect, type SearchableSelectOption } from "@/components/ims";
+import {
+  DataTable,
+  EmptyState,
+  FieldLabel,
+  FilterBar,
+  PageHeader,
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "@/components/ims";
 
-type DocRow = {
+type DocRow = Record<string, unknown> & {
   id: number;
   document_type: string;
   entity_type: string;
@@ -21,16 +29,45 @@ type UploadForm = { entity_type: string; entity_id: string; document_type: strin
 type DocumentEntityType = { id: number; code: string; name: string; description?: string | null; status: string };
 
 const emptyForm: UploadForm = { entity_type: "asset", entity_id: "", document_type: "", file: null };
+const documentTypePresets = [
+  "invoice",
+  "challan",
+  "approval",
+  "supporting_document",
+  "warranty",
+  "quotation",
+  "contract",
+  "verification",
+  "disposal",
+  "maintenance",
+];
+
+const formatDocumentType = (value: string) =>
+  value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+
+const formatFileSize = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "-";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 
 export default function DocumentsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const authReady = isAuthenticated && !authLoading;
-  const headers = useMemo(() => ({}), []);
 
   const [rows, setRows] = useState<DocRow[]>([]);
   const [entityTypes, setEntityTypes] = useState<DocumentEntityType[]>([]);
   const [form, setForm] = useState<UploadForm>(emptyForm);
   const [filters, setFilters] = useState<Filters>({ entity_type: "", document_type: "", entity_id: "" });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -42,21 +79,20 @@ export default function DocumentsPage() {
     if (filters.entity_id.trim()) params.entity_id = filters.entity_id.trim();
 
     try {
-      const response = await api.get<{ data: DocRow[] }>("/documents", { ...headers, params });
+      const response = await api.get<{ data: DocRow[] }>("/documents", { params });
       setRows(response.data?.data ?? []);
       setError("");
     } catch {
       setRows([]);
       setError("Unable to load documents.");
     }
-  }, [headers, authReady, filters.entity_type, filters.document_type, filters.entity_id]);
+  }, [authReady, filters.entity_type, filters.document_type, filters.entity_id]);
 
   const loadEntityTypes = useCallback(async () => {
     if (!authReady) return;
 
     try {
       const response = await api.get<{ data: DocumentEntityType[] }>("/master-data/document-entity-types", {
-        ...headers,
         params: { status: "active" },
       });
       const data = response.data?.data ?? [];
@@ -72,7 +108,7 @@ export default function DocumentsPage() {
       setEntityTypes([]);
       setError("Unable to load document entity types.");
     }
-  }, [authReady, headers]);
+  }, [authReady]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -94,10 +130,40 @@ export default function DocumentsPage() {
     [entityTypes],
   );
 
+  const filterEntityTypeOptions = useMemo<SearchableSelectOption[]>(
+    () => [{ value: "", label: "All entity types" }, ...entityTypeOptions],
+    [entityTypeOptions],
+  );
+
+  const documentTypeOptions = useMemo<SearchableSelectOption[]>(() => {
+    const values = new Set([...documentTypePresets, ...rows.map((row) => row.document_type).filter(Boolean)]);
+    return [
+      { value: "", label: "All document types" },
+      ...Array.from(values)
+        .sort((a, b) => formatDocumentType(a).localeCompare(formatDocumentType(b)))
+        .map((type) => ({ value: type, label: formatDocumentType(type), keywords: type })),
+    ];
+  }, [rows]);
+
   const entityTypeLabel = useCallback(
-    (code: string) => entityTypes.find((type) => type.code === code)?.name ?? code,
+    (code: string) => entityTypes.find((type) => type.code === code)?.name ?? formatDocumentType(code),
     [entityTypes],
   );
+
+  const openUploadDialog = () => {
+    setMessage("");
+    setError("");
+    setDialogOpen(true);
+    setForm((current) => ({
+      ...current,
+      entity_type: current.entity_type || entityTypeOptions[0]?.value || "asset",
+    }));
+  };
+
+  const closeUploadDialog = () => {
+    setDialogOpen(false);
+    setForm((current) => ({ ...emptyForm, entity_type: current.entity_type || entityTypeOptions[0]?.value || "asset" }));
+  };
 
   const upload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -106,7 +172,7 @@ export default function DocumentsPage() {
       return;
     }
     if (!form.file || !form.entity_type || !form.entity_id || !form.document_type) {
-      setError("Entity and document info are required.");
+      setError("Entity type, entity ID, document type, and file are required.");
       return;
     }
 
@@ -116,42 +182,110 @@ export default function DocumentsPage() {
     payload.append("document_type", form.document_type);
     payload.append("file", form.file);
 
+    setSaving(true);
     try {
-      await api.post("/documents", payload, headers);
+      await api.post("/documents", payload);
       setMessage("Document uploaded.");
-      setForm((current) => ({ ...emptyForm, entity_type: current.entity_type || entityTypeOptions[0]?.value || "asset" }));
+      closeUploadDialog();
       await loadRows();
     } catch {
-      setError("Upload failed.");
+      setError("Upload failed. Check the entity ID, document type, and file size.");
+    } finally {
+      setSaving(false);
     }
   };
 
-  const deleteRow = async (id: number) => {
+  const deleteRow = async (row: DocRow) => {
+    if (!window.confirm(`Delete ${row.original_file_name}?`)) {
+      return;
+    }
+
+    setDeletingId(row.id);
     try {
-      await api.delete(`/documents/${id}`, headers);
+      await api.delete(`/documents/${row.id}`);
       await loadRows();
       setMessage("Document deleted.");
+      setError("");
     } catch {
       setError("Unable to delete document.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const downloadRow = async (row: DocRow) => {
+    setDownloadingId(row.id);
+    try {
+      const response = await api.get<Blob>(`/documents/${row.id}/download`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = row.original_file_name || `document-${row.id}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setError("");
+    } catch {
+      setError("Unable to download document.");
+    } finally {
+      setDownloadingId(null);
     }
   };
 
   const columns = [
-    { key: "document_type", header: "Type" },
-    { key: "entity_type", header: "Entity Type", render: (row: DocRow) => <>{entityTypeLabel(row.entity_type)}</> },
+    {
+      key: "document_type",
+      header: "Document Type",
+      render: (row: DocRow) => <span className="fw-semibold">{formatDocumentType(row.document_type)}</span>,
+    },
+    {
+      key: "entity_type",
+      header: "Entity",
+      render: (row: DocRow) => (
+        <div>
+          <div className="fw-semibold">{entityTypeLabel(row.entity_type)}</div>
+          <div className="small text-secondary">{row.entity_type}</div>
+        </div>
+      ),
+    },
     { key: "entity_id", header: "Entity ID" },
-    { key: "original_file_name", header: "File" },
-    { key: "mime_type", header: "MIME" },
-    { key: "file_size", header: "Size" },
-    { key: "file_path", header: "Stored Path" },
+    {
+      key: "original_file_name",
+      header: "File",
+      render: (row: DocRow) => (
+        <div>
+          <div className="fw-semibold">{row.original_file_name}</div>
+          <div className="small text-secondary">{row.mime_type || "Unknown MIME type"}</div>
+        </div>
+      ),
+    },
+    { key: "file_size", header: "Size", render: (row: DocRow) => <>{formatFileSize(row.file_size)}</> },
     {
       key: "action",
-      header: "Action",
+      header: "Actions",
+      className: "text-end",
       render: (row: DocRow) => (
-        <button className="btn btn-sm btn-outline-danger" type="button" onClick={() => deleteRow(row.id)}>
-          <i className="bi bi-trash me-1" />
-          Delete
-        </button>
+        <div className="btn-group btn-group-sm" onClick={(event) => event.stopPropagation()}>
+          <button
+            className="btn btn-outline-primary"
+            type="button"
+            disabled={downloadingId === row.id}
+            onClick={() => downloadRow(row)}
+          >
+            <i className="bi bi-download me-1" />
+            {downloadingId === row.id ? "Downloading" : "Download"}
+          </button>
+          <button
+            className="btn btn-outline-danger"
+            type="button"
+            disabled={deletingId === row.id}
+            onClick={() => deleteRow(row)}
+          >
+            <i className="bi bi-trash me-1" />
+            {deletingId === row.id ? "Deleting" : "Delete"}
+          </button>
+        </div>
       ),
     },
   ];
@@ -161,22 +295,95 @@ export default function DocumentsPage() {
       <div className="container-fluid p-4">
         <PageHeader
           title="Documents"
-          subtitle="Upload, search, and manage document attachments."
-          
+          subtitle="Upload, search, and manage supporting documents attached to IMS records."
+          actions={
+            <button className="btn btn-sm btn-primary" type="button" onClick={openUploadDialog}>
+              <i className="bi bi-plus-lg me-1" />
+              Upload Document
+            </button>
+          }
         />
         {message ? <div className="alert alert-success">{message}</div> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}
 
-        <div className="row g-4 mb-4">
-          <div className="col-12 col-xl-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">Upload Document</div>
-              <div className="card-body">
-                <form className="row g-3" onSubmit={upload}>
-                  <div className="col-12">
-                    <label className="form-label small">Entity Type</label>
+        <FilterBar onReset={() => setFilters({ entity_type: "", document_type: "", entity_id: "" })}>
+          <div className="col-12 col-md-4">
+            <label className="form-label small mb-1">Entity Type</label>
+            <SearchableSelect
+              id="documents-filter-entity-type"
+              options={filterEntityTypeOptions}
+              value={filters.entity_type}
+              placeholder="All entity types"
+              emptyLabel="No document entity types found."
+              onChange={(value) => setFilters((current) => ({ ...current, entity_type: value }))}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small mb-1">Document Type</label>
+            <SearchableSelect
+              id="documents-filter-document-type"
+              options={documentTypeOptions}
+              value={filters.document_type}
+              placeholder="All document types"
+              emptyLabel="No document types found."
+              onChange={(value) => setFilters((current) => ({ ...current, document_type: value }))}
+            />
+          </div>
+          <div className="col-12 col-md-3">
+            <label className="form-label small mb-1">Entity ID</label>
+            <input
+              className="form-control form-control-sm"
+              value={filters.entity_id}
+              onChange={(event) => setFilters((current) => ({ ...current, entity_id: event.target.value }))}
+              placeholder="e.g. 1"
+            />
+          </div>
+        </FilterBar>
+
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <h2 className="h6 mb-0">Document list</h2>
+          <span className="small text-secondary">{rows.length} records</span>
+        </div>
+
+        {rows.length === 0 ? (
+          <EmptyState
+            title="No documents"
+            message="Upload invoice, approval, verification, disposal, maintenance, or other supporting documents."
+            action={
+              <button className="btn btn-sm btn-primary" type="button" onClick={openUploadDialog}>
+                <i className="bi bi-plus-lg me-1" />
+                Upload Document
+              </button>
+            }
+          />
+        ) : (
+          <DataTable columns={columns} rows={rows} empty="No documents match current filters." />
+        )}
+      </div>
+
+      {dialogOpen ? (
+        <>
+          <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <form className="modal-content" onSubmit={upload}>
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title h5">Upload Document</h3>
+                  <div className="small text-secondary">
+                    Attach a supporting file to an asset, receipt, voucher, verification, disposal, or other IMS record.
+                  </div>
+                </div>
+                <button className="btn-close" type="button" aria-label="Close" onClick={closeUploadDialog} />
+              </div>
+
+              <div className="modal-body">
+                <div className="row g-3">
+                  <div className="col-12 col-md-6">
+                    <FieldLabel info="Choose the IMS record type this file belongs to. These options are managed from Master Data.">
+                      Entity Type
+                    </FieldLabel>
                     <SearchableSelect
-                      id="document-entity-type"
+                      id="document-upload-entity-type"
                       options={entityTypeOptions}
                       value={form.entity_type}
                       placeholder="Search entity type"
@@ -184,24 +391,41 @@ export default function DocumentsPage() {
                       onChange={(value) => setForm((current) => ({ ...current, entity_type: value }))}
                     />
                   </div>
-                  <div className="col-12">
-                    <label className="form-label small">Entity ID</label>
+                  <div className="col-12 col-md-6">
+                    <FieldLabel info="Enter the numeric ID of the selected record, for example asset ID 1 or receipt ID 3.">
+                      Entity ID
+                    </FieldLabel>
                     <input
                       className="form-control form-control-sm"
+                      inputMode="numeric"
                       value={form.entity_id}
                       onChange={(event) => setForm((current) => ({ ...current, entity_id: event.target.value }))}
+                      placeholder="e.g. 1"
                     />
                   </div>
-                  <div className="col-12">
-                    <label className="form-label small">Document Type</label>
+                  <div className="col-12 col-md-6">
+                    <FieldLabel info="Classify the attachment, such as invoice, challan, approval, warranty, or verification.">
+                      Document Type
+                    </FieldLabel>
                     <input
                       className="form-control form-control-sm"
+                      list="document-type-presets"
                       value={form.document_type}
                       onChange={(event) => setForm((current) => ({ ...current, document_type: event.target.value }))}
+                      placeholder="e.g. invoice"
                     />
+                    <datalist id="document-type-presets">
+                      {documentTypePresets.map((type) => (
+                        <option key={type} value={type}>
+                          {formatDocumentType(type)}
+                        </option>
+                      ))}
+                    </datalist>
                   </div>
-                  <div className="col-12">
-                    <label className="form-label small">File</label>
+                  <div className="col-12 col-md-6">
+                    <FieldLabel info="Upload the supporting file. Maximum 10 MB per file and 50 MB total per record.">
+                      File
+                    </FieldLabel>
                     <input
                       className="form-control form-control-sm"
                       type="file"
@@ -209,53 +433,26 @@ export default function DocumentsPage() {
                         setForm((current) => ({ ...current, file: event.target.files?.[0] ?? null }))
                       }
                     />
+                    <div className="small text-secondary mt-1">Max 10 MB per file, 50 MB total per entity.</div>
                   </div>
-                  <div className="col-12">
-                    <button className="btn btn-sm btn-primary" type="submit">
-                      <i className="bi bi-upload me-1" />
-                      Upload
-                    </button>
-                  </div>
-                </form>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div className="col-12 col-xl-7">
-            <FilterBar onReset={() => setFilters({ entity_type: "", document_type: "", entity_id: "" })}>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Entity Type</label>
-                <SearchableSelect
-                  id="documents-filter-entity-type"
-                  options={entityTypeOptions}
-                  value={filters.entity_type}
-                  placeholder="All entity types"
-                  emptyLabel="No active document entity types found."
-                  onChange={(value) => setFilters((current) => ({ ...current, entity_type: value }))}
-                />
+              <div className="modal-footer">
+                <button className="btn btn-sm btn-outline-secondary" type="button" onClick={closeUploadDialog}>
+                  Cancel
+                </button>
+                <button className="btn btn-sm btn-primary" type="submit" disabled={saving}>
+                  <i className="bi bi-upload me-1" />
+                  {saving ? "Uploading" : "Upload Document"}
+                </button>
               </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Document Type</label>
-                <input
-                  className="form-control form-control-sm"
-                  value={filters.document_type}
-                  onChange={(event) => setFilters((current) => ({ ...current, document_type: event.target.value }))}
-                />
-              </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Entity ID</label>
-                <input
-                  className="form-control form-control-sm"
-                  value={filters.entity_id}
-                  onChange={(event) => setFilters((current) => ({ ...current, entity_id: event.target.value }))}
-                />
-              </div>
-            </FilterBar>
-
-            {rows.length === 0 ? <EmptyState title="No documents" message="No documents uploaded." /> : <DataTable columns={columns} rows={rows} />}
+            </form>
           </div>
-        </div>
-      </div>
+          </div>
+          <div className="modal-backdrop fade show" onClick={closeUploadDialog} />
+        </>
+      ) : null}
     </main>
   );
 }
