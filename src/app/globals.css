@@ -782,11 +782,11 @@ a {
 .ims-info-tooltip {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 0.55rem);
-  z-index: 1100;
+  top: calc(100% + 0.55rem);
+  z-index: 1080;
   width: max-content;
   max-width: min(20rem, 80vw);
-  transform: translateX(-50%) translateY(0.2rem);
+  transform: translateX(-50%) translateY(-0.2rem);
   border-radius: 0.35rem;
   background: #111827;
   color: #ffffff;
@@ -798,6 +798,12 @@ a {
   pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease;
   box-shadow: 0 0.75rem 1.75rem rgba(15, 23, 42, 0.22);
+}
+
+.ims-info-hint-top .ims-info-tooltip {
+  top: auto;
+  bottom: calc(100% + 0.55rem);
+  transform: translateX(-50%) translateY(0.2rem);
 }
 
 .ims-info-hint:hover .ims-info-tooltip,

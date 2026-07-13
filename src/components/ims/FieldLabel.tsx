@@ -6,6 +6,7 @@ type FieldLabelProps = {
   children: ReactNode;
   required?: boolean;
   info?: string;
+  infoPlacement?: "top" | "bottom";
   htmlFor?: string;
   check?: boolean;
   className?: string;
@@ -15,6 +16,7 @@ export function FieldLabel({
   children,
   required = false,
   info,
+  infoPlacement = "bottom",
   htmlFor,
   check = false,
   className = "",
@@ -28,7 +30,7 @@ export function FieldLabel({
         {children} {required ? <span className="text-danger">*</span> : null}
       </span>
       {info ? (
-        <span className="ims-info-hint">
+        <span className={`ims-info-hint ims-info-hint-${infoPlacement}`}>
           <button className="ims-info-button" type="button" aria-label={`${labelText} help`}>
             i
           </button>
