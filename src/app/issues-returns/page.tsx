@@ -863,6 +863,24 @@ function IssuesReturnsContent() {
                       />
                     </div>
 
+                    {form.transaction_type === "issue" && (
+                      <div className="col-12 col-md-6">
+                        <label className="form-label">To Department *</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={form.to_department_id}
+                          onChange={(e) => setFormValue("to_department_id", e.target.value)}
+                        >
+                          <option value="">Select</option>
+                          {lookups.departments.map((department) => (
+                            <option key={department.id} value={department.id}>
+                              {department.code} - {department.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     {(form.transaction_type === "issue" || form.transaction_type === "return" || form.transaction_type === "transfer") && (
                       <div className="col-12 col-md-6">
                         <label className="form-label">
@@ -991,7 +1009,7 @@ function IssuesReturnsContent() {
                       </div>
                     )}
 
-                    {showsToDepartment && (
+                    {showsToDepartment && form.transaction_type !== "issue" && (
                       <>
                         <div className="col-12 col-md-6">
                           <label className="form-label">To Department *</label>
