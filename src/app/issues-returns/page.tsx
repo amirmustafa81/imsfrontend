@@ -103,6 +103,24 @@ const typeOptions: Array<{ value: TransactionType; label: string }> = [
   { value: "adjustment", label: "Adjustment" },
 ];
 
+const transactionNoPrefixes: Record<TransactionType, string> = {
+  issue: "ISS",
+  return: "RET",
+  transfer: "TRF",
+  consumption: "CON",
+  adjustment: "ADJ",
+};
+
+const previewYearFromDate = (date: string): string => {
+  const isoYear = date.match(/^(\d{4})-/)?.[1];
+  const displayYear = date.match(/(\d{4})$/)?.[1];
+
+  return isoYear ?? displayYear ?? String(new Date().getFullYear());
+};
+
+const previewTransactionNo = (type: TransactionType, date: string): string =>
+  `${transactionNoPrefixes[type] ?? "TXN"}-${previewYearFromDate(date)}-####`;
+
 const toTransactionTypeLabel = (type: TransactionType) => {
   if (type === "issue") return "Issue";
   if (type === "return") return "Return";
@@ -486,7 +504,6 @@ function IssuesReturnsContent() {
     }
 
     const payload = {
-      transaction_no: form.transaction_no.trim(),
       transaction_type: form.transaction_type,
       transaction_date: form.transaction_date,
       from_department_id: numberOrNull(form.from_department_id),
@@ -812,12 +829,14 @@ function IssuesReturnsContent() {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Transaction no</label>
                       <input
-                        className="form-control form-control-sm"
-                        value={form.transaction_no}
-                        required
-                        onChange={(e) => setFormValue("transaction_no", e.target.value)}
-                        placeholder="INV-2026-0001"
+                        className="form-control form-control-sm bg-light text-muted"
+                        value={previewTransactionNo(form.transaction_type, form.transaction_date)}
+                        readOnly
+                        aria-readonly="true"
                       />
+                      <div className="form-text small">
+                        Preview only. The backend assigns the next available {transactionNoPrefixes[form.transaction_type]} number when saved.
+                      </div>
                     </div>
 
                     <div className="col-12 col-md-6">

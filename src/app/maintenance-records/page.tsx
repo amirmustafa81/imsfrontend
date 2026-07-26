@@ -66,6 +66,7 @@ function MaintenanceRecordsContent() {
   const [vendors, setVendors] = useState<Lookup[]>([]);
   const [rows, setRows] = useState<MaintenanceRecord[]>([]);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const searchParams = useSearchParams();
@@ -154,6 +155,7 @@ function MaintenanceRecordsContent() {
         headers,
       );
       setForm(emptyForm);
+      setDialogOpen(false);
       setMessage("Maintenance record saved.");
       setError("");
       await loadRows();
@@ -200,24 +202,116 @@ function MaintenanceRecordsContent() {
     },
   ];
 
+  const openCreateDialog = () => {
+    setForm(emptyForm);
+    setDialogOpen(true);
+    setMessage("");
+    setError("");
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setForm(emptyForm);
+  };
+
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
         <PageHeader
           title="Maintenance Records"
           subtitle="Track repair, service, warranty, inspection, and other maintenance events."
-          
+          actions={
+            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+              <i className="bi bi-plus-lg me-1" />
+              Record Maintenance
+            </button>
+          }
         />
 
         {message ? <div className="alert alert-success">{message}</div> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}
 
-        <div className="row g-4 mb-4">
-          <div className="col-12 col-xl-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">Create / Record Maintenance</div>
-              <div className="card-body">
-                <form className="row g-3" onSubmit={saveRecord}>
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body">
+            <FilterBar onReset={() => setFilters({ status: "", maintenance_type: "", search: "", asset_id: "" })}>
+              <div className="col-12 col-md-4">
+                <label className="form-label small mb-1">Asset ID</label>
+                <input
+                  className="form-control form-control-sm"
+                  value={filters.asset_id}
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setFilters((current) => ({ ...current, asset_id: event.target.value.replace(/\D/g, "") }))
+                  }
+                />
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label small mb-1">Search</label>
+                <input
+                  className="form-control form-control-sm"
+                  value={filters.search}
+                  onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+                />
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label small mb-1">Type</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={filters.maintenance_type}
+                  onChange={(event) => setFilters((current) => ({ ...current, maintenance_type: event.target.value }))}
+                >
+                  <option value="">All</option>
+                  <option value="repair">Repair</option>
+                  <option value="service">Service</option>
+                  <option value="warranty_claim">Warranty Claim</option>
+                  <option value="inspection">Inspection</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label small mb-1">Status</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={filters.status}
+                  onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+                >
+                  <option value="">All</option>
+                  <option value="open">Open</option>
+                  <option value="sent_for_repair">Sent for Repair</option>
+                  <option value="repaired">Repaired</option>
+                  <option value="not_repairable">Not Repairable</option>
+                  <option value="closed">Closed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+            </FilterBar>
+          </div>
+        </div>
+
+        <div className="d-flex align-items-center justify-content-between mb-2">
+          <h2 className="h5 mb-0">Maintenance list</h2>
+          <span className="text-secondary small">{rows.length} records</span>
+        </div>
+        {rows.length === 0 ? (
+          <EmptyState title="No maintenance records" message="No maintenance activity recorded yet." />
+        ) : (
+          <DataTable columns={columns} rows={rows} />
+        )}
+
+        {dialogOpen ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable" style={{ width: "min(54vw, 920px)", maxWidth: "min(54vw, 920px)" }}>
+                <form className="modal-content border-0 shadow-lg" onSubmit={saveRecord}>
+                  <div className="modal-header px-4 py-3">
+                    <div>
+                      <h2 className="h4 mb-1">Record Maintenance</h2>
+                      <p className="text-secondary mb-0">Track repair, service, warranty, inspection, and cost details for an asset.</p>
+                    </div>
+                    <button type="button" className="btn-close" aria-label="Close" onClick={closeDialog} />
+                  </div>
+                  <div className="modal-body px-4 py-4">
+                    <div className="row g-3">
                   <div className="col-12">
                     <label className="form-label small">Maintenance No</label>
                     <input
@@ -335,80 +429,27 @@ function MaintenanceRecordsContent() {
                     />
                   </div>
                   <div className="col-12 d-flex gap-2">
-                    <button className="btn btn-sm btn-primary" type="submit">
-                      <i className="bi bi-plus-circle me-1" />
-                      Save
+                    <button className="btn btn-outline-secondary" type="button" onClick={reset}>
+                      Reset Form
                     </button>
-                    <button className="btn btn-sm btn-outline-secondary" type="button" onClick={reset}>
-                      Reset
+                  </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer px-4 py-3">
+                    <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
+                      Cancel
+                    </button>
+                    <button className="btn btn-primary" type="submit">
+                      <i className="bi bi-plus-circle me-1" />
+                      Save Maintenance
                     </button>
                   </div>
                 </form>
               </div>
             </div>
-          </div>
-
-          <div className="col-12 col-xl-7">
-            <FilterBar onReset={() => setFilters({ status: "", maintenance_type: "", search: "", asset_id: "" })}>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Asset ID</label>
-                <input
-                  className="form-control form-control-sm"
-                  value={filters.asset_id}
-                  inputMode="numeric"
-                  onChange={(event) =>
-                    setFilters((current) => ({ ...current, asset_id: event.target.value.replace(/\D/g, "") }))
-                  }
-                />
-              </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Search</label>
-                <input
-                  className="form-control form-control-sm"
-                  value={filters.search}
-                  onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
-                />
-              </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Type</label>
-                <select
-                  className="form-select form-select-sm"
-                  value={filters.maintenance_type}
-                  onChange={(event) => setFilters((current) => ({ ...current, maintenance_type: event.target.value }))}
-                >
-                  <option value="">All</option>
-                  <option value="repair">Repair</option>
-                  <option value="service">Service</option>
-                  <option value="warranty_claim">Warranty Claim</option>
-                  <option value="inspection">Inspection</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Status</label>
-                <select
-                  className="form-select form-select-sm"
-                  value={filters.status}
-                  onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
-                >
-                  <option value="">All</option>
-                  <option value="open">Open</option>
-                  <option value="sent_for_repair">Sent for Repair</option>
-                  <option value="repaired">Repaired</option>
-                  <option value="not_repairable">Not Repairable</option>
-                  <option value="closed">Closed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-            </FilterBar>
-
-            {rows.length === 0 ? (
-              <EmptyState title="No maintenance records" message="No maintenance activity recorded yet." />
-            ) : (
-              <DataTable columns={columns} rows={rows} />
-            )}
-          </div>
-        </div>
+            <div className="modal-backdrop fade show" onClick={closeDialog} />
+          </>
+        ) : null}
       </div>
     </main>
   );

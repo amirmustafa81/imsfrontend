@@ -65,6 +65,7 @@ export default function AssetMovementsPage() {
   const [rows, setRows] = useState<AssetMovement[]>([]);
   const [filters, setFilters] = useState({ movementType: "", search: "", status: "" });
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -142,6 +143,7 @@ export default function AssetMovementsPage() {
         headers,
       );
       setForm(emptyForm);
+      setDialogOpen(false);
       setMessage("Movement recorded.");
       setError("");
       await loadRows();
@@ -191,24 +193,84 @@ export default function AssetMovementsPage() {
     },
   ];
 
+  const openCreateDialog = () => {
+    setForm(emptyForm);
+    setDialogOpen(true);
+    setMessage("");
+    setError("");
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setForm(emptyForm);
+  };
+
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
         <PageHeader
           title="Asset Movements"
           subtitle="Record and track physical asset movements across departments, rooms, and custodians."
-          
+          actions={
+            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+              <i className="bi bi-plus-lg me-1" />
+              Record Movement
+            </button>
+          }
         />
 
         {message ? <div className="alert alert-success">{message}</div> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}
 
-        <div className="row g-4 mb-4">
-          <div className="col-12 col-xl-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">Record Movement</div>
-              <div className="card-body">
-                <form className="row g-3" onSubmit={saveRecord}>
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body">
+            <FilterBar onReset={() => setFilters({ movementType: "", search: "", status: "" })}>
+              <div className="col-12 col-md-4">
+                <label className="form-label small mb-1">Movement Type</label>
+                <select className="form-select form-select-sm" value={filters.movementType} onChange={(event) => setFilters((current) => ({ ...current, movementType: event.target.value }))}>
+                  <option value="">All</option>
+                  <option value="issue">Issue</option>
+                  <option value="return">Return</option>
+                  <option value="transfer">Transfer</option>
+                  <option value="custodian_change">Custodian Change</option>
+                  <option value="location_change">Location Change</option>
+                  <option value="repair_out">Repair Out</option>
+                  <option value="repair_return">Repair Return</option>
+                  <option value="verification_update">Verification Update</option>
+                </select>
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label small mb-1">Search</label>
+                <input className="form-control form-control-sm" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} />
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label small mb-1">Status</label>
+                <input className="form-control form-control-sm" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))} />
+              </div>
+            </FilterBar>
+          </div>
+        </div>
+
+        <div className="d-flex align-items-center justify-content-between mb-2">
+          <h2 className="h5 mb-0">Movement list</h2>
+          <span className="text-secondary small">{rows.length} records</span>
+        </div>
+        {rows.length === 0 ? <EmptyState title="No movements" message="No movement history found." /> : <DataTable columns={columns} rows={rows} />}
+
+        {dialogOpen ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable" style={{ width: "min(54vw, 920px)", maxWidth: "min(54vw, 920px)" }}>
+                <form className="modal-content border-0 shadow-lg" onSubmit={saveRecord}>
+                  <div className="modal-header px-4 py-3">
+                    <div>
+                      <h2 className="h4 mb-1">Record Movement</h2>
+                      <p className="text-secondary mb-0">Create a physical asset movement record with custodian, department, and approval reference.</p>
+                    </div>
+                    <button type="button" className="btn-close" aria-label="Close" onClick={closeDialog} />
+                  </div>
+                  <div className="modal-body px-4 py-4">
+                    <div className="row g-3">
                   <div className="col-12">
                     <label className="form-label small">Movement No</label>
                     <input className="form-control form-control-sm" value={form.movement_no} onChange={(event) => setForm((current) => ({ ...current, movement_no: event.target.value }))} />
@@ -294,8 +356,13 @@ export default function AssetMovementsPage() {
                     <label className="form-label small">Remarks</label>
                     <textarea className="form-control form-control-sm" rows={2} value={form.remarks} onChange={(event) => setForm((current) => ({ ...current, remarks: event.target.value }))} />
                   </div>
-                  <div className="col-12">
-                    <button className="btn btn-sm btn-primary" type="submit">
+                    </div>
+                  </div>
+                  <div className="modal-footer px-4 py-3">
+                    <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
+                      Cancel
+                    </button>
+                    <button className="btn btn-primary" type="submit">
                       <i className="bi bi-plus-circle me-1" />
                       Save Movement
                     </button>
@@ -303,36 +370,9 @@ export default function AssetMovementsPage() {
                 </form>
               </div>
             </div>
-          </div>
-
-          <div className="col-12 col-xl-7">
-            <FilterBar onReset={() => setFilters({ movementType: "", search: "", status: "" })}>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Movement Type</label>
-                <select className="form-select form-select-sm" value={filters.movementType} onChange={(event) => setFilters((current) => ({ ...current, movementType: event.target.value }))}>
-                  <option value="">All</option>
-                  <option value="issue">Issue</option>
-                  <option value="return">Return</option>
-                  <option value="transfer">Transfer</option>
-                  <option value="custodian_change">Custodian Change</option>
-                  <option value="location_change">Location Change</option>
-                  <option value="repair_out">Repair Out</option>
-                  <option value="repair_return">Repair Return</option>
-                  <option value="verification_update">Verification Update</option>
-                </select>
-              </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Search</label>
-                <input className="form-control form-control-sm" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} />
-              </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label small mb-1">Status</label>
-                <input className="form-control form-control-sm" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))} />
-              </div>
-            </FilterBar>
-            {rows.length === 0 ? <EmptyState title="No movements" message="No movement history found." /> : <DataTable columns={columns} rows={rows} />}
-          </div>
-        </div>
+            <div className="modal-backdrop fade show" onClick={closeDialog} />
+          </>
+        ) : null}
       </div>
     </main>
   );

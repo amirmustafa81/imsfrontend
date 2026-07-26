@@ -159,6 +159,7 @@ export default function DisposalsPage() {
   const [form, setForm] = useState<DisposalForm>(initialForm);
   const [items, setItems] = useState<DisposalItemInput[]>([{ ...emptyItem }]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [message, setMessage] = useState("Load disposals to begin.");
   const [error, setError] = useState("");
 
@@ -315,8 +316,8 @@ export default function DisposalsPage() {
       const saved = response.data?.data;
       setMessage(`Disposal saved with id #${saved?.id ?? "new"}.`);
       setError("");
-      setForm(initialForm);
-      setItems([{ ...emptyItem }]);
+      resetForm();
+      setDialogOpen(false);
       await loadRows();
       if (saved?.id) setExpandedId(saved.id);
     } catch {
@@ -400,6 +401,16 @@ export default function DisposalsPage() {
     setFilter(initialFilters);
   };
 
+  const openCreateDialog = () => {
+    setError("");
+    setDialogOpen(true);
+  };
+
+  const closeCreateDialog = () => {
+    setDialogOpen(false);
+    resetForm();
+  };
+
   const disposalColumns = [
     {
       key: "disposal",
@@ -473,7 +484,12 @@ export default function DisposalsPage() {
         <PageHeader
           title="Asset Disposals"
           subtitle="Create disposal proposals and post disposal transactions with approval metadata."
-          
+          actions={
+            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+              <i className="bi bi-plus-lg me-1" />
+              Create Disposal
+            </button>
+          }
         />
 
         {(error || message) && (
@@ -483,113 +499,176 @@ export default function DisposalsPage() {
           </div>
         )}
 
-        <div className="row g-4">
-          <section className="col-12 col-xxl-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">Create Disposal</div>
-              <div className="card-body">
-                <form onSubmit={saveDisposal} className="row g-2">
-                  <div className="col-12">
-                    <label className="form-label">Disposal No</label>
-                    <input
-                      className="form-control"
-                      value={form.disposal_no}
-                      onChange={(event) => setFormValue("disposal_no", event.target.value)}
-                      placeholder="DIS-001"
-                    />
-                  </div>
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body">
+            <FilterBar onReset={clearFilters}>
+              <div className="col-12 col-lg-6">
+                <label className="form-label small mb-1">Search / Disposal No / Approval / Remarks</label>
+                <input
+                  value={filter.search}
+                  onChange={(event) => setFilterValue("search", event.target.value)}
+                  className="form-control form-control-sm"
+                  placeholder="Search records..."
+                />
+              </div>
+              <div className="col-6 col-lg-3">
+                <label className="form-label small mb-1">Status</label>
+                <select className="form-select form-select-sm" value={filter.status} onChange={(event) => setFilterValue("status", event.target.value)}>
+                  {statusOptions.map((option) => (
+                    <option key={option.value || "all"} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-6 col-lg-3">
+                <label className="form-label small mb-1">Disposal Type</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={filter.disposalType}
+                  onChange={(event) => setFilterValue("disposalType", event.target.value)}
+                >
+                  <option value="">All Types</option>
+                  {disposalTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </FilterBar>
+          </div>
+        </div>
 
-                  <div className="col-12">
-                    <label className="form-label">Disposal Type</label>
-                    <select
-                      className="form-select"
-                      value={form.disposal_type}
-                      onChange={(event) => setFormValue("disposal_type", event.target.value as Disposal["disposal_type"])}
-                    >
-                      {disposalTypeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+        <div className="d-flex align-items-center justify-content-between mb-2">
+          <h2 className="h5 fw-semibold mb-0">Disposal list</h2>
+          <span className="text-secondary">{filteredRows.length} records</span>
+        </div>
 
-                  <div className="col-12">
-                    <label className="form-label">Request Date</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={form.request_date}
-                      onChange={(event) => setFormValue("request_date", event.target.value)}
-                    />
-                  </div>
+        {filteredRows.length === 0 ? (
+          <EmptyState title="No disposals found" message="No records match the current filters." icon="bi-recycle" />
+        ) : (
+          <DataTable columns={disposalColumns} rows={filteredRows} />
+        )}
 
-                  <div className="col-12">
-                    <label className="form-label">Committee Recommendation</label>
-                    <textarea
-                      className="form-control"
-                      rows={2}
-                      value={form.committee_recommendation}
-                      onChange={(event) => setFormValue("committee_recommendation", event.target.value)}
-                      placeholder="Committee resolution / notes"
-                    />
-                  </div>
+        {selectedDisposal ? (
+          <section className="mt-4">
+            <h3 className="h5 fw-semibold">Disposal items for #{selectedDisposal.disposal_no}</h3>
+            <DataTable columns={expandedItemColumns} rows={selectedDisposal.items ?? []} empty="No item rows returned by backend." />
+          </section>
+        ) : null}
+      </div>
 
-                  <div className="col-12">
-                    <ApprovalReferenceFields
-                      value={{
-                        authority: form.approved_by,
-                        date: form.approval_date,
-                        ref: form.approval_ref,
-                        remarks: form.remarks,
-                      }}
-                      onChange={(value) => {
-                        setFormValue("approval_ref", value.ref);
-                        setFormValue("approval_date", value.date);
-                        setFormValue("approved_by", value.authority);
-                        setFormValue("remarks", value.remarks);
-                      }}
-                    />
+      {dialogOpen ? (
+        <>
+          <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+            <div
+              className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+              style={{ width: "min(72vw, 1200px)", maxWidth: "min(72vw, 1200px)" }}
+            >
+              <form className="modal-content border-0 shadow" onSubmit={saveDisposal}>
+                <div className="modal-header">
+                  <div>
+                    <h2 className="modal-title h5 mb-1">Create Disposal</h2>
+                    <p className="text-secondary mb-0">Record disposal, write-off, auction, transfer, or destruction details.</p>
                   </div>
+                  <button type="button" className="btn-close" onClick={closeCreateDialog} aria-label="Close" />
+                </div>
 
-                  <div className="col-12">
-                    <label className="form-label">Status</label>
-                    <select
-                      className="form-select"
-                      value={form.status}
-                      onChange={(event) => setFormValue("status", event.target.value as Disposal["status"])}
-                    >
-                      {statusOptions
-                        .filter((option) => option.value !== "")
-                        .map((option) => (
+                <div className="modal-body">
+                  <div className="row g-3">
+                    <div className="col-12 col-lg-6">
+                      <label className="form-label">Disposal No</label>
+                      <input
+                        className="form-control"
+                        value={form.disposal_no}
+                        onChange={(event) => setFormValue("disposal_no", event.target.value)}
+                        placeholder="DIS-001"
+                      />
+                    </div>
+
+                    <div className="col-12 col-lg-6">
+                      <label className="form-label">Disposal Type</label>
+                      <select
+                        className="form-select"
+                        value={form.disposal_type}
+                        onChange={(event) => setFormValue("disposal_type", event.target.value as Disposal["disposal_type"])}
+                      >
+                        {disposalTypeOptions.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
                         ))}
-                    </select>
-                  </div>
-
-                  <div className="col-12">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <h6 className="mb-0">Disposal Items</h6>
-                      <button type="button" className="btn btn-sm btn-outline-primary" onClick={addItemRow}>
-                        <i className="bi bi-plus-lg me-1" />
-                        Add Item
-                      </button>
+                      </select>
                     </div>
 
-                    <div className="mt-2">
-                      <div className="d-grid gap-2">
+                    <div className="col-12 col-lg-4">
+                      <label className="form-label">Request Date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={form.request_date}
+                        onChange={(event) => setFormValue("request_date", event.target.value)}
+                      />
+                    </div>
+
+                    <div className="col-12 col-lg-8">
+                      <label className="form-label">Status</label>
+                      <select className="form-select" value={form.status} onChange={(event) => setFormValue("status", event.target.value as Disposal["status"])}>
+                        {statusOptions
+                          .filter((option) => option.value !== "")
+                          .map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label">Committee Recommendation</label>
+                      <textarea
+                        className="form-control"
+                        rows={2}
+                        value={form.committee_recommendation}
+                        onChange={(event) => setFormValue("committee_recommendation", event.target.value)}
+                        placeholder="Committee resolution / notes"
+                      />
+                    </div>
+
+                    <div className="col-12">
+                      <ApprovalReferenceFields
+                        value={{
+                          authority: form.approved_by,
+                          date: form.approval_date,
+                          ref: form.approval_ref,
+                          remarks: form.remarks,
+                        }}
+                        onChange={(value) => {
+                          setFormValue("approval_ref", value.ref);
+                          setFormValue("approval_date", value.date);
+                          setFormValue("approved_by", value.authority);
+                          setFormValue("remarks", value.remarks);
+                        }}
+                      />
+                    </div>
+
+                    <div className="col-12">
+                      <div className="d-flex align-items-center justify-content-between">
+                        <h3 className="h6 mb-0">Disposal Items</h3>
+                        <button type="button" className="btn btn-sm btn-outline-primary" onClick={addItemRow}>
+                          <i className="bi bi-plus-lg me-1" />
+                          Add Item
+                        </button>
+                      </div>
+
+                      <div className="d-grid gap-3 mt-3">
                         {items.map((item, index) => (
-                          <div key={`${item.asset_id}-${index}`} className="border rounded p-2">
-                            <div className="row g-2">
-                              <div className="col-12">
+                          <div key={`${item.asset_id}-${index}`} className="rounded border bg-body-tertiary p-3">
+                            <div className="row g-3 align-items-end">
+                              <div className="col-12 col-lg-6">
                                 <label className="form-label">Asset</label>
-                                <select
-                                  className="form-select"
-                                  value={item.asset_id}
-                                  onChange={(event) => setItemValue(index, "asset_id", event.target.value)}
-                                >
+                                <select className="form-select" value={item.asset_id} onChange={(event) => setItemValue(index, "asset_id", event.target.value)}>
                                   <option value="">Select Asset</option>
                                   {lookups.fixedAssets.map((asset) => {
                                     const typed = asset as FixedAsset;
@@ -602,7 +681,7 @@ export default function DisposalsPage() {
                                 </select>
                               </div>
 
-                              <div className="col-4">
+                              <div className="col-6 col-lg-2">
                                 <label className="form-label">Book Value</label>
                                 <input
                                   className="form-control"
@@ -614,7 +693,7 @@ export default function DisposalsPage() {
                                 />
                               </div>
 
-                              <div className="col-4">
+                              <div className="col-6 col-lg-2">
                                 <label className="form-label">Disposal Value</label>
                                 <input
                                   className="form-control"
@@ -626,24 +705,23 @@ export default function DisposalsPage() {
                                 />
                               </div>
 
-                              <div className="col-4">
-                                <label className="form-label">Reason</label>
-                                <div className="d-flex gap-2">
-                                  <input
-                                    className="form-control"
-                                    value={item.reason}
-                                    onChange={(event) => setItemValue(index, "reason", event.target.value)}
-                                    placeholder="Reason"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline-danger"
-                                    onClick={() => removeItemRow(index)}
-                                    title="Remove"
-                                  >
-                                    <i className="bi bi-trash" />
+                              <div className="col-12 col-lg-2">
+                                {items.length > 1 ? (
+                                  <button type="button" className="btn btn-outline-danger w-100" onClick={() => removeItemRow(index)}>
+                                    <i className="bi bi-trash me-1" />
+                                    Remove
                                   </button>
-                                </div>
+                                ) : null}
+                              </div>
+
+                              <div className="col-12">
+                                <label className="form-label">Reason</label>
+                                <input
+                                  className="form-control"
+                                  value={item.reason}
+                                  onChange={(event) => setItemValue(index, "reason", event.target.value)}
+                                  placeholder="Reason"
+                                />
                               </div>
                             </div>
                           </div>
@@ -651,82 +729,23 @@ export default function DisposalsPage() {
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  <div className="col-12 d-flex gap-2">
-                    <button type="submit" className="btn btn-primary">
-                      Save Disposal
-                    </button>
-                    <button type="button" className="btn btn-outline-secondary" onClick={resetForm}>
-                      Reset
-                    </button>
-                  </div>
-                </form>
-              </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-outline-secondary" onClick={closeCreateDialog}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    <i className="bi bi-check2-circle me-1" />
+                    Save Disposal
+                  </button>
+                </div>
+              </form>
             </div>
-          </section>
-
-          <section className="col-12 col-xxl-7">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">Disposal List</div>
-              <div className="card-body">
-                <FilterBar onReset={clearFilters}>
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small mb-1">Search / Disposal No / Approval / Remarks</label>
-                    <input
-                      value={filter.search}
-                      onChange={(event) => setFilterValue("search", event.target.value)}
-                      className="form-control form-control-sm"
-                      placeholder="Search records..."
-                    />
-                  </div>
-                  <div className="col-6 col-md-3">
-                    <label className="form-label small mb-1">Status</label>
-                    <select
-                      className="form-select form-select-sm"
-                      value={filter.status}
-                      onChange={(event) => setFilterValue("status", event.target.value)}
-                    >
-                      {statusOptions.map((option) => (
-                        <option key={option.value || "all"} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-6 col-md-3">
-                    <label className="form-label small mb-1">Disposal Type</label>
-                    <select
-                      className="form-select form-select-sm"
-                      value={filter.disposalType}
-                      onChange={(event) => setFilterValue("disposalType", event.target.value)}
-                    >
-                      <option value="">All Types</option>
-                      {disposalTypeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </FilterBar>
-
-                {filteredRows.length === 0 ? (
-                  <EmptyState title="No disposals found" message="No records match the current filters." icon="bi-recycle" />
-                ) : (
-                  <DataTable columns={disposalColumns} rows={filteredRows} />
-                )}
-
-                {selectedDisposal ? (
-                  <div className="mt-3">
-                    <h3 className="h6">Disposal items for #{selectedDisposal.disposal_no}</h3>
-                    <DataTable columns={expandedItemColumns} rows={selectedDisposal.items ?? []} empty="No item rows returned by backend." />
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
+          </div>
+          <div className="modal-backdrop fade show" />
+        </>
+      ) : null}
     </main>
   );
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { DataTable, EmptyState, FilterBar, PageHeader } from "@/components/ims";
+import { formatNotificationType, NOTIFICATION_TYPE_OPTIONS } from "@/lib/notifications";
 
 type NotificationRow = {
   id: number;
@@ -104,7 +105,11 @@ export default function NotificationsPage() {
 
   const columns = [
     { key: "title", header: "Title" },
-    { key: "notification_type", header: "Type" },
+    {
+      key: "notification_type",
+      header: "Type",
+      render: (row: NotificationRow) => formatNotificationType(row.notification_type),
+    },
     { key: "message", header: "Message" },
     {
       key: "is_read",
@@ -170,12 +175,18 @@ export default function NotificationsPage() {
           </div>
           <div className="col-12 col-lg-3">
             <label className="form-label small mb-1">Type</label>
-            <input
-              className="form-control form-control-sm"
+            <select
+              className="form-select form-select-sm"
               value={filters.notification_type}
               onChange={(event) => setFilter("notification_type", event.target.value)}
-              placeholder="e.g. approval"
-            />
+            >
+              <option value="">All Types</option>
+              {NOTIFICATION_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="col-12 col-lg-2 d-grid">
             <label className="form-label small mb-1 opacity-0">Refresh</label>

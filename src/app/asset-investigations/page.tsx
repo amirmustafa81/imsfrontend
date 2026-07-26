@@ -54,6 +54,7 @@ export default function AssetInvestigationsPage() {
   const [rows, setRows] = useState<Investigation[]>([]);
   const [filters, setFilters] = useState({ status: "", assetId: "", search: "" });
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -122,6 +123,7 @@ export default function AssetInvestigationsPage() {
         headers,
       );
       setForm(emptyForm);
+      setDialogOpen(false);
       setMessage("Investigation created.");
       setError("");
       await loadRows();
@@ -168,24 +170,88 @@ export default function AssetInvestigationsPage() {
     },
   ];
 
+  const openCreateDialog = () => {
+    setForm(emptyForm);
+    setDialogOpen(true);
+    setMessage("");
+    setError("");
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setForm(emptyForm);
+  };
+
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
         <PageHeader
           title="Asset Investigations"
           subtitle="Manage missing/under investigation and recovery workflow."
-          
+          actions={
+            <button className="btn btn-sm btn-primary px-3" type="button" onClick={openCreateDialog}>
+              <i className="bi bi-plus-lg me-1" />
+              Create Investigation
+            </button>
+          }
         />
 
         {message ? <div className="alert alert-success">{message}</div> : null}
         {error ? <div className="alert alert-danger">{error}</div> : null}
 
-        <div className="row g-4 mb-4">
-          <div className="col-12 col-xl-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">Create Investigation</div>
-              <div className="card-body">
-                <form className="row g-3" onSubmit={saveRecord}>
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body">
+            <FilterBar onReset={() => setFilters({ status: "", assetId: "", search: "" })}>
+              <div className="col-12 col-md-3">
+                <label className="form-label small mb-1">Asset</label>
+                <select className="form-select form-select-sm" value={filters.assetId} onChange={(event) => setFilters((current) => ({ ...current, assetId: event.target.value }))}>
+                  <option value="">All</option>
+                  {assets.map((asset) => (
+                    <option key={asset.id} value={asset.id}>
+                      {asset.asset_id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-12 col-md-3">
+                <label className="form-label small mb-1">Status</label>
+                <select className="form-select form-select-sm" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
+                  <option value="">All</option>
+                  <option value="missing_under_investigation">Missing / Under Investigation</option>
+                  <option value="found">Found</option>
+                  <option value="recommended_write_off">Recommended Write-off</option>
+                  <option value="recovery_pending">Recovery Pending</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <div className="col-12 col-md-6">
+                <label className="form-label small mb-1">Search</label>
+                <input className="form-control form-control-sm" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} />
+              </div>
+            </FilterBar>
+          </div>
+        </div>
+
+        <div className="d-flex align-items-center justify-content-between mb-2">
+          <h2 className="h5 mb-0">Investigation list</h2>
+          <span className="text-secondary small">{rows.length} records</span>
+        </div>
+        {rows.length === 0 ? <EmptyState title="No investigations" message="No investigation records found." /> : <DataTable columns={columns} rows={rows} />}
+
+        {dialogOpen ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable" style={{ width: "min(54vw, 920px)", maxWidth: "min(54vw, 920px)" }}>
+                <form className="modal-content border-0 shadow-lg" onSubmit={saveRecord}>
+                  <div className="modal-header px-4 py-3">
+                    <div>
+                      <h2 className="h4 mb-1">Create Investigation</h2>
+                      <p className="text-secondary mb-0">Record a missing asset inquiry, recovery status, and final action reference.</p>
+                    </div>
+                    <button type="button" className="btn-close" aria-label="Close" onClick={closeDialog} />
+                  </div>
+                  <div className="modal-body px-4 py-4">
+                    <div className="row g-3">
                   <div className="col-12">
                     <label className="form-label small">Case No.</label>
                     <input className="form-control form-control-sm" value={form.case_no} onChange={(event) => setForm((current) => ({ ...current, case_no: event.target.value }))} />
@@ -235,50 +301,23 @@ export default function AssetInvestigationsPage() {
                     <label className="form-label small">Remarks</label>
                     <textarea className="form-control" rows={2} value={form.remarks} onChange={(event) => setForm((current) => ({ ...current, remarks: event.target.value }))} />
                   </div>
-                  <div className="col-12">
-                    <button className="btn btn-sm btn-primary" type="submit">
+                    </div>
+                  </div>
+                  <div className="modal-footer px-4 py-3">
+                    <button className="btn btn-outline-secondary" type="button" onClick={closeDialog}>
+                      Cancel
+                    </button>
+                    <button className="btn btn-primary" type="submit">
                       <i className="bi bi-plus-circle me-1" />
-                      Save
+                      Save Investigation
                     </button>
                   </div>
                 </form>
               </div>
             </div>
-          </div>
-
-          <div className="col-12 col-xl-7">
-            <FilterBar onReset={() => setFilters({ status: "", assetId: "", search: "" })}>
-              <div className="col-12 col-md-3">
-                <label className="form-label small mb-1">Asset</label>
-                <select className="form-select form-select-sm" value={filters.assetId} onChange={(event) => setFilters((current) => ({ ...current, assetId: event.target.value }))}>
-                  <option value="">All</option>
-                  {assets.map((asset) => (
-                    <option key={asset.id} value={asset.id}>
-                      {asset.asset_id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-12 col-md-3">
-                <label className="form-label small mb-1">Status</label>
-                <select className="form-select form-select-sm" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
-                  <option value="">All</option>
-                  <option value="missing_under_investigation">Missing / Under Investigation</option>
-                  <option value="found">Found</option>
-                  <option value="recommended_write_off">Recommended Write-off</option>
-                  <option value="recovery_pending">Recovery Pending</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </div>
-              <div className="col-12 col-md-6">
-                <label className="form-label small mb-1">Search</label>
-                <input className="form-control form-control-sm" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} />
-              </div>
-            </FilterBar>
-
-            {rows.length === 0 ? <EmptyState title="No investigations" message="No investigation records found." /> : <DataTable columns={columns} rows={rows} />}
-          </div>
-        </div>
+            <div className="modal-backdrop fade show" onClick={closeDialog} />
+          </>
+        ) : null}
       </div>
     </main>
   );

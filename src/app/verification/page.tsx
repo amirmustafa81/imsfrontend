@@ -191,6 +191,7 @@ export default function VerificationPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<number, VerificationItem[]>>({});
   const [expandedLoading, setExpandedLoading] = useState<Record<number, boolean>>({});
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -363,6 +364,7 @@ export default function VerificationPage() {
         setMessage("Verification saved.");
       }
       resetForm();
+      setDialogOpen(false);
       await loadRows();
     } catch {
       setError("Unable to save verification. Check required fields.");
@@ -428,6 +430,15 @@ export default function VerificationPage() {
     setStatusFilter("");
     setDepartmentFilter("");
     setProjectFilter("");
+  };
+
+  const openCreateDialog = () => {
+    setError("");
+    setDialogOpen(true);
+  };
+
+  const closeCreateDialog = () => {
+    setDialogOpen(false);
   };
 
   const verificationColumns = [
@@ -530,7 +541,12 @@ export default function VerificationPage() {
         <PageHeader
           title="Physical Verification"
           subtitle="Create verification rounds and record item/asset discrepancies for audit trail."
-          
+          actions={
+            <button type="button" className="btn btn-primary" onClick={openCreateDialog}>
+              <i className="bi bi-plus-lg me-2" />
+              New Verification
+            </button>
+          }
         />
 
         {(message || error) && (
@@ -540,17 +556,114 @@ export default function VerificationPage() {
           </div>
         )}
 
-        <div className="row g-4">
-          <section className="col-12 col-xxl-5">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">New Verification</div>
-              <div className="card-body">
-                <form onSubmit={saveVerification}>
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body">
+            <FilterBar onReset={clearFilters}>
+              <div className="col-12 col-lg-4">
+                <label className="form-label small mb-1">Search</label>
+                <input
+                  className="form-control"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Verification no / remarks"
+                />
+              </div>
+              <div className="col-12 col-sm-6 col-lg-2">
+                <label className="form-label small mb-1">Type</label>
+                <select className="form-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                  <option value="">All types</option>
+                  {verificationTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-12 col-sm-6 col-lg-2">
+                <label className="form-label small mb-1">Status</label>
+                <select className="form-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                  <option value="">All statuses</option>
+                  {verificationStatuses.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-12 col-sm-6 col-lg-2">
+                <label className="form-label small mb-1">Department</label>
+                <select className="form-select" value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
+                  <option value="">All departments</option>
+                  {lookups.departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.code} - {department.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-12 col-sm-6 col-lg-2">
+                <label className="form-label small mb-1">Project</label>
+                <select className="form-select" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+                  <option value="">All projects</option>
+                  {lookups["research-projects"].map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.project_code} - {project.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </FilterBar>
+          </div>
+        </div>
+
+        <div className="d-flex align-items-center justify-content-between mb-2">
+          <h2 className="h5 mb-0">Verification list</h2>
+          <span className="text-secondary">{rows.length} records</span>
+        </div>
+
+        {rows.length === 0 ? (
+          <EmptyState title="No verification records" message="No verification records match the current filters." icon="bi-clipboard-check" />
+        ) : (
+          <DataTable columns={verificationColumns} rows={rows} />
+        )}
+
+        {selectedVerification ? (
+          <section className="mt-4">
+            <h3 className="h5">Verification details for #{selectedVerification.verification_no}</h3>
+            {expandedLoading[selectedVerification.id] ? (
+              <div className="text-secondary">Loading details...</div>
+            ) : (
+              <DataTable
+                columns={expandedItemColumns}
+                rows={expandedItems[selectedVerification.id] ?? []}
+                empty="No detail rows returned by backend."
+              />
+            )}
+          </section>
+        ) : null}
+      </div>
+
+      {dialogOpen ? (
+        <>
+          <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+            <div
+              className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+              style={{ width: "min(72vw, 1200px)", maxWidth: "min(72vw, 1200px)" }}
+            >
+              <form className="modal-content border-0 shadow" onSubmit={saveVerification}>
+                <div className="modal-header">
+                  <div>
+                    <h2 className="modal-title h5">New Verification</h2>
+                    <p className="text-secondary mb-0">Create a verification round and record item or asset discrepancies.</p>
+                  </div>
+                  <button type="button" className="btn-close" aria-label="Close" onClick={closeCreateDialog} />
+                </div>
+                <div className="modal-body">
                   <div className="row g-3">
                     <div className="col-12 col-md-6">
                       <label className="form-label">Verification no</label>
                       <input
-                        className="form-control form-control-sm"
+                        className="form-control"
                         value={form.verification_no}
                         required
                         onChange={(e) => setFormValue("verification_no", e.target.value)}
@@ -559,11 +672,7 @@ export default function VerificationPage() {
                     </div>
                     <div className="col-12 col-md-6">
                       <label className="form-label">Type</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={form.verification_type}
-                        onChange={(e) => setFormValue("verification_type", e.target.value)}
-                      >
+                      <select className="form-select" value={form.verification_type} onChange={(e) => setFormValue("verification_type", e.target.value)}>
                         {verificationTypes.map((type) => (
                           <option key={type.value} value={type.value}>
                             {type.label}
@@ -571,13 +680,9 @@ export default function VerificationPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="col-12 col-md-6">
+                    <div className="col-12 col-md-4">
                       <label className="form-label">Status</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={form.status}
-                        onChange={(e) => setFormValue("status", e.target.value)}
-                      >
+                      <select className="form-select" value={form.status} onChange={(e) => setFormValue("status", e.target.value)}>
                         {verificationStatuses.map((status) => (
                           <option key={status.value} value={status.value}>
                             {status.label}
@@ -585,13 +690,9 @@ export default function VerificationPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="col-12 col-md-3">
+                    <div className="col-12 col-md-4">
                       <label className="form-label">Department</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={form.department_id}
-                        onChange={(e) => setFormValue("department_id", e.target.value)}
-                      >
+                      <select className="form-select" value={form.department_id} onChange={(e) => setFormValue("department_id", e.target.value)}>
                         <option value="">Optional</option>
                         {lookups.departments.map((department) => (
                           <option key={department.id} value={department.id}>
@@ -600,13 +701,9 @@ export default function VerificationPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="col-12 col-md-3">
+                    <div className="col-12 col-md-4">
                       <label className="form-label">Building</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={form.building_id}
-                        onChange={(e) => setFormValue("building_id", e.target.value)}
-                      >
+                      <select className="form-select" value={form.building_id} onChange={(e) => setFormValue("building_id", e.target.value)}>
                         <option value="">Optional</option>
                         {lookups.buildings.map((building) => (
                           <option key={building.id} value={building.id}>
@@ -615,13 +712,9 @@ export default function VerificationPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="col-12 col-md-3">
+                    <div className="col-12 col-md-4">
                       <label className="form-label">Room</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={form.room_id}
-                        onChange={(e) => setFormValue("room_id", e.target.value)}
-                      >
+                      <select className="form-select" value={form.room_id} onChange={(e) => setFormValue("room_id", e.target.value)}>
                         <option value="">Optional</option>
                         {lookups.rooms.map((room) => (
                           <option key={room.id} value={room.id}>
@@ -630,13 +723,9 @@ export default function VerificationPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="col-12 col-md-3">
+                    <div className="col-12 col-md-4">
                       <label className="form-label">Project</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={form.project_id}
-                        onChange={(e) => setFormValue("project_id", e.target.value)}
-                      >
+                      <select className="form-select" value={form.project_id} onChange={(e) => setFormValue("project_id", e.target.value)}>
                         <option value="">Optional</option>
                         {lookups["research-projects"].map((project) => (
                           <option key={project.id} value={project.id}>
@@ -645,13 +734,9 @@ export default function VerificationPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="col-12 col-md-6">
+                    <div className="col-12 col-md-4">
                       <label className="form-label">Funding source</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={form.funding_source_id}
-                        onChange={(e) => setFormValue("funding_source_id", e.target.value)}
-                      >
+                      <select className="form-select" value={form.funding_source_id} onChange={(e) => setFormValue("funding_source_id", e.target.value)}>
                         <option value="">Optional</option>
                         {lookups["funding-sources"].map((source) => (
                           <option key={source.id} value={source.id}>
@@ -662,37 +747,27 @@ export default function VerificationPage() {
                     </div>
                     <div className="col-12 col-md-3">
                       <label className="form-label">Start date</label>
-                      <input
-                        type="date"
-                        className="form-control form-control-sm"
-                        value={form.start_date}
-                        onChange={(e) => setFormValue("start_date", e.target.value)}
-                      />
+                      <input type="date" className="form-control" value={form.start_date} onChange={(e) => setFormValue("start_date", e.target.value)} />
                     </div>
                     <div className="col-12 col-md-3">
                       <label className="form-label">End date</label>
-                      <input
-                        type="date"
-                        className="form-control form-control-sm"
-                        value={form.end_date}
-                        onChange={(e) => setFormValue("end_date", e.target.value)}
-                      />
+                      <input type="date" className="form-control" value={form.end_date} onChange={(e) => setFormValue("end_date", e.target.value)} />
                     </div>
-                    <div className="col-12 col-md-6">
+                    <div className="col-12 col-md-3">
                       <label className="form-label">Custodian user id</label>
                       <input
                         type="number"
-                        className="form-control form-control-sm"
+                        className="form-control"
                         value={form.custodian_user_id}
                         onChange={(e) => setFormValue("custodian_user_id", e.target.value)}
                         placeholder="Optional"
                       />
                     </div>
-                    <div className="col-12 col-md-6">
+                    <div className="col-12 col-md-3">
                       <label className="form-label">Conducted by user id</label>
                       <input
                         type="number"
-                        className="form-control form-control-sm"
+                        className="form-control"
                         value={form.conducted_by}
                         onChange={(e) => setFormValue("conducted_by", e.target.value)}
                         placeholder="Optional"
@@ -701,7 +776,7 @@ export default function VerificationPage() {
                     <div className="col-12">
                       <label className="form-label">Remarks</label>
                       <textarea
-                        className="form-control form-control-sm"
+                        className="form-control"
                         rows={2}
                         value={form.remarks}
                         onChange={(e) => setFormValue("remarks", e.target.value)}
@@ -713,229 +788,146 @@ export default function VerificationPage() {
                   <hr className="my-4" />
 
                   <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h2 className="h5 mb-0">Verification Items</h2>
-                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={addItemRow}>
+                    <h3 className="h5 mb-0">Verification Items</h3>
+                    <button type="button" className="btn btn-outline-primary" onClick={addItemRow}>
                       <i className="bi bi-plus-lg me-1" />
                       Add row
                     </button>
                   </div>
 
                   {items.map((item, index) => (
-                    <div className="row g-2 align-items-end mb-3" key={`${index}-${item.item_id || item.asset_id || "new"}`}>
-                      <div className="col-12 col-xl-2">
-                        <label className="form-label mb-1 small">Asset ID</label>
-                        <input
-                          className="form-control form-control-sm"
-                          value={item.asset_id}
-                          onChange={(e) => setItemValue(index, "asset_id", e.target.value)}
-                          placeholder="Optional"
-                        />
-                      </div>
-                      <div className="col-12 col-xl-2">
-                        <label className="form-label mb-1 small">Item</label>
-                        <select
-                          className="form-select form-select-sm"
-                          value={item.item_id}
-                          onChange={(e) => setItemValue(index, "item_id", e.target.value)}
-                        >
-                          <option value="">Select item</option>
-                          {lookups.items.map((lookupItem) => (
-                            <option key={lookupItem.id} value={lookupItem.id}>
-                              {lookupItem.item_code} - {lookupItem.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="col-12 col-xl-2">
-                        <label className="form-label mb-1 small">Status</label>
-                        <select
-                          className="form-select form-select-sm"
-                          value={item.verification_status}
-                          onChange={(e) => setItemValue(index, "verification_status", e.target.value as VerificationItemInput["verification_status"])}
-                          required
-                        >
-                          <option value="">Select</option>
-                          {itemStatuses.map((status) => (
-                            <option key={status} value={status}>
-                              {status.replaceAll("_", " ")}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="col-12 col-xl-1">
-                        <label className="form-label mb-1 small">Expected Qty</label>
-                        <input
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          className="form-control form-control-sm"
-                          value={item.expected_quantity}
-                          onChange={(e) => setItemValue(index, "expected_quantity", e.target.value)}
-                          placeholder="0"
-                        />
-                      </div>
-                      <div className="col-12 col-xl-1">
-                        <label className="form-label mb-1 small">Found Qty</label>
-                        <input
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          className="form-control form-control-sm"
-                          value={item.found_quantity}
-                          onChange={(e) => setItemValue(index, "found_quantity", e.target.value)}
-                          placeholder="0"
-                        />
-                      </div>
-                      <div className="col-12 col-xl-2">
-                        <label className="form-label mb-1 small">Expected dept</label>
-                        <select
-                          className="form-select form-select-sm"
-                          value={item.expected_department_id}
-                          onChange={(e) => setItemValue(index, "expected_department_id", e.target.value)}
-                        >
-                          <option value="">Optional</option>
-                          {lookups.departments.map((department) => (
-                            <option key={department.id} value={department.id}>
-                              {department.code} - {department.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="col-12 col-xl-2">
-                        <label className="form-label mb-1 small">Found dept</label>
-                        <select
-                          className="form-select form-select-sm"
-                          value={item.found_department_id}
-                          onChange={(e) => setItemValue(index, "found_department_id", e.target.value)}
-                        >
-                          <option value="">Optional</option>
-                          {lookups.departments.map((department) => (
-                            <option key={department.id} value={department.id}>
-                              {department.code} - {department.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="col-12 col-xl-1">
-                        <button
-                          type="button"
-                          className="btn btn-outline-danger w-100"
-                          onClick={() => removeItemRow(index)}
-                          disabled={items.length === 1}
-                          aria-label="Remove row"
-                        >
-                          <i className="bi bi-trash" />
-                        </button>
-                      </div>
-                      <div className="col-12">
-                        <label className="form-label mb-1 small">Condition / remarks</label>
-                        <textarea
-                          className="form-control form-control-sm"
-                          rows={1}
-                          value={item.condition_remarks}
-                          onChange={(e) => setItemValue(index, "condition_remarks", e.target.value)}
-                          placeholder="Damage/mismatch notes"
-                        />
+                    <div className="border rounded p-3 mb-3" key={`${index}-${item.item_id || item.asset_id || "new"}`}>
+                      <div className="row g-3 align-items-end">
+                        <div className="col-12 col-lg-2">
+                          <label className="form-label small mb-1">Asset ID</label>
+                          <input
+                            className="form-control"
+                            value={item.asset_id}
+                            onChange={(e) => setItemValue(index, "asset_id", e.target.value)}
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div className="col-12 col-lg-3">
+                          <label className="form-label small mb-1">Item</label>
+                          <select className="form-select" value={item.item_id} onChange={(e) => setItemValue(index, "item_id", e.target.value)}>
+                            <option value="">Select item</option>
+                            {lookups.items.map((lookupItem) => (
+                              <option key={lookupItem.id} value={lookupItem.id}>
+                                {lookupItem.item_code} - {lookupItem.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-12 col-lg-2">
+                          <label className="form-label small mb-1">Status</label>
+                          <select
+                            className="form-select"
+                            value={item.verification_status}
+                            onChange={(e) => setItemValue(index, "verification_status", e.target.value as VerificationItemInput["verification_status"])}
+                            required
+                          >
+                            <option value="">Select</option>
+                            {itemStatuses.map((status) => (
+                              <option key={status} value={status}>
+                                {status.replaceAll("_", " ")}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-12 col-lg-2">
+                          <label className="form-label small mb-1">Expected Qty</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            min="0"
+                            className="form-control"
+                            value={item.expected_quantity}
+                            onChange={(e) => setItemValue(index, "expected_quantity", e.target.value)}
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="col-12 col-lg-2">
+                          <label className="form-label small mb-1">Found Qty</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            min="0"
+                            className="form-control"
+                            value={item.found_quantity}
+                            onChange={(e) => setItemValue(index, "found_quantity", e.target.value)}
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="col-12 col-lg-1">
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger w-100"
+                            onClick={() => removeItemRow(index)}
+                            disabled={items.length === 1}
+                            aria-label="Remove row"
+                          >
+                            <i className="bi bi-trash" />
+                          </button>
+                        </div>
+                        <div className="col-12 col-md-6">
+                          <label className="form-label small mb-1">Expected dept</label>
+                          <select
+                            className="form-select"
+                            value={item.expected_department_id}
+                            onChange={(e) => setItemValue(index, "expected_department_id", e.target.value)}
+                          >
+                            <option value="">Optional</option>
+                            {lookups.departments.map((department) => (
+                              <option key={department.id} value={department.id}>
+                                {department.code} - {department.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-12 col-md-6">
+                          <label className="form-label small mb-1">Found dept</label>
+                          <select
+                            className="form-select"
+                            value={item.found_department_id}
+                            onChange={(e) => setItemValue(index, "found_department_id", e.target.value)}
+                          >
+                            <option value="">Optional</option>
+                            {lookups.departments.map((department) => (
+                              <option key={department.id} value={department.id}>
+                                {department.code} - {department.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-12">
+                          <label className="form-label small mb-1">Condition / remarks</label>
+                          <textarea
+                            className="form-control"
+                            rows={2}
+                            value={item.condition_remarks}
+                            onChange={(e) => setItemValue(index, "condition_remarks", e.target.value)}
+                            placeholder="Damage/mismatch notes"
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
-
-                  <div className="d-flex justify-content-end">
-                    <button type="submit" className="btn btn-primary">
-                      <i className="bi bi-save me-2" />
-                      Save Verification
-                    </button>
-                  </div>
-                </form>
-              </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-outline-secondary" onClick={closeCreateDialog}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    <i className="bi bi-save me-2" />
+                    Save Verification
+                  </button>
+                </div>
+              </form>
             </div>
-          </section>
-
-          <section className="col-12 col-xxl-7">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">Verification List</div>
-              <div className="card-body">
-                <FilterBar onReset={clearFilters}>
-                  <div className="col-12 col-md-4">
-                    <label className="form-label small mb-1">Search</label>
-                    <input
-                      className="form-control form-control-sm"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Verification no / remarks"
-                    />
-                  </div>
-                  <div className="col-12 col-md-2">
-                    <label className="form-label small mb-1">Type</label>
-                    <select className="form-select form-select-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                      <option value="">All types</option>
-                      {verificationTypes.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-12 col-md-2">
-                    <label className="form-label small mb-1">Status</label>
-                    <select className="form-select form-select-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                      <option value="">All statuses</option>
-                      {verificationStatuses.map((status) => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-12 col-md-2">
-                    <label className="form-label small mb-1">Department</label>
-                    <select className="form-select form-select-sm" value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
-                      <option value="">All departments</option>
-                      {lookups.departments.map((department) => (
-                        <option key={department.id} value={department.id}>
-                          {department.code} - {department.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-12 col-md-2">
-                    <label className="form-label small mb-1">Project</label>
-                    <select className="form-select form-select-sm" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
-                      <option value="">All projects</option>
-                      {lookups["research-projects"].map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.project_code} - {project.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </FilterBar>
-
-                {rows.length === 0 ? (
-                  <EmptyState title="No verification records" message="No verification records match the current filters." icon="bi-clipboard-check" />
-                ) : (
-                  <DataTable columns={verificationColumns} rows={rows} />
-                )}
-
-                {selectedVerification ? (
-                  <div className="mt-3">
-                    <h3 className="h6">Verification details for #{selectedVerification.verification_no}</h3>
-                    {expandedLoading[selectedVerification.id] ? (
-                      <div className="text-secondary">Loading details...</div>
-                    ) : (
-                      <DataTable
-                        columns={expandedItemColumns}
-                        rows={expandedItems[selectedVerification.id] ?? []}
-                        empty="No detail rows returned by backend."
-                      />
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
+          </div>
+          <div className="modal-backdrop fade show" />
+        </>
+      ) : null}
     </main>
   );
 }

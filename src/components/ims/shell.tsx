@@ -5,6 +5,7 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { isAuthBypassEnabled, useAuth } from "@/lib/auth";
+import { formatNotificationType } from "@/lib/notifications";
 
 type SidebarItem = {
   label: string;
@@ -316,7 +317,7 @@ export function ImsShell({ children }: { children: ReactNode }) {
                           <span className="min-w-0 flex-grow-1">
                             <span className="d-block fw-semibold text-body text-truncate">{notification.title}</span>
                             <span className="d-block small text-secondary text-truncate">{notification.message}</span>
-                            <span className="d-block small text-secondary text-truncate">{notification.notification_type}</span>
+                            <span className="d-block small text-secondary text-truncate">{formatNotificationType(notification.notification_type)}</span>
                           </span>
                           <button
                             className="btn btn-sm btn-outline-primary flex-shrink-0"

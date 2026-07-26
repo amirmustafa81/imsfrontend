@@ -235,6 +235,15 @@ const defaultForm: ReceiptForm = {
 
 const toPayloadDate = (value: string): string | null => value.trim() ? value : null;
 
+const previewYearFromDate = (date: string): string => {
+  const isoYear = date.match(/^(\d{4})-/)?.[1];
+  const displayYear = date.match(/(\d{4})$/)?.[1];
+
+  return isoYear ?? displayYear ?? String(new Date().getFullYear());
+};
+
+const previewReceiptNo = (date: string): string => `GRN-${previewYearFromDate(date)}-####`;
+
 export default function InventoryReceiptsPage() {
   const { isAuthenticated, loading } = useAuth();
   const [rows, setRows] = useState<Receipt[]>([]);
@@ -778,7 +787,6 @@ export default function InventoryReceiptsPage() {
     }
 
     const payload: Record<string, unknown> = {
-      receipt_no: form.receipt_no.trim(),
       receipt_type: form.receipt_type,
       supplier_id: form.supplier_id ? Number(form.supplier_id) : null,
       po_reference: form.po_reference.trim() || null,
@@ -815,8 +823,8 @@ export default function InventoryReceiptsPage() {
       }),
     };
 
-    if (!payload.store_id || !payload.department_id || !payload.receipt_no || !payload.receipt_type) {
-      setError("Receipt No, Receipt Type, Store and Department are required.");
+    if (!payload.store_id || !payload.department_id || !payload.receipt_type) {
+      setError("Receipt Type, Store and Department are required.");
       return;
     }
 
@@ -1033,11 +1041,12 @@ export default function InventoryReceiptsPage() {
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Receipt No.</label>
                     <input
-                      className="form-control form-control-sm"
-                      value={form.receipt_no}
-                      onChange={(event) => setFormValue("receipt_no", event.target.value)}
-                      required
+                      className="form-control form-control-sm bg-light text-muted"
+                      value={previewReceiptNo(form.receipt_date)}
+                      readOnly
+                      aria-readonly="true"
                     />
+                    <div className="form-text small">Preview only. The backend assigns the next available GRN number when saved.</div>
                   </div>
 
                   <div className="col-12 col-md-6">
