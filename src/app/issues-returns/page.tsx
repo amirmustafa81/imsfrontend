@@ -226,6 +226,12 @@ function IssuesReturnsContent() {
     form.transaction_type === "return" ||
     form.transaction_type === "transfer" ||
     (form.transaction_type === "adjustment" && form.adjustment_direction === "increase");
+  const recipientDepartmentId =
+    form.transaction_type === "return"
+      ? form.from_department_id
+      : form.transaction_type === "issue" || form.transaction_type === "transfer"
+        ? form.to_department_id
+        : "";
 
   const lookupLabel = (source: LookupKey, value: unknown) => {
     if (value === null || value === undefined || value === "") return "-";
@@ -392,6 +398,29 @@ function IssuesReturnsContent() {
       return;
     }
 
+    if ((key === "from_department_id" || key === "to_department_id") && typeof value === "string") {
+      setForm((current) => {
+        const next = {
+          ...current,
+          [key]: value,
+        };
+        const filtersRecipient =
+          (current.transaction_type === "return" && key === "from_department_id") ||
+          ((current.transaction_type === "issue" || current.transaction_type === "transfer") && key === "to_department_id");
+
+        if (filtersRecipient && current.recipient_user_id && value) {
+          const currentRecipient = lookups.users.find((user) => String(user.id) === current.recipient_user_id);
+
+          if (!currentRecipient || String(currentRecipient.department_id ?? "") !== value) {
+            next.recipient_user_id = "";
+          }
+        }
+
+        return next;
+      });
+      return;
+    }
+
     setForm((current) => ({
       ...current,
       [key]: value,
@@ -476,7 +505,13 @@ function IssuesReturnsContent() {
     keywords: `${row.email ?? ""} ${row.phone ?? ""} ${row.department_id ?? ""}`,
   });
 
-  const employeeOptions = useMemo(() => lookups.users.map((user) => toSearchOption(user, "Employee")), [lookups.users]);
+  const employeeOptions = useMemo(
+    () =>
+      lookups.users
+        .filter((user) => !recipientDepartmentId || String(user.department_id ?? "") === recipientDepartmentId)
+        .map((user) => toSearchOption(user, "Employee")),
+    [lookups.users, recipientDepartmentId],
+  );
   const itemOptions = useMemo(
     () =>
       lookups.items.map((item) => ({
