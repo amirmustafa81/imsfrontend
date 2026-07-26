@@ -211,7 +211,21 @@ function IssuesReturnsContent() {
   }, [searchParams]);
   const [assetIdFilter, setAssetIdFilter] = useState(() => queryAssetId);
 
-  
+  const showsSourceStockFields =
+    form.transaction_type === "issue" ||
+    form.transaction_type === "consumption" ||
+    form.transaction_type === "transfer" ||
+    (form.transaction_type === "adjustment" && form.adjustment_direction === "decrease");
+  const showsReturnByDepartment = form.transaction_type === "return";
+  const showsToDepartment =
+    form.transaction_type === "issue" ||
+    form.transaction_type === "return" ||
+    form.transaction_type === "transfer" ||
+    (form.transaction_type === "adjustment" && form.adjustment_direction === "increase");
+  const showsToStore =
+    form.transaction_type === "return" ||
+    form.transaction_type === "transfer" ||
+    (form.transaction_type === "adjustment" && form.adjustment_direction === "increase");
 
   const lookupLabel = (source: LookupKey, value: unknown) => {
     if (value === null || value === undefined || value === "") return "-";
@@ -219,6 +233,7 @@ function IssuesReturnsContent() {
     const rows = lookups[source] ?? [];
     const match = rows.find((row) => String(row.id) === String(value));
     if (!match) return String(value);
+    if (source === "users") return String(match.name ?? value);
 
     return `${match.code ?? match.project_code ?? match.id} - ${match.name ?? match.title ?? match.title_code ?? ""}`;
   };
@@ -306,18 +321,17 @@ function IssuesReturnsContent() {
         };
 
         if (value === "return") {
-          next.from_department_id = "";
           next.from_store_id = "";
           next.from_storage_bin_id = "";
           next.adjustment_direction = "increase";
         }
 
         if (value === "issue" || value === "consumption") {
-          next.to_department_id = "";
           next.to_store_id = "";
           next.to_storage_bin_id = "";
           next.adjustment_direction = "decrease";
           if (value === "consumption") {
+            next.to_department_id = "";
             next.recipient_user_id = "";
           }
         }
@@ -432,7 +446,7 @@ function IssuesReturnsContent() {
 
   const canSubmitType = (type: TransactionType, adjustmentDirection: TransactionForm["adjustment_direction"]): string[] => {
     if (type === "issue") {
-      return ["from_department_id", "from_store_id", "recipient_user_id"];
+      return ["from_department_id", "from_store_id", "recipient_user_id", "to_department_id"];
     }
 
     if (type === "consumption") {
@@ -444,7 +458,7 @@ function IssuesReturnsContent() {
     }
 
     if (type === "return") {
-      return ["to_department_id", "to_store_id", "recipient_user_id"];
+      return ["recipient_user_id", "from_department_id", "to_department_id", "to_store_id"];
     }
 
     return ["from_department_id", "from_store_id", "to_department_id", "to_store_id"];
@@ -853,10 +867,10 @@ function IssuesReturnsContent() {
                       <div className="col-12 col-md-6">
                         <label className="form-label">
                           {form.transaction_type === "return"
-                            ? "Returned By Employee"
+                            ? "By Employee"
                             : form.transaction_type === "transfer"
                               ? "Recipient / Custodian (optional)"
-                              : "Issued To Employee"}
+                              : "To Employee"}
                           {form.transaction_type === "issue" || form.transaction_type === "return" ? " *" : ""}
                         </label>
                         <SearchableSelect
@@ -909,10 +923,10 @@ function IssuesReturnsContent() {
                       </div>
                     )}
 
-                        {(form.transaction_type === "issue" || form.transaction_type === "consumption" || form.transaction_type === "transfer" || (form.transaction_type === "adjustment" && form.adjustment_direction === "decrease")) && (
-                          <>
-                            <div className="col-12 col-md-6">
-                              <label className="form-label">From Department</label>
+                    {showsSourceStockFields && (
+                      <>
+                        <div className="col-12 col-md-6">
+                          <label className="form-label">From Department *</label>
                           <select
                             className="form-select form-select-sm"
                             value={form.from_department_id}
@@ -926,43 +940,61 @@ function IssuesReturnsContent() {
                             ))}
                           </select>
                         </div>
-                            <div className="col-12 col-md-6">
-                              <label className="form-label">From Store</label>
-                              <select
-                                className="form-select form-select-sm"
+                        <div className="col-12 col-md-6">
+                          <label className="form-label">From Store *</label>
+                          <select
+                            className="form-select form-select-sm"
                             value={form.from_store_id}
                             onChange={(e) => setFormValue("from_store_id", e.target.value)}
                           >
                             <option value="">Select</option>
-                                {lookups.stores.map((store) => (
-                                  <option key={store.id} value={store.id}>
-                                    {store.code} - {store.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="col-12 col-md-6">
-                              <label className="form-label">From Storage Bin (optional)</label>
-                              <select
-                                className="form-select form-select-sm"
-                                value={form.from_storage_bin_id}
-                                onChange={(e) => setFormValue("from_storage_bin_id", e.target.value)}
-                              >
-                                <option value="">Optional</option>
-                                {binsForStore(form.from_store_id).map((bin) => (
-                                  <option key={bin.id} value={bin.id}>
-                                    {bin.code} - {bin.name ?? ""}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </>
-                        )}
-
-                    {(form.transaction_type === "return" || form.transaction_type === "transfer" || (form.transaction_type === "adjustment" && form.adjustment_direction === "increase")) && (
-                          <>
+                            {lookups.stores.map((store) => (
+                              <option key={store.id} value={store.id}>
+                                {store.code} - {store.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <div className="col-12 col-md-6">
-                          <label className="form-label">To Department</label>
+                          <label className="form-label">From Storage Bin (optional)</label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={form.from_storage_bin_id}
+                            onChange={(e) => setFormValue("from_storage_bin_id", e.target.value)}
+                          >
+                            <option value="">Optional</option>
+                            {binsForStore(form.from_store_id).map((bin) => (
+                              <option key={bin.id} value={bin.id}>
+                                {bin.code} - {bin.name ?? ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
+
+                    {showsReturnByDepartment && (
+                      <div className="col-12 col-md-6">
+                        <label className="form-label">By Department *</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={form.from_department_id}
+                          onChange={(e) => setFormValue("from_department_id", e.target.value)}
+                        >
+                          <option value="">Select</option>
+                          {lookups.departments.map((department) => (
+                            <option key={department.id} value={department.id}>
+                              {department.code} - {department.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {showsToDepartment && (
+                      <>
+                        <div className="col-12 col-md-6">
+                          <label className="form-label">To Department *</label>
                           <select
                             className="form-select form-select-sm"
                             value={form.to_department_id}
@@ -976,38 +1008,42 @@ function IssuesReturnsContent() {
                             ))}
                           </select>
                         </div>
-                            <div className="col-12 col-md-6">
-                              <label className="form-label">To Store</label>
-                              <select
-                                className="form-select form-select-sm"
-                            value={form.to_store_id}
-                            onChange={(e) => setFormValue("to_store_id", e.target.value)}
-                          >
-                            <option value="">Select</option>
-                                {lookups.stores.map((store) => (
-                                  <option key={store.id} value={store.id}>
-                                    {store.code} - {store.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="col-12 col-md-6">
-                              <label className="form-label">To Storage Bin (optional)</label>
-                              <select
-                                className="form-select form-select-sm"
-                                value={form.to_storage_bin_id}
-                                onChange={(e) => setFormValue("to_storage_bin_id", e.target.value)}
-                              >
-                                <option value="">Optional</option>
-                                {binsForStore(form.to_store_id).map((bin) => (
-                                  <option key={bin.id} value={bin.id}>
-                                    {bin.code} - {bin.name ?? ""}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </>
-                        )}
+                        {showsToStore ? (
+                          <div className="col-12 col-md-6">
+                            <label className="form-label">To Store *</label>
+                            <select
+                              className="form-select form-select-sm"
+                              value={form.to_store_id}
+                              onChange={(e) => setFormValue("to_store_id", e.target.value)}
+                            >
+                              <option value="">Select</option>
+                              {lookups.stores.map((store) => (
+                                <option key={store.id} value={store.id}>
+                                  {store.code} - {store.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : null}
+                        {showsToStore ? (
+                          <div className="col-12 col-md-6">
+                            <label className="form-label">To Storage Bin (optional)</label>
+                            <select
+                              className="form-select form-select-sm"
+                              value={form.to_storage_bin_id}
+                              onChange={(e) => setFormValue("to_storage_bin_id", e.target.value)}
+                            >
+                              <option value="">Optional</option>
+                              {binsForStore(form.to_store_id).map((bin) => (
+                                <option key={bin.id} value={bin.id}>
+                                  {bin.code} - {bin.name ?? ""}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
 
                     <div className="col-12 col-md-6">
                       <label className="form-label">Funding Source</label>
