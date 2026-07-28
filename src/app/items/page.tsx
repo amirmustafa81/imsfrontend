@@ -170,7 +170,7 @@ const createQuickMasterForm = (resource: QuickMasterResource, currentForm: ItemF
 });
 
 const infoText = {
-  itemCode: "Unique item code used in receipts, stock, issue, asset registration, reports, and imports.",
+  itemCode: "Auto-generated from category, subcategory, and the next 4-digit serial number.",
   itemName: "Official item name shown to users in lists, transactions, receipts, and reports.",
   itemType: "Controls how the item behaves, such as consumable stock, fixed asset, controlled stationery, project inventory, or license.",
   category: "Main classification used for reporting, coding, depreciation policy, and item grouping.",
@@ -360,6 +360,46 @@ export default function ItemsPage() {
     () => statusOptions.filter((option) => option.value) as SearchableSelectOption[],
     [],
   );
+  const generatedItemCode = useMemo(() => {
+    if (editingId) {
+      return form.item_code;
+    }
+
+    const category = lookups["asset-categories"].find((lookup) => String(lookup.id) === form.category_id);
+    if (!category?.code) {
+      return "";
+    }
+
+    const subcategory = form.subcategory_id
+      ? lookups["asset-categories"].find((lookup) => String(lookup.id) === form.subcategory_id)
+      : null;
+    const codeSegments = [category.code, subcategory?.code].filter(Boolean).map((segment) =>
+      String(segment)
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, ""),
+    );
+    const prefix = codeSegments.filter(Boolean).join("-");
+
+    if (!prefix) {
+      return "";
+    }
+
+    const maxSequence = rows.reduce((max, row) => {
+      if (!row.item_code.startsWith(`${prefix}-`)) {
+        return max;
+      }
+
+      const match = row.item_code.match(/-(\d{4})$/);
+      if (!match) {
+        return max;
+      }
+
+      return Math.max(max, Number(match[1]));
+    }, 0);
+
+    return `${prefix}-${String(maxSequence + 1).padStart(4, "0")}`;
+  }, [editingId, form.category_id, form.item_code, form.subcategory_id, lookups, rows]);
 
   const selectCategory = (categoryId: string) => {
     setForm((current) => ({
@@ -493,7 +533,7 @@ export default function ItemsPage() {
 
     try {
       const payload = {
-        item_code: form.item_code.trim(),
+        item_code: editingId ? form.item_code.trim() : generatedItemCode,
         name: form.name.trim(),
         item_type: form.item_type,
         category_id: Number(form.category_id),
@@ -754,8 +794,11 @@ export default function ItemsPage() {
         {dialogOpen ? (
           <>
             <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
-              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable" style={{ width: "min(54vw, 920px)", maxWidth: "min(54vw, 920px)" }}>
-                <form className="modal-content border-0 shadow-lg" onSubmit={saveItem}>
+              <div
+                className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+                style={{ width: "min(78vw, 1280px)", maxWidth: "min(78vw, 1280px)", maxHeight: "calc(100vh - 2rem)" }}
+              >
+                <form className="modal-content border-0 shadow-lg" style={{ maxHeight: "calc(100vh - 2rem)" }} onSubmit={saveItem}>
                   <div className="modal-header px-4 py-3">
                     <div>
                       <h5 className="modal-title mb-1">{editingId ? "Edit Item" : "Create Item"}</h5>
@@ -763,17 +806,18 @@ export default function ItemsPage() {
                     </div>
                     <button className="btn-close" type="button" aria-label="Close" onClick={closeDialog} />
                   </div>
-                  <div className="modal-body px-4 py-4">
+                  <div className="modal-body px-4 py-4" style={{ overflowY: "auto" }}>
                     <div className="row g-3">
                       <div className="col-12 col-md-4">
                         <FieldLabel required info={infoText.itemCode}>Item Code</FieldLabel>
                         <input
                           className="form-control form-control-sm"
-                          value={form.item_code}
-                          onChange={(event) => setFormField("item_code", event.target.value)}
-                          placeholder="e.g. IT-LAP-001"
+                          value={editingId ? form.item_code : generatedItemCode}
+                          placeholder={form.category_id ? "Auto-generating..." : "Select category first"}
+                          readOnly
                           required
                         />
+                        {!editingId ? <div className="form-text">Generated as Category-Subcategory-0001 when saved.</div> : null}
                       </div>
                       <div className="col-12 col-md-8">
                         <FieldLabel required info={infoText.itemName}>Item Name</FieldLabel>
@@ -901,14 +945,14 @@ export default function ItemsPage() {
                                   checked={Boolean(form[key as keyof ItemFormState])}
                                   onChange={(event) => setFormField(key as keyof ItemFormState, event.target.checked as never)}
                                 />
-                                <FieldLabel htmlFor={`item-${key}`} check info={info}>{label}</FieldLabel>
+                                <FieldLabel htmlFor={`item-${key}`} check info={info} infoPlacement="top">{label}</FieldLabel>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
                       <div className="col-12 col-md-4">
-                        <FieldLabel info={infoText.status}>Status</FieldLabel>
+                        <FieldLabel info={infoText.status} infoPlacement="top">Status</FieldLabel>
                         <SearchableSelect id="item-status" value={form.status} options={activeStatusOptions} onChange={(value) => setFormField("status", value as ItemFormState["status"])} placeholder="Search status" />
                       </div>
                     </div>

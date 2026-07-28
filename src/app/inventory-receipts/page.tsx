@@ -302,6 +302,12 @@ const totalCostFor = (acceptedValue: string, unitCostValue: string) => {
 const itemOptionLabel = (row: RowData) =>
   `${row.item_code ?? row.code ?? row.id} - ${row.name ?? row.title ?? ""}`.trim();
 
+const itemCodeSegment = (value: unknown) =>
+  String(value ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
 const statusOptionLabel = (status: string) => status.replace("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
 
 type ApprovalReferenceState = {
@@ -649,6 +655,38 @@ export default function InventoryReceiptsPage() {
   const categoryOptions = useMemo(() => parentCategories.map(toLookupOption), [parentCategories]);
   const subcategoryOptions = useMemo(() => quickItemSubcategories.map(toLookupOption), [quickItemSubcategories]);
   const unitOptions = useMemo(() => lookups["units-of-measure"].map(toLookupOption), [lookups]);
+  const generatedQuickItemCode = useMemo(() => {
+    if (!selectedQuickItemCategory?.code) {
+      return "";
+    }
+
+    const subcategory = quickItemForm.subcategory_id
+      ? lookups["asset-categories"].find((category) => String(category.id) === quickItemForm.subcategory_id)
+      : null;
+    const prefix = [itemCodeSegment(selectedQuickItemCategory.code), itemCodeSegment(subcategory?.code)]
+      .filter(Boolean)
+      .join("-");
+
+    if (!prefix) {
+      return "";
+    }
+
+    const maxSequence = lookups.items.reduce((max, item) => {
+      const code = String(item.item_code ?? item.code ?? "");
+      if (!code.startsWith(`${prefix}-`)) {
+        return max;
+      }
+
+      const match = code.match(/-(\d{4})$/);
+      if (!match) {
+        return max;
+      }
+
+      return Math.max(max, Number(match[1]));
+    }, 0);
+
+    return `${prefix}-${String(maxSequence + 1).padStart(4, "0")}`;
+  }, [lookups, quickItemForm.subcategory_id, selectedQuickItemCategory]);
 
   const inspectionStatusOptions = useMemo<SearchableSelectOption[]>(
     () =>
@@ -933,19 +971,18 @@ export default function InventoryReceiptsPage() {
 
     try {
       if (
-        !quickItemForm.item_code.trim() ||
         !quickItemForm.name.trim() ||
         !quickItemForm.item_type ||
         !quickItemForm.category_id ||
         !quickItemForm.unit_id
       ) {
-        setQuickItemError("Item Code, Item Name, Item Type, Category, and Unit of Measure are required.");
+        setQuickItemError("Item Name, Item Type, Category, and Unit of Measure are required.");
         setQuickItemSaving(false);
         return;
       }
 
       const payload = {
-        item_code: quickItemForm.item_code.trim(),
+        item_code: generatedQuickItemCode,
         name: quickItemForm.name.trim(),
         item_type: quickItemForm.item_type,
         category_id: Number(quickItemForm.category_id),
@@ -970,7 +1007,7 @@ export default function InventoryReceiptsPage() {
       const createdItem =
         created?.id
           ? created
-          : nextItems.find((item) => String(item.item_code ?? item.code ?? "") === quickItemForm.item_code.trim());
+          : nextItems.find((item) => String(item.item_code ?? item.code ?? "") === generatedQuickItemCode);
 
       if (createdItem?.id && quickItemRowIndex !== null) {
         setItemValue(quickItemRowIndex, "item_id", String(createdItem.id));
@@ -2361,11 +2398,12 @@ export default function InventoryReceiptsPage() {
                             <FieldLabel required>Item Code</FieldLabel>
                             <input
                               className="form-control form-control-sm"
-                              value={quickItemForm.item_code}
-                              onChange={(event) => setQuickItemField("item_code", event.target.value)}
-                              placeholder="e.g. IT-LAP-001"
+                              value={generatedQuickItemCode}
+                              placeholder={quickItemForm.category_id ? "Auto-generating..." : "Select category first"}
+                              readOnly
                               required
                             />
+                            <div className="form-text">Generated as Category-Subcategory-0001 when saved.</div>
                           </div>
 
                           <div className="col-12 col-md-8">
