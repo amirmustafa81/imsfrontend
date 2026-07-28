@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { isAuthBypassEnabled, useAuth } from "@/lib/auth";
@@ -11,6 +11,7 @@ type SidebarItem = {
   label: string;
   href: string;
   icon: string;
+  permissions: string[];
   planned?: boolean;
 };
 
@@ -32,65 +33,65 @@ const NAV_GROUPS: SidebarGroup[] = [
   {
     title: "Operations",
     items: [
-      { label: "Dashboard", href: "/", icon: "bi-speedometer2" },
+      { label: "Dashboard", href: "/", icon: "bi-speedometer2", permissions: ["dashboard.view"] },
     ],
   },
   {
     title: "Inventory",
     items: [
-      { label: "Item Master", href: "/items", icon: "bi-box" },
-      { label: "Receipts (GRN)", href: "/inventory-receipts", icon: "bi-truck" },
-      { label: "Stock Balances", href: "/stock", icon: "bi-stack" },
-      { label: "Issue / Return / Transfer", href: "/issues-returns", icon: "bi-arrow-left-right" },
+      { label: "Item Master", href: "/items", icon: "bi-box", permissions: ["master-data.view"] },
+      { label: "Receipts (GRN)", href: "/inventory-receipts", icon: "bi-truck", permissions: ["inventory-receipts.view"] },
+      { label: "Stock Balances", href: "/stock", icon: "bi-stack", permissions: ["stock.view"] },
+      { label: "Issue / Return / Transfer", href: "/issues-returns", icon: "bi-arrow-left-right", permissions: ["issues-returns.view"] },
     ],
   },
   {
     title: "Assets",
     items: [
-      { label: "Fixed Asset Register", href: "/assets", icon: "bi-tags" },
-      { label: "Tag Print Log", href: "/tag-print-log", icon: "bi-qr-code" },
+      { label: "Fixed Asset Register", href: "/assets", icon: "bi-tags", permissions: ["assets.view"] },
+      { label: "Tag Print Log", href: "/tag-print-log", icon: "bi-qr-code", permissions: ["asset-tags.view"] },
     ],
   },
   {
     title: "Specialized",
     items: [
-      { label: "Project Inventory", href: "/projects", icon: "bi-journal-text" },
-      { label: "Laboratory Inventory", href: "/lab", icon: "bi-eyedropper" },
-      { label: "IT Assets", href: "/it-assets", icon: "bi-pc-display-horizontal" },
-      { label: "Controlled Stationery", href: "/controlled-stationery", icon: "bi-journal-check" },
+      { label: "Project Inventory", href: "/projects", icon: "bi-journal-text", permissions: ["research-projects.view"] },
+      { label: "Laboratory Inventory", href: "/lab", icon: "bi-eyedropper", permissions: ["inventory-receipts.view", "stock.view"] },
+      { label: "IT Assets", href: "/it-assets", icon: "bi-pc-display-horizontal", permissions: ["assets.view"] },
+      { label: "Controlled Stationery", href: "/controlled-stationery", icon: "bi-journal-check", permissions: ["controlled-stationery.view"] },
     ],
   },
   {
     title: "Compliance",
     items: [
-      { label: "Physical Verification", href: "/verification", icon: "bi-clipboard-check" },
-      { label: "Disposal / Write-Off", href: "/disposals", icon: "bi-trash3" },
-      { label: "Asset Investigations", href: "/asset-investigations", icon: "bi-search" },
-      { label: "Maintenance Records", href: "/maintenance-records", icon: "bi-tools" },
-      { label: "Asset Movements", href: "/asset-movements", icon: "bi-arrow-up-right-circle" },
-      { label: "Audit Log", href: "/audit-logs", icon: "bi-shield-check" },
+      { label: "Physical Verification", href: "/verification", icon: "bi-clipboard-check", permissions: ["verification.view"] },
+      { label: "Disposal / Write-Off", href: "/disposals", icon: "bi-trash3", permissions: ["disposal.view"] },
+      { label: "Asset Investigations", href: "/asset-investigations", icon: "bi-search", permissions: ["audit.view"] },
+      { label: "Maintenance Records", href: "/maintenance-records", icon: "bi-tools", permissions: ["maintenance.view"] },
+      { label: "Asset Movements", href: "/asset-movements", icon: "bi-arrow-up-right-circle", permissions: ["assets.view", "transfers.view"] },
+      { label: "Audit Log", href: "/audit-logs", icon: "bi-shield-check", permissions: ["audit.view"] },
     ],
   },
   {
     title: "Reports & Docs",
     items: [
-      { label: "Reports", href: "/reports", icon: "bi-bar-chart" },
-      { label: "Export History", href: "/export-history", icon: "bi-cloud-arrow-up" },
-      { label: "Documents", href: "/documents", icon: "bi-folder2-open" },
-      { label: "ERP Sync Logs", href: "/erp-sync-logs", icon: "bi-arrow-repeat" },
+      { label: "Reports", href: "/reports", icon: "bi-bar-chart", permissions: ["reports.view"] },
+      { label: "Export History", href: "/export-history", icon: "bi-cloud-arrow-up", permissions: ["reports.export"] },
+      { label: "Documents", href: "/documents", icon: "bi-folder2-open", permissions: ["reports.view"] },
+      { label: "ERP Sync Logs", href: "/erp-sync-logs", icon: "bi-arrow-repeat", permissions: ["erp-sync.view"] },
     ],
   },
   {
     title: "Administration",
     items: [
-      { label: "Master Data", href: "/master-data", icon: "bi-database-gear" },
-      { label: "ERP Import", href: "/import", icon: "bi-upload" },
-      { label: "Depreciation", href: "/depreciation", icon: "bi-percent" },
-      { label: "Stock Movements", href: "/transfers", icon: "bi-diagram-3" },
-      { label: "System Settings", href: "/system-settings", icon: "bi-gear" },
-      { label: "User Delegations", href: "/user-delegations", icon: "bi-person-check" },
-      { label: "Users", href: "/users", icon: "bi-people" },
-      { label: "Roles", href: "/roles", icon: "bi-shield-lock" },
+      { label: "Master Data", href: "/master-data", icon: "bi-database-gear", permissions: ["master-data.view"] },
+      { label: "ERP Import", href: "/import", icon: "bi-upload", permissions: ["erp-sync.create", "erp-sync.update"] },
+      { label: "Depreciation", href: "/depreciation", icon: "bi-percent", permissions: ["depreciation.view"] },
+      { label: "Stock Movements", href: "/transfers", icon: "bi-diagram-3", permissions: ["transfers.view"] },
+      { label: "System Settings", href: "/system-settings", icon: "bi-gear", permissions: ["settings.view"] },
+      { label: "User Delegations", href: "/user-delegations", icon: "bi-person-check", permissions: ["users.update", "roles.update"] },
+      { label: "Users", href: "/users", icon: "bi-people", permissions: ["users.view"] },
+      { label: "Roles", href: "/roles", icon: "bi-shield-lock", permissions: ["roles.view"] },
     ],
   },
 ];
@@ -98,7 +99,7 @@ const NAV_GROUPS: SidebarGroup[] = [
 export function ImsShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isAuthenticated, loading, logout, user } = useAuth();
+  const { hasPermission, isAuthenticated, loading, logout, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -109,6 +110,14 @@ export function ImsShell({ children }: { children: ReactNode }) {
 
   const isLoginPage = pathname === "/login";
   const isActive = (href: string) => pathname === href;
+  const visibleNavGroups = useMemo(
+    () =>
+      NAV_GROUPS.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => hasPermission(item.permissions)),
+      })).filter((group) => group.items.length > 0),
+    [hasPermission],
+  );
 
   const roleLabel = user?.roles?.[0]?.name ?? "User";
   const userName = user?.name ?? "User";
@@ -224,7 +233,7 @@ export function ImsShell({ children }: { children: ReactNode }) {
         </Link>
 
         <nav className="ims-sidebar-nav">
-          {NAV_GROUPS.map((group) => (
+          {visibleNavGroups.map((group) => (
             <div className="ims-nav-group" key={group.title}>
               <div className="ims-nav-title">{group.title}</div>
               <div className="list-group list-group-flush">
