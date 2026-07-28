@@ -50,6 +50,21 @@ type LookupMap = {
   "asset-attribute-definitions": AttributeDefinition[];
 };
 
+type QuickMasterResource = "category" | "subcategory" | "unit";
+
+type QuickMasterForm = {
+  code: string;
+  name: string;
+  parent_category_id: string;
+  useful_life_years: string;
+  depreciation_method: "straight_line" | "reducing_balance" | "none";
+  capitalization_threshold: string;
+  is_sensitive_controlled: boolean;
+  requires_serial_tracking: boolean;
+  requires_qr_tag: boolean;
+  status: "active" | "inactive";
+};
+
 type ItemFormState = {
   item_code: string;
   name: string;
@@ -141,6 +156,19 @@ const createInitialForm = (): ItemFormState => ({
   status: "active",
 });
 
+const createQuickMasterForm = (resource: QuickMasterResource, currentForm: ItemFormState): QuickMasterForm => ({
+  code: "",
+  name: "",
+  parent_category_id: resource === "subcategory" ? currentForm.category_id : "",
+  useful_life_years: "",
+  depreciation_method: "none",
+  capitalization_threshold: "",
+  is_sensitive_controlled: false,
+  requires_serial_tracking: false,
+  requires_qr_tag: false,
+  status: "active",
+});
+
 const infoText = {
   itemCode: "Unique item code used in receipts, stock, issue, asset registration, reports, and imports.",
   itemName: "Official item name shown to users in lists, transactions, receipts, and reports.",
@@ -177,6 +205,11 @@ export default function ItemsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ItemFormState>(createInitialForm);
+  const [quickMasterOpen, setQuickMasterOpen] = useState(false);
+  const [quickMasterResource, setQuickMasterResource] = useState<QuickMasterResource>("category");
+  const [quickMasterForm, setQuickMasterForm] = useState<QuickMasterForm>(() => createQuickMasterForm("category", createInitialForm()));
+  const [quickMasterSaving, setQuickMasterSaving] = useState(false);
+  const [quickMasterError, setQuickMasterError] = useState("");
 
   const loadLookups = useCallback(async () => {
     if (!authReady) {
@@ -274,10 +307,30 @@ export default function ItemsPage() {
     setDialogOpen(false);
     setEditingId(null);
     setSaving(false);
+    setQuickMasterOpen(false);
+    setQuickMasterSaving(false);
+    setQuickMasterError("");
   };
 
   const setFormField = <K extends keyof ItemFormState>(key: K, value: ItemFormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const openQuickMasterDialog = (resource: QuickMasterResource) => {
+    setQuickMasterResource(resource);
+    setQuickMasterForm(createQuickMasterForm(resource, form));
+    setQuickMasterError("");
+    setQuickMasterOpen(true);
+  };
+
+  const closeQuickMasterDialog = () => {
+    setQuickMasterOpen(false);
+    setQuickMasterSaving(false);
+    setQuickMasterError("");
+  };
+
+  const setQuickMasterField = <K extends keyof QuickMasterForm>(key: K, value: QuickMasterForm[K]) => {
+    setQuickMasterForm((current) => ({ ...current, [key]: value }));
   };
 
   const parentCategories = useMemo(
@@ -315,6 +368,89 @@ export default function ItemsPage() {
       subcategory_id: "",
       attributes: {},
     }));
+  };
+
+  const reloadMasterLookup = async (endpoint: keyof LookupMap) => {
+    const response = await api.get<{ data: Lookup[] }>(`/master-data/${endpoint}`, authHeaders);
+    const payload = Array.isArray(response.data?.data) ? response.data.data : [];
+    setLookups((current) => ({ ...current, [endpoint]: payload }));
+    return payload;
+  };
+
+  const validateQuickMaster = () => {
+    if (quickMasterResource === "subcategory") {
+      return Boolean(quickMasterForm.code.trim() && quickMasterForm.name.trim() && quickMasterForm.parent_category_id);
+    }
+
+    return Boolean(quickMasterForm.code.trim() && quickMasterForm.name.trim());
+  };
+
+  const quickMasterPayload = () => {
+    if (quickMasterResource === "unit") {
+      return {
+        code: quickMasterForm.code.trim(),
+        name: quickMasterForm.name.trim(),
+        status: quickMasterForm.status,
+      };
+    }
+
+    return {
+      code: quickMasterForm.code.trim(),
+      name: quickMasterForm.name.trim(),
+      parent_category_id: quickMasterResource === "subcategory" ? Number(quickMasterForm.parent_category_id) : null,
+      useful_life_years: quickMasterForm.useful_life_years ? Number(quickMasterForm.useful_life_years) : null,
+      depreciation_method: quickMasterForm.depreciation_method,
+      capitalization_threshold: quickMasterForm.capitalization_threshold ? Number(quickMasterForm.capitalization_threshold) : null,
+      is_sensitive_controlled: quickMasterForm.is_sensitive_controlled,
+      requires_serial_tracking: quickMasterForm.requires_serial_tracking,
+      requires_qr_tag: quickMasterForm.requires_qr_tag,
+      status: quickMasterForm.status,
+    };
+  };
+
+  const saveQuickMaster = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!authReady) {
+      setQuickMasterError("Please sign in before creating master data records.");
+      return;
+    }
+
+    if (!validateQuickMaster()) {
+      setQuickMasterError("Code and Name are required. Subcategory also requires a parent category.");
+      return;
+    }
+
+    setQuickMasterSaving(true);
+    setQuickMasterError("");
+
+    try {
+      const endpoint = quickMasterResource === "unit" ? "units-of-measure" : "asset-categories";
+      const response = await api.post<{ data?: Lookup }>(`/master-data/${endpoint}`, quickMasterPayload(), authHeaders);
+      const created = response.data?.data;
+      const nextRows = await reloadMasterLookup(endpoint);
+      const createdRow = created?.id
+        ? created
+        : nextRows.find((row) => String(row.code ?? "").toLowerCase() === quickMasterForm.code.trim().toLowerCase());
+
+      if (createdRow?.id) {
+        if (quickMasterResource === "category") {
+          selectCategory(String(createdRow.id));
+        } else if (quickMasterResource === "subcategory") {
+          setFormField("subcategory_id", String(createdRow.id));
+        } else {
+          setFormField("unit_id", String(createdRow.id));
+        }
+      }
+
+      setMessage(`${quickMasterResource === "unit" ? "Unit of Measure" : quickMasterResource === "subcategory" ? "Subcategory" : "Category"} created and selected.`);
+      setError("");
+      setQuickMasterOpen(false);
+    } catch {
+      setQuickMasterError("Unable to create record. Verify required fields and duplicate code.");
+    } finally {
+      setQuickMasterSaving(false);
+    }
   };
 
   const startEditing = (row: ItemRow) => {
@@ -466,6 +602,109 @@ export default function ItemsPage() {
     },
   ];
 
+  const quickMasterTitle =
+    quickMasterResource === "unit" ? "Unit of Measure" : quickMasterResource === "subcategory" ? "Subcategory" : "Category";
+
+  const renderQuickMasterFields = () => (
+    <div className="row g-3">
+      <div className="col-12 col-md-4">
+        <FieldLabel required>Code</FieldLabel>
+        <input
+          className="form-control form-control-sm"
+          value={quickMasterForm.code}
+          onChange={(event) => setQuickMasterField("code", event.target.value)}
+          placeholder={quickMasterResource === "unit" ? "e.g. EACH" : "e.g. IT"}
+          required
+        />
+      </div>
+      <div className="col-12 col-md-8">
+        <FieldLabel required>Name</FieldLabel>
+        <input
+          className="form-control form-control-sm"
+          value={quickMasterForm.name}
+          onChange={(event) => setQuickMasterField("name", event.target.value)}
+          placeholder={quickMasterResource === "unit" ? "e.g. Each" : "e.g. IT Equipment"}
+          required
+        />
+      </div>
+
+      {quickMasterResource === "subcategory" ? (
+        <div className="col-12 col-md-8">
+          <FieldLabel required>Parent Category</FieldLabel>
+          <SearchableSelect
+            id="item-quick-subcategory-parent"
+            value={quickMasterForm.parent_category_id}
+            options={categorySelectOptions}
+            onChange={(value) => setQuickMasterField("parent_category_id", value)}
+            placeholder="Search parent category"
+          />
+        </div>
+      ) : null}
+
+      {quickMasterResource !== "unit" ? (
+        <>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Useful Life Years</label>
+            <input
+              className="form-control form-control-sm"
+              type="number"
+              min="0"
+              step="0.01"
+              value={quickMasterForm.useful_life_years}
+              onChange={(event) => setQuickMasterField("useful_life_years", event.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Status</label>
+            <SearchableSelect
+              id="item-quick-category-status"
+              value={quickMasterForm.status}
+              options={activeStatusOptions}
+              onChange={(value) => setQuickMasterField("status", value as QuickMasterForm["status"])}
+              placeholder="Search status"
+            />
+          </div>
+          <div className="col-12">
+            <div className="row g-2">
+              {[
+                ["is_sensitive_controlled", "Sensitive / Controlled"],
+                ["requires_serial_tracking", "Serial Tracking"],
+                ["requires_qr_tag", "QR Tag Required"],
+              ].map(([key, label]) => (
+                <div className="col-12 col-md-4" key={key}>
+                  <div className="form-check">
+                    <input
+                      id={`item-quick-${key}`}
+                      className="form-check-input"
+                      type="checkbox"
+                      checked={Boolean(quickMasterForm[key as keyof QuickMasterForm])}
+                      onChange={(event) => setQuickMasterField(key as keyof QuickMasterForm, event.target.checked as never)}
+                    />
+                    <label className="form-check-label small" htmlFor={`item-quick-${key}`}>
+                      {label}
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Status</label>
+          <SearchableSelect
+            id="item-quick-unit-status"
+            value={quickMasterForm.status}
+            options={activeStatusOptions}
+            onChange={(value) => setQuickMasterField("status", value as QuickMasterForm["status"])}
+            placeholder="Search status"
+          />
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
@@ -551,11 +790,29 @@ export default function ItemsPage() {
                         <SearchableSelect id="item-type" value={form.item_type} options={activeItemTypeOptions} onChange={(value) => setFormField("item_type", value as ItemType)} placeholder="Search item type" />
                       </div>
                       <div className="col-12 col-md-4">
-                        <FieldLabel required info={infoText.category}>Category</FieldLabel>
+                        <div className="d-flex align-items-start justify-content-between gap-2">
+                          <FieldLabel required info={infoText.category}>Category</FieldLabel>
+                          <button className="btn btn-link btn-sm p-0 text-decoration-none" type="button" onClick={() => openQuickMasterDialog("category")}>
+                            <i className="bi bi-plus-circle me-1" />
+                            New Category
+                          </button>
+                        </div>
                         <SearchableSelect id="item-category" value={form.category_id} options={categorySelectOptions} onChange={selectCategory} placeholder="Search category" />
                       </div>
                       <div className="col-12 col-md-4">
-                        <FieldLabel info={infoText.subcategory}>Subcategory</FieldLabel>
+                        <div className="d-flex align-items-start justify-content-between gap-2">
+                          <FieldLabel info={infoText.subcategory}>Subcategory</FieldLabel>
+                          <button
+                            className="btn btn-link btn-sm p-0 text-decoration-none"
+                            type="button"
+                            onClick={() => openQuickMasterDialog("subcategory")}
+                            disabled={!form.category_id}
+                            title={form.category_id ? "Create subcategory under selected category" : "Choose category before adding subcategory"}
+                          >
+                            <i className="bi bi-plus-circle me-1" />
+                            New Subcategory
+                          </button>
+                        </div>
                         <SearchableSelect
                           id="item-subcategory"
                           value={form.subcategory_id}
@@ -567,7 +824,13 @@ export default function ItemsPage() {
                         />
                       </div>
                       <div className="col-12 col-md-4">
-                        <FieldLabel required info={infoText.unit}>Unit of Measure</FieldLabel>
+                        <div className="d-flex align-items-start justify-content-between gap-2">
+                          <FieldLabel required info={infoText.unit}>Unit of Measure</FieldLabel>
+                          <button className="btn btn-link btn-sm p-0 text-decoration-none" type="button" onClick={() => openQuickMasterDialog("unit")}>
+                            <i className="bi bi-plus-circle me-1" />
+                            New UoM
+                          </button>
+                        </div>
                         <SearchableSelect id="item-unit" value={form.unit_id} options={unitSelectOptions} onChange={(value) => setFormField("unit_id", value)} placeholder="Search UoM" />
                       </div>
                       <div className="col-12 col-md-4">
@@ -663,6 +926,37 @@ export default function ItemsPage() {
               </div>
             </div>
             <div className="modal-backdrop fade show" onClick={closeDialog} />
+            {quickMasterOpen ? (
+              <>
+                <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" style={{ zIndex: 1080 }}>
+                  <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: 720 }}>
+                    <form className="modal-content border-0 shadow-lg" onSubmit={saveQuickMaster}>
+                      <div className="modal-header px-4 py-3">
+                        <div>
+                          <h3 className="modal-title h5 mb-1">Add {quickMasterTitle}</h3>
+                          <div className="small text-secondary">Create the missing master data record and select it for this item.</div>
+                        </div>
+                        <button className="btn-close" type="button" aria-label="Close" onClick={closeQuickMasterDialog} />
+                      </div>
+                      <div className="modal-body px-4 py-4">
+                        {quickMasterError ? <div className="alert alert-danger py-2">{quickMasterError}</div> : null}
+                        {renderQuickMasterFields()}
+                      </div>
+                      <div className="modal-footer px-4 py-3">
+                        <button className="btn btn-outline-secondary" type="button" onClick={closeQuickMasterDialog}>
+                          Cancel
+                        </button>
+                        <button className="btn btn-primary" type="submit" disabled={quickMasterSaving || !authReady}>
+                          <i className="bi bi-check2-square me-1" />
+                          {quickMasterSaving ? "Saving..." : `Create & Select ${quickMasterTitle}`}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+                <div className="modal-backdrop fade show" style={{ zIndex: 1070 }} onClick={closeQuickMasterDialog} />
+              </>
+            ) : null}
           </>
         ) : null}
       </div>

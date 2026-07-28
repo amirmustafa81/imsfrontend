@@ -28,11 +28,12 @@ export function SearchableSelect({
   const selected = options.find((option) => option.value === value);
   const selectedLabel = selected?.label ?? "";
   const [query, setQuery] = useState(selectedLabel);
+  const [hasTypedQuery, setHasTypedQuery] = useState(false);
   const [open, setOpen] = useState(false);
   const displayValue = open ? query : selectedLabel;
 
   const filteredOptions = useMemo(() => {
-    const normalizedQuery = displayValue.trim().toLowerCase();
+    const normalizedQuery = hasTypedQuery ? query.trim().toLowerCase() : "";
     if (!normalizedQuery) {
       return options.slice(0, 60);
     }
@@ -40,7 +41,7 @@ export function SearchableSelect({
     return options
       .filter((option) => `${option.label} ${option.keywords ?? ""}`.toLowerCase().includes(normalizedQuery))
       .slice(0, 60);
-  }, [displayValue, options]);
+  }, [hasTypedQuery, options, query]);
 
   return (
     <div className="position-relative">
@@ -56,6 +57,12 @@ export function SearchableSelect({
         value={displayValue}
         onFocus={() => {
           setQuery(selectedLabel);
+          setHasTypedQuery(false);
+          setOpen(true);
+        }}
+        onClick={() => {
+          setQuery(selectedLabel);
+          setHasTypedQuery(false);
           setOpen(true);
         }}
         onBlur={() => {
@@ -63,6 +70,7 @@ export function SearchableSelect({
         }}
         onChange={(event) => {
           setQuery(event.target.value);
+          setHasTypedQuery(true);
           onChange("");
           setOpen(true);
         }}
@@ -86,6 +94,7 @@ export function SearchableSelect({
                 onClick={() => {
                   onChange(option.value);
                   setQuery(option.label);
+                  setHasTypedQuery(false);
                   setOpen(false);
                 }}
               >
