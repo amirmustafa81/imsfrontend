@@ -12,6 +12,25 @@ type AssetOption = {
   id: number;
   asset_id: string;
   serial_number: string;
+  department?: {
+    code?: string | null;
+    name?: string | null;
+  } | null;
+  building?: {
+    code?: string | null;
+    name?: string | null;
+  } | null;
+  room?: {
+    code?: string | null;
+    name?: string | null;
+  } | null;
+  store?: {
+    code?: string | null;
+    name?: string | null;
+  } | null;
+  department_code?: string | null;
+  building_code?: string | null;
+  room_code?: string | null;
 };
 
 type TagPrintLog = {
@@ -64,6 +83,23 @@ const normalizePrintFormat = (format: string | null | undefined): NormalizedPrin
   return "QR";
 };
 
+const relationLabel = (relation?: { code?: string | null; name?: string | null } | null, fallback?: string | null) =>
+  relation?.name || relation?.code || fallback || "";
+
+const assetLocationLabel = (asset: AssetOption | null) => {
+  if (!asset) {
+    return "No location selected";
+  }
+
+  const building = relationLabel(asset.building, asset.building_code);
+  const room = relationLabel(asset.room, asset.room_code);
+  const store = relationLabel(asset.store);
+  const department = relationLabel(asset.department, asset.department_code);
+  const buildingRoom = [building, room].filter(Boolean).join(" / ");
+
+  return buildingRoom || store || department || "No location recorded";
+};
+
 export default function TagPrintLogPage() {
   return (
     <Suspense fallback={<main className="p-4 text-secondary">Loading tag print log...</main>}>
@@ -114,6 +150,7 @@ function TagPrintLogContent() {
     () => createCode128SvgMarkup(form.printable_tag_id, { height: 64, moduleWidth: 2 }),
     [form.printable_tag_id],
   );
+  const selectedAssetLocation = useMemo(() => assetLocationLabel(selectedAsset), [selectedAsset]);
 
   const loadLookups = useCallback(async () => {
     if (authLoading || !isAuthenticated) {
@@ -269,6 +306,7 @@ function TagPrintLogContent() {
 
     const assetCode = selectedAsset?.asset_id ?? "No asset selected";
     const serialNumber = selectedAsset?.serial_number || "No serial recorded";
+    const location = assetLocationLabel(selectedAsset);
     const qrImageMarkup = qrDataUrl
       ? `<img src="${escapeHtml(qrDataUrl)}" alt="QR code for ${escapeHtml(tagId)}" />`
       : `<span class="unavailable">QR unavailable</span>`;
@@ -398,7 +436,7 @@ function TagPrintLogContent() {
             .meta {
               margin-top: 2mm;
               color: #4f5865;
-              font-size: 9pt;
+              font-size: 8.4pt;
               overflow-wrap: anywhere;
             }
           </style>
@@ -410,6 +448,7 @@ function TagPrintLogContent() {
               <div class="tag">${escapeHtml(tagId)}</div>
               <div class="meta">${escapeHtml(assetCode)}</div>
               <div class="meta">${escapeHtml(serialNumber)}</div>
+              <div class="meta">${escapeHtml(location)}</div>
             </div>
           </div>
         </body>
@@ -620,6 +659,7 @@ function TagPrintLogContent() {
                           <div className="fw-semibold text-truncate">{form.printable_tag_id || "Select asset to generate tag"}</div>
                           <div className="small text-secondary text-truncate">{selectedAsset?.asset_id ?? "No asset selected"}</div>
                           <div className="small text-secondary text-truncate">{selectedAsset?.serial_number || "No serial recorded"}</div>
+                          <div className="small text-secondary text-truncate">{selectedAssetLocation}</div>
                         </div>
                       </div>
                     </div>
