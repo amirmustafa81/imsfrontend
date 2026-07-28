@@ -40,7 +40,7 @@ type LookupKey = keyof LookupMap;
 
 type RowLookupKey = Exclude<LookupKey, "asset-attribute-definitions">;
 
-type QuickMasterResource = "departments" | "stores" | "suppliers" | "research-projects";
+type QuickMasterResource = "departments" | "stores" | "suppliers" | "funding-sources" | "research-projects";
 
 type SystemSetting = {
   setting_key: string;
@@ -211,6 +211,17 @@ const projectCategoryOptions: SearchableSelectOption[] = [
   { value: "other", label: "Other" },
 ];
 
+const sponsorTypeOptions: SearchableSelectOption[] = [
+  { value: "university", label: "University" },
+  { value: "government", label: "Government" },
+  { value: "hec", label: "HEC" },
+  { value: "psf", label: "PSF" },
+  { value: "donor", label: "Donor" },
+  { value: "industry", label: "Industry" },
+  { value: "international", label: "International" },
+  { value: "other", label: "Other" },
+];
+
 const projectStatusOptions: SearchableSelectOption[] = [
   { value: "active", label: "Active" },
   { value: "closed", label: "Closed" },
@@ -222,6 +233,7 @@ const quickMasterResourceMeta: Record<QuickMasterResource, { title: string; sele
   departments: { title: "Department", selectField: "department_id" },
   stores: { title: "Store", selectField: "store_id" },
   suppliers: { title: "Supplier", selectField: "supplier_id" },
+  "funding-sources": { title: "Funding Source", selectField: "funding_source_id" },
   "research-projects": { title: "Project", selectField: "project_id" },
 };
 
@@ -374,6 +386,15 @@ const createQuickMasterForm = (resource: QuickMasterResource, receiptForm: Recei
       phone: "",
       email: "",
       address: "",
+      status: "active",
+    };
+  }
+
+  if (resource === "funding-sources") {
+    return {
+      code: "",
+      name: "",
+      sponsor_type: "university",
       status: "active",
     };
   }
@@ -1019,6 +1040,15 @@ export default function InventoryReceiptsPage() {
       };
     }
 
+    if (quickMasterResource === "funding-sources") {
+      return {
+        code: quickMasterForm.code?.trim(),
+        name: quickMasterForm.name?.trim(),
+        sponsor_type: quickMasterForm.sponsor_type,
+        status: quickMasterForm.status,
+      };
+    }
+
     return {
       project_code: quickMasterForm.project_code?.trim(),
       title: quickMasterForm.title?.trim(),
@@ -1051,6 +1081,10 @@ export default function InventoryReceiptsPage() {
 
     if (quickMasterResource === "suppliers") {
       return Boolean(quickMasterForm.name?.trim());
+    }
+
+    if (quickMasterResource === "funding-sources") {
+      return Boolean(quickMasterForm.code?.trim() && quickMasterForm.name?.trim());
     }
 
     return Boolean(quickMasterForm.project_code?.trim() && quickMasterForm.title?.trim() && quickMasterForm.project_category);
@@ -1645,6 +1679,53 @@ export default function InventoryReceiptsPage() {
       );
     }
 
+    if (quickMasterResource === "funding-sources") {
+      return (
+        <>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Code</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.code ?? ""}
+              onChange={(event) => setQuickMasterField("code", event.target.value)}
+              placeholder="e.g. ENV-GRANT"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-8">
+            <FieldLabel required>Name</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.name ?? ""}
+              onChange={(event) => setQuickMasterField("name", event.target.value)}
+              placeholder="e.g. Environmental Sciences Grant"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-6">
+            <label className="form-label small">Sponsor Type</label>
+            <SearchableSelect
+              id="receipt-quick-funding-source-sponsor-type"
+              value={quickMasterForm.sponsor_type ?? "university"}
+              options={sponsorTypeOptions}
+              placeholder="Search sponsor type"
+              onChange={(value) => setQuickMasterField("sponsor_type", value)}
+            />
+          </div>
+          <div className="col-12 col-md-6">
+            <label className="form-label small">Status</label>
+            <SearchableSelect
+              id="receipt-quick-funding-source-status"
+              value={quickMasterForm.status ?? "active"}
+              options={quickItemStatusOptions}
+              placeholder="Search status"
+              onChange={(value) => setQuickMasterField("status", value)}
+            />
+          </div>
+        </>
+      );
+    }
+
     return (
       <>
         <div className="col-12 col-md-4">
@@ -1896,7 +1977,17 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label small">Funding Source</label>
+                    <div className="d-flex align-items-center justify-content-between">
+                      <label className="form-label small">Funding Source</label>
+                      <button
+                        className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
+                        type="button"
+                        onClick={() => openQuickMasterDialog("funding-sources")}
+                      >
+                        <i className="bi bi-plus-circle me-1" />
+                        New Funding Source
+                      </button>
+                    </div>
                     <SearchableSelect
                       id="receipt-funding-source"
                       value={form.funding_source_id}
