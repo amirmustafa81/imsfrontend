@@ -40,6 +40,8 @@ type LookupKey = keyof LookupMap;
 
 type RowLookupKey = Exclude<LookupKey, "asset-attribute-definitions">;
 
+type QuickMasterResource = "departments" | "stores" | "suppliers" | "research-projects";
+
 type SystemSetting = {
   setting_key: string;
   setting_value: string | null;
@@ -146,6 +148,8 @@ type QuickItemForm = {
   status: "active" | "inactive";
 };
 
+type QuickMasterForm = Record<string, string>;
+
 type PendingAttachment = {
   file: File;
   name: string;
@@ -175,6 +179,51 @@ const quickItemStatusOptions: SearchableSelectOption[] = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
+
+const departmentTypeOptions: SearchableSelectOption[] = [
+  { value: "academic", label: "Academic" },
+  { value: "administrative", label: "Administrative" },
+  { value: "store", label: "Store" },
+  { value: "laboratory", label: "Laboratory" },
+  { value: "hostel", label: "Hostel" },
+  { value: "transport", label: "Transport" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "other", label: "Other" },
+];
+
+const storeTypeOptions: SearchableSelectOption[] = [
+  { value: "central", label: "Central" },
+  { value: "departmental", label: "Departmental" },
+  { value: "laboratory", label: "Laboratory" },
+  { value: "examination", label: "Examination" },
+  { value: "project", label: "Project" },
+  { value: "other", label: "Other" },
+];
+
+const projectCategoryOptions: SearchableSelectOption[] = [
+  { value: "hec_nrpu", label: "HEC NRPU" },
+  { value: "psf", label: "PSF" },
+  { value: "internal_grant", label: "Internal Grant" },
+  { value: "donor_project", label: "Donor Project" },
+  { value: "industry_project", label: "Industry Project" },
+  { value: "international_collaboration", label: "International Collaboration" },
+  { value: "student_fyp", label: "Student FYP" },
+  { value: "other", label: "Other" },
+];
+
+const projectStatusOptions: SearchableSelectOption[] = [
+  { value: "active", label: "Active" },
+  { value: "closed", label: "Closed" },
+  { value: "suspended", label: "Suspended" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const quickMasterResourceMeta: Record<QuickMasterResource, { title: string; selectField: keyof ReceiptForm }> = {
+  departments: { title: "Department", selectField: "department_id" },
+  stores: { title: "Store", selectField: "store_id" },
+  suppliers: { title: "Supplier", selectField: "supplier_id" },
+  "research-projects": { title: "Project", selectField: "project_id" },
+};
 
 const statusOptions: ReceiptStatus[] = [
   "draft",
@@ -296,6 +345,53 @@ const createQuickItemForm = (): QuickItemForm => ({
   status: "active",
 });
 
+const createQuickMasterForm = (resource: QuickMasterResource, receiptForm: ReceiptForm): QuickMasterForm => {
+  if (resource === "departments") {
+    return {
+      code: "",
+      name: "",
+      erp_department_id: "",
+      department_type: "academic",
+      status: "active",
+    };
+  }
+
+  if (resource === "stores") {
+    return {
+      code: "",
+      name: "",
+      department_id: receiptForm.department_id,
+      store_type: "departmental",
+      status: "active",
+    };
+  }
+
+  if (resource === "suppliers") {
+    return {
+      name: "",
+      ntn: "",
+      contact_person: "",
+      phone: "",
+      email: "",
+      address: "",
+      status: "active",
+    };
+  }
+
+  return {
+    project_code: "",
+    title: "",
+    sponsor: "",
+    project_category: "internal_grant",
+    department_id: receiptForm.department_id,
+    funding_source_id: receiptForm.funding_source_id,
+    cost_center_code: "",
+    start_date: "",
+    end_date: "",
+    status: "active",
+  };
+};
+
 const toLookupOption = (row: RowData): SearchableSelectOption => ({
   value: String(row.id),
   label: `${row.code ?? ""}${row.code && row.name ? " - " : ""}${row.name ?? ""}`.trim() || `#${row.id}`,
@@ -365,6 +461,11 @@ export default function InventoryReceiptsPage() {
   const [quickItemSaving, setQuickItemSaving] = useState(false);
   const [quickItemForm, setQuickItemForm] = useState<QuickItemForm>(createQuickItemForm);
   const [quickItemError, setQuickItemError] = useState("");
+  const [quickMasterOpen, setQuickMasterOpen] = useState(false);
+  const [quickMasterResource, setQuickMasterResource] = useState<QuickMasterResource>("departments");
+  const [quickMasterForm, setQuickMasterForm] = useState<QuickMasterForm>({});
+  const [quickMasterSaving, setQuickMasterSaving] = useState(false);
+  const [quickMasterError, setQuickMasterError] = useState("");
 
   const [isPostingReceipt, setIsPostingReceipt] = useState(false);
   const [uploadingAttachmentId, setUploadingAttachmentId] = useState<number | null>(null);
@@ -750,6 +851,8 @@ export default function InventoryReceiptsPage() {
     setQuickItemOpen(false);
     setQuickItemRowIndex(null);
     setQuickItemError("");
+    setQuickMasterOpen(false);
+    setQuickMasterError("");
     setIsPostingReceipt(false);
   };
 
@@ -786,6 +889,14 @@ export default function InventoryReceiptsPage() {
     const nextItems = Array.isArray(payload) ? (payload as RowData[]) : [];
     setLookups((current) => ({ ...current, items: nextItems }));
     return nextItems;
+  };
+
+  const reloadRowLookup = async (resource: RowLookupKey) => {
+    const response = await api.get(`/master-data/${resource}`);
+    const payload = response.data?.data;
+    const nextRows = Array.isArray(payload) ? (payload as RowData[]) : [];
+    setLookups((current) => ({ ...current, [resource]: nextRows }));
+    return nextRows;
   };
 
   const saveQuickItem = async (event: FormEvent<HTMLFormElement>) => {
@@ -853,6 +964,144 @@ export default function InventoryReceiptsPage() {
       setQuickItemError(extractApiMessage(itemError, "Unable to create item. Verify required fields and duplicate code."));
     } finally {
       setQuickItemSaving(false);
+    }
+  };
+
+  const openQuickMasterDialog = (resource: QuickMasterResource) => {
+    setQuickMasterResource(resource);
+    setQuickMasterForm(createQuickMasterForm(resource, form));
+    setQuickMasterError("");
+    setQuickMasterOpen(true);
+  };
+
+  const closeQuickMasterDialog = () => {
+    setQuickMasterOpen(false);
+    setQuickMasterSaving(false);
+    setQuickMasterError("");
+  };
+
+  const setQuickMasterField = (key: string, value: string) => {
+    setQuickMasterForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const quickMasterPayload = () => {
+    if (quickMasterResource === "departments") {
+      return {
+        code: quickMasterForm.code?.trim(),
+        name: quickMasterForm.name?.trim(),
+        erp_department_id: quickMasterForm.erp_department_id?.trim() || null,
+        department_type: quickMasterForm.department_type,
+        status: quickMasterForm.status,
+      };
+    }
+
+    if (quickMasterResource === "stores") {
+      return {
+        code: quickMasterForm.code?.trim(),
+        name: quickMasterForm.name?.trim(),
+        department_id: Number(quickMasterForm.department_id),
+        building_id: null,
+        room_id: null,
+        store_type: quickMasterForm.store_type,
+        status: quickMasterForm.status,
+      };
+    }
+
+    if (quickMasterResource === "suppliers") {
+      return {
+        name: quickMasterForm.name?.trim(),
+        ntn: quickMasterForm.ntn?.trim() || null,
+        contact_person: quickMasterForm.contact_person?.trim() || null,
+        phone: quickMasterForm.phone?.trim() || null,
+        email: quickMasterForm.email?.trim() || null,
+        address: quickMasterForm.address?.trim() || null,
+        status: quickMasterForm.status,
+      };
+    }
+
+    return {
+      project_code: quickMasterForm.project_code?.trim(),
+      title: quickMasterForm.title?.trim(),
+      sponsor: quickMasterForm.sponsor?.trim() || null,
+      project_category: quickMasterForm.project_category,
+      pi_user_id: null,
+      co_pi_user_id: null,
+      department_id: quickMasterForm.department_id ? Number(quickMasterForm.department_id) : null,
+      funding_source_id: quickMasterForm.funding_source_id ? Number(quickMasterForm.funding_source_id) : null,
+      cost_center_code: quickMasterForm.cost_center_code?.trim() || null,
+      start_date: toPayloadDate(quickMasterForm.start_date ?? ""),
+      end_date: toPayloadDate(quickMasterForm.end_date ?? ""),
+      status: quickMasterForm.status,
+    };
+  };
+
+  const validateQuickMaster = () => {
+    if (quickMasterResource === "departments") {
+      return Boolean(quickMasterForm.code?.trim() && quickMasterForm.name?.trim() && quickMasterForm.department_type);
+    }
+
+    if (quickMasterResource === "stores") {
+      return Boolean(
+        quickMasterForm.code?.trim() &&
+          quickMasterForm.name?.trim() &&
+          quickMasterForm.department_id &&
+          quickMasterForm.store_type,
+      );
+    }
+
+    if (quickMasterResource === "suppliers") {
+      return Boolean(quickMasterForm.name?.trim());
+    }
+
+    return Boolean(quickMasterForm.project_code?.trim() && quickMasterForm.title?.trim() && quickMasterForm.project_category);
+  };
+
+  const saveQuickMaster = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!authReady) {
+      setQuickMasterError("Please sign in before creating master data records.");
+      return;
+    }
+
+    if (!validateQuickMaster()) {
+      setQuickMasterError("Please fill the required fields before saving.");
+      return;
+    }
+
+    setQuickMasterSaving(true);
+    setQuickMasterError("");
+
+    try {
+      const response = await api.post(`/master-data/${quickMasterResource}`, quickMasterPayload());
+      const created = response.data?.data as RowData | undefined;
+      const nextRows = await reloadRowLookup(quickMasterResource);
+      const createdRow =
+        created?.id
+          ? created
+          : nextRows.find((row) => {
+              if (quickMasterResource === "research-projects") {
+                return String(row.project_code ?? "") === quickMasterForm.project_code?.trim();
+              }
+
+              if (quickMasterResource === "suppliers") {
+                return String(row.name ?? "") === quickMasterForm.name?.trim();
+              }
+
+              return String(row.code ?? "") === quickMasterForm.code?.trim();
+            });
+
+      if (createdRow?.id) {
+        setFormValue(quickMasterResourceMeta[quickMasterResource].selectField, String(createdRow.id));
+      }
+
+      setMessage(`${quickMasterResourceMeta[quickMasterResource].title} created and selected for this receipt.`);
+      setError("");
+      setQuickMasterOpen(false);
+    } catch (masterError) {
+      setQuickMasterError(extractApiMessage(masterError, "Unable to create record. Verify required fields and duplicates."));
+    } finally {
+      setQuickMasterSaving(false);
     }
   };
 
@@ -1215,6 +1464,287 @@ export default function InventoryReceiptsPage() {
     }
   };
 
+  const renderQuickMasterFields = () => {
+    if (quickMasterResource === "departments") {
+      return (
+        <>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Code</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.code ?? ""}
+              onChange={(event) => setQuickMasterField("code", event.target.value)}
+              placeholder="e.g. ENV"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-8">
+            <FieldLabel required>Name</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.name ?? ""}
+              onChange={(event) => setQuickMasterField("name", event.target.value)}
+              placeholder="e.g. Environmental Sciences"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">ERP Department ID</label>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.erp_department_id ?? ""}
+              onChange={(event) => setQuickMasterField("erp_department_id", event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Type</FieldLabel>
+            <SearchableSelect
+              id="receipt-quick-department-type"
+              value={quickMasterForm.department_type ?? ""}
+              options={departmentTypeOptions}
+              placeholder="Search type"
+              onChange={(value) => setQuickMasterField("department_type", value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Status</label>
+            <SearchableSelect
+              id="receipt-quick-department-status"
+              value={quickMasterForm.status ?? "active"}
+              options={quickItemStatusOptions}
+              placeholder="Search status"
+              onChange={(value) => setQuickMasterField("status", value)}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (quickMasterResource === "stores") {
+      return (
+        <>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Code</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.code ?? ""}
+              onChange={(event) => setQuickMasterField("code", event.target.value)}
+              placeholder="e.g. ENV-LAB"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-8">
+            <FieldLabel required>Name</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.name ?? ""}
+              onChange={(event) => setQuickMasterField("name", event.target.value)}
+              placeholder="e.g. Environmental Lab Store"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Department</FieldLabel>
+            <SearchableSelect
+              id="receipt-quick-store-department"
+              value={quickMasterForm.department_id ?? ""}
+              options={departmentOptions}
+              placeholder="Search department"
+              onChange={(value) => setQuickMasterField("department_id", value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Store Type</FieldLabel>
+            <SearchableSelect
+              id="receipt-quick-store-type"
+              value={quickMasterForm.store_type ?? ""}
+              options={storeTypeOptions}
+              placeholder="Search type"
+              onChange={(value) => setQuickMasterField("store_type", value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Status</label>
+            <SearchableSelect
+              id="receipt-quick-store-status"
+              value={quickMasterForm.status ?? "active"}
+              options={quickItemStatusOptions}
+              placeholder="Search status"
+              onChange={(value) => setQuickMasterField("status", value)}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (quickMasterResource === "suppliers") {
+      return (
+        <>
+          <div className="col-12 col-md-8">
+            <FieldLabel required>Name</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.name ?? ""}
+              onChange={(event) => setQuickMasterField("name", event.target.value)}
+              placeholder="e.g. Scientific Supplies"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">NTN</label>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.ntn ?? ""}
+              onChange={(event) => setQuickMasterField("ntn", event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Contact Person</label>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.contact_person ?? ""}
+              onChange={(event) => setQuickMasterField("contact_person", event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Phone</label>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.phone ?? ""}
+              onChange={(event) => setQuickMasterField("phone", event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Email</label>
+            <input
+              className="form-control form-control-sm"
+              type="email"
+              value={quickMasterForm.email ?? ""}
+              onChange={(event) => setQuickMasterField("email", event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-8">
+            <label className="form-label small">Address</label>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.address ?? ""}
+              onChange={(event) => setQuickMasterField("address", event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Status</label>
+            <SearchableSelect
+              id="receipt-quick-supplier-status"
+              value={quickMasterForm.status ?? "active"}
+              options={quickItemStatusOptions}
+              placeholder="Search status"
+              onChange={(value) => setQuickMasterField("status", value)}
+            />
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <div className="col-12 col-md-4">
+          <FieldLabel required>Project Code</FieldLabel>
+          <input
+            className="form-control form-control-sm"
+            value={quickMasterForm.project_code ?? ""}
+            onChange={(event) => setQuickMasterField("project_code", event.target.value)}
+            placeholder="e.g. ENV-2026-01"
+            required
+          />
+        </div>
+        <div className="col-12 col-md-8">
+          <FieldLabel required>Project Title</FieldLabel>
+          <input
+            className="form-control form-control-sm"
+            value={quickMasterForm.title ?? ""}
+            onChange={(event) => setQuickMasterField("title", event.target.value)}
+            placeholder="e.g. Environmental Lab Procurement"
+            required
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <FieldLabel required>Category</FieldLabel>
+          <SearchableSelect
+            id="receipt-quick-project-category"
+            value={quickMasterForm.project_category ?? ""}
+            options={projectCategoryOptions}
+            placeholder="Search category"
+            onChange={(value) => setQuickMasterField("project_category", value)}
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Department</label>
+          <SearchableSelect
+            id="receipt-quick-project-department"
+            value={quickMasterForm.department_id ?? ""}
+            options={departmentOptions}
+            placeholder="Search department"
+            onChange={(value) => setQuickMasterField("department_id", value)}
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Funding Source</label>
+          <SearchableSelect
+            id="receipt-quick-project-funding-source"
+            value={quickMasterForm.funding_source_id ?? ""}
+            options={fundingSourceOptions}
+            placeholder="Search funding source"
+            onChange={(value) => setQuickMasterField("funding_source_id", value)}
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Sponsor</label>
+          <input
+            className="form-control form-control-sm"
+            value={quickMasterForm.sponsor ?? ""}
+            onChange={(event) => setQuickMasterField("sponsor", event.target.value)}
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Cost Center</label>
+          <input
+            className="form-control form-control-sm"
+            value={quickMasterForm.cost_center_code ?? ""}
+            onChange={(event) => setQuickMasterField("cost_center_code", event.target.value)}
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Status</label>
+          <SearchableSelect
+            id="receipt-quick-project-status"
+            value={quickMasterForm.status ?? "active"}
+            options={projectStatusOptions}
+            placeholder="Search status"
+            onChange={(value) => setQuickMasterField("status", value)}
+          />
+        </div>
+        <div className="col-12 col-md-6">
+          <label className="form-label small">Start Date</label>
+          <input
+            className="form-control form-control-sm"
+            type="date"
+            value={quickMasterForm.start_date ?? ""}
+            onChange={(event) => setQuickMasterField("start_date", event.target.value)}
+          />
+        </div>
+        <div className="col-12 col-md-6">
+          <label className="form-label small">End Date</label>
+          <input
+            className="form-control form-control-sm"
+            type="date"
+            value={quickMasterForm.end_date ?? ""}
+            onChange={(event) => setQuickMasterField("end_date", event.target.value)}
+          />
+        </div>
+      </>
+    );
+  };
+
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
@@ -1303,7 +1833,17 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label small">Store</label>
+                    <div className="d-flex align-items-center justify-content-between">
+                      <label className="form-label small">Store</label>
+                      <button
+                        className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
+                        type="button"
+                        onClick={() => openQuickMasterDialog("stores")}
+                      >
+                        <i className="bi bi-plus-circle me-1" />
+                        New Store
+                      </button>
+                    </div>
                     <SearchableSelect
                       id="receipt-store"
                       value={form.store_id}
@@ -1314,7 +1854,17 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label small">Department</label>
+                    <div className="d-flex align-items-center justify-content-between">
+                      <label className="form-label small">Department</label>
+                      <button
+                        className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
+                        type="button"
+                        onClick={() => openQuickMasterDialog("departments")}
+                      >
+                        <i className="bi bi-plus-circle me-1" />
+                        New Department
+                      </button>
+                    </div>
                     <SearchableSelect
                       id="receipt-department"
                       value={form.department_id}
@@ -1325,7 +1875,17 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label small">Supplier</label>
+                    <div className="d-flex align-items-center justify-content-between">
+                      <label className="form-label small">Supplier</label>
+                      <button
+                        className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
+                        type="button"
+                        onClick={() => openQuickMasterDialog("suppliers")}
+                      >
+                        <i className="bi bi-plus-circle me-1" />
+                        New Supplier
+                      </button>
+                    </div>
                     <SearchableSelect
                       id="receipt-supplier"
                       value={form.supplier_id}
@@ -1347,7 +1907,17 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <label className="form-label small">Project</label>
+                    <div className="d-flex align-items-center justify-content-between">
+                      <label className="form-label small">Project</label>
+                      <button
+                        className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
+                        type="button"
+                        onClick={() => openQuickMasterDialog("research-projects")}
+                      >
+                        <i className="bi bi-plus-circle me-1" />
+                        New Project
+                      </button>
+                    </div>
                     <SearchableSelect
                       id="receipt-project"
                       value={form.project_id}
@@ -1638,6 +2208,44 @@ export default function InventoryReceiptsPage() {
                 </form>
               </div>
             </div>
+            {quickMasterOpen ? (
+              <>
+                <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" style={{ zIndex: 1080 }}>
+                  <div
+                    className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+                    style={{ width: "min(54vw, 860px)", maxWidth: "min(54vw, 860px)" }}
+                  >
+                    <form className="modal-content border-0 shadow-lg" onSubmit={saveQuickMaster}>
+                      <div className="modal-header px-4 py-3">
+                        <div>
+                          <h3 className="modal-title h5 mb-1">Add {quickMasterResourceMeta[quickMasterResource].title}</h3>
+                          <div className="small text-secondary">
+                            Create the missing master record here, then continue this GRN.
+                          </div>
+                        </div>
+                        <button className="btn-close" type="button" aria-label="Close" onClick={closeQuickMasterDialog} />
+                      </div>
+
+                      <div className="modal-body px-4 py-4">
+                        {quickMasterError ? <div className="alert alert-danger py-2">{quickMasterError}</div> : null}
+                        <div className="row g-3">{renderQuickMasterFields()}</div>
+                      </div>
+
+                      <div className="modal-footer px-4 py-3">
+                        <button className="btn btn-outline-secondary" type="button" onClick={closeQuickMasterDialog}>
+                          Cancel
+                        </button>
+                        <button className="btn btn-primary" type="submit" disabled={quickMasterSaving || !authReady}>
+                          <i className="bi bi-plus-circle me-1" />
+                          {quickMasterSaving ? "Saving..." : `Create & Select ${quickMasterResourceMeta[quickMasterResource].title}`}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+                <div className="modal-backdrop fade show" style={{ zIndex: 1070 }} />
+              </>
+            ) : null}
             {quickItemOpen ? (
               <>
                 <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" style={{ zIndex: 1080 }}>
