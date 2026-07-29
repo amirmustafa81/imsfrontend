@@ -10,6 +10,7 @@ import {
   ApprovalReferenceFields,
   DataTable,
   EmptyState,
+  FieldLabel,
   FilterBar,
   PageHeader,
   SearchableSelect,
@@ -34,6 +35,10 @@ type RowData = {
   id: number;
   [key: string]: string | number | null | undefined;
 };
+
+type QuickMasterResource = "departments" | "stores" | "funding-sources" | "users";
+
+type QuickMasterForm = Record<string, string>;
 
 type Transaction = {
   id: number;
@@ -103,6 +108,55 @@ const typeOptions: Array<{ value: TransactionType; label: string }> = [
   { value: "adjustment", label: "Adjustment" },
 ];
 
+const quickMasterResourceTitles: Record<QuickMasterResource, string> = {
+  departments: "Department",
+  stores: "Store",
+  "funding-sources": "Funding Source",
+  users: "Employee",
+};
+
+const activeStatusOptions: SearchableSelectOption[] = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+const userStatusOptions: SearchableSelectOption[] = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "suspended", label: "Suspended" },
+];
+
+const departmentTypeOptions: SearchableSelectOption[] = [
+  { value: "academic", label: "Academic" },
+  { value: "administrative", label: "Administrative" },
+  { value: "store", label: "Store" },
+  { value: "laboratory", label: "Laboratory" },
+  { value: "hostel", label: "Hostel" },
+  { value: "transport", label: "Transport" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "other", label: "Other" },
+];
+
+const storeTypeOptions: SearchableSelectOption[] = [
+  { value: "central", label: "Central" },
+  { value: "departmental", label: "Departmental" },
+  { value: "laboratory", label: "Laboratory" },
+  { value: "examination", label: "Examination" },
+  { value: "project", label: "Project" },
+  { value: "other", label: "Other" },
+];
+
+const sponsorTypeOptions: SearchableSelectOption[] = [
+  { value: "university", label: "University" },
+  { value: "government", label: "Government" },
+  { value: "hec", label: "HEC" },
+  { value: "psf", label: "PSF" },
+  { value: "donor", label: "Donor" },
+  { value: "industry", label: "Industry" },
+  { value: "international", label: "International" },
+  { value: "other", label: "Other" },
+];
+
 const transactionNoPrefixes: Record<TransactionType, string> = {
   issue: "ISS",
   return: "RET",
@@ -170,6 +224,11 @@ const numberOrNull = (value: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const extractApiMessage = (error: unknown, fallback: string) => {
+  const message = (error as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+  return typeof message === "string" && message.trim() ? message : fallback;
+};
+
 export default function IssuesReturnsPage() {
   return (
     <Suspense fallback={<main className="p-4 text-secondary">Loading transactions...</main>}>
@@ -204,6 +263,12 @@ function IssuesReturnsContent() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [quickMasterOpen, setQuickMasterOpen] = useState(false);
+  const [quickMasterResource, setQuickMasterResource] = useState<QuickMasterResource>("departments");
+  const [quickMasterTargetField, setQuickMasterTargetField] = useState<keyof TransactionForm>("to_department_id");
+  const [quickMasterForm, setQuickMasterForm] = useState<QuickMasterForm>({});
+  const [quickMasterSaving, setQuickMasterSaving] = useState(false);
+  const [quickMasterError, setQuickMasterError] = useState("");
   const searchParams = useSearchParams();
   const queryAssetId = useMemo(() => {
     const assetIdFromQuery = searchParams.get("asset_id");
@@ -522,6 +587,241 @@ function IssuesReturnsContent() {
     [lookups.items],
   );
 
+  const departmentOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups.departments.map((department) => ({
+        value: String(department.id),
+        label: `${department.code ?? department.id} - ${department.name ?? ""}`.trim(),
+        keywords: [department.code, department.name, department.department_type].filter(Boolean).join(" "),
+      })),
+    [lookups.departments],
+  );
+
+  const storeOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups.stores.map((store) => ({
+        value: String(store.id),
+        label: `${store.code ?? store.id} - ${store.name ?? ""}`.trim(),
+        keywords: [store.code, store.name, store.store_type, store.department_id].filter(Boolean).join(" "),
+      })),
+    [lookups.stores],
+  );
+
+  const fundingSourceOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups["funding-sources"].map((source) => ({
+        value: String(source.id),
+        label: `${source.code ?? source.id} - ${source.name ?? ""}`.trim(),
+        keywords: [source.code, source.name, source.sponsor_type].filter(Boolean).join(" "),
+      })),
+    [lookups],
+  );
+
+  const projectOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups["research-projects"].map((project) => ({
+        value: String(project.id),
+        label: `${project.project_code ?? project.code ?? project.id} - ${project.title ?? project.name ?? ""}`.trim(),
+        keywords: [project.project_code, project.code, project.title, project.name].filter(Boolean).join(" "),
+      })),
+    [lookups],
+  );
+
+  const reloadLookup = async (resource: QuickMasterResource) => {
+    const response = await api.get(resource === "users" ? "/users" : `/master-data/${resource}`);
+    const payload = response.data?.data;
+    const nextRows = Array.isArray(payload) ? (payload as RowData[]) : [];
+    setLookups((current) => ({ ...current, [resource]: nextRows }));
+    return nextRows;
+  };
+
+  const createQuickMasterForm = (resource: QuickMasterResource, targetField: keyof TransactionForm): QuickMasterForm => {
+    if (resource === "departments") {
+      return { code: "", name: "", erp_department_id: "", department_type: "administrative", status: "active" };
+    }
+
+    if (resource === "stores") {
+      const departmentId =
+        targetField === "to_store_id"
+          ? form.to_department_id
+          : targetField === "from_store_id"
+            ? form.from_department_id
+            : "";
+
+      return { code: "", name: "", department_id: departmentId, store_type: "departmental", status: "active" };
+    }
+
+    if (resource === "funding-sources") {
+      return { code: "", name: "", sponsor_type: "university", status: "active" };
+    }
+
+    return {
+      name: "",
+      email: "",
+      password: "",
+      employee_code: "",
+      phone: "",
+      designation: "",
+      department_id: recipientDepartmentId,
+      access_scope: "department",
+      status: "active",
+    };
+  };
+
+  const openQuickMasterDialog = (resource: QuickMasterResource, targetField: keyof TransactionForm) => {
+    setQuickMasterResource(resource);
+    setQuickMasterTargetField(targetField);
+    setQuickMasterForm(createQuickMasterForm(resource, targetField));
+    setQuickMasterError("");
+    setQuickMasterOpen(true);
+  };
+
+  const closeQuickMasterDialog = () => {
+    setQuickMasterOpen(false);
+    setQuickMasterSaving(false);
+    setQuickMasterError("");
+  };
+
+  const setQuickMasterField = (key: string, value: string) => {
+    setQuickMasterForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const quickMasterPayload = () => {
+    if (quickMasterResource === "departments") {
+      return {
+        code: quickMasterForm.code?.trim(),
+        name: quickMasterForm.name?.trim(),
+        erp_department_id: quickMasterForm.erp_department_id?.trim() || null,
+        department_type: quickMasterForm.department_type,
+        status: quickMasterForm.status,
+      };
+    }
+
+    if (quickMasterResource === "stores") {
+      return {
+        code: quickMasterForm.code?.trim(),
+        name: quickMasterForm.name?.trim(),
+        department_id: Number(quickMasterForm.department_id),
+        building_id: null,
+        room_id: null,
+        store_type: quickMasterForm.store_type,
+        status: quickMasterForm.status,
+      };
+    }
+
+    if (quickMasterResource === "funding-sources") {
+      return {
+        code: quickMasterForm.code?.trim(),
+        name: quickMasterForm.name?.trim(),
+        sponsor_type: quickMasterForm.sponsor_type,
+        status: quickMasterForm.status,
+      };
+    }
+
+    return {
+      name: quickMasterForm.name?.trim(),
+      email: quickMasterForm.email?.trim(),
+      password: quickMasterForm.password?.trim(),
+      employee_code: quickMasterForm.employee_code?.trim() || null,
+      phone: quickMasterForm.phone?.trim() || null,
+      designation: quickMasterForm.designation?.trim() || null,
+      department_id: quickMasterForm.department_id ? Number(quickMasterForm.department_id) : null,
+      access_scope: quickMasterForm.access_scope,
+      status: quickMasterForm.status,
+      role_ids: [],
+    };
+  };
+
+  const validateQuickMaster = () => {
+    if (quickMasterResource === "departments") {
+      return Boolean(quickMasterForm.code?.trim() && quickMasterForm.name?.trim() && quickMasterForm.department_type);
+    }
+
+    if (quickMasterResource === "stores") {
+      return Boolean(
+        quickMasterForm.code?.trim() &&
+          quickMasterForm.name?.trim() &&
+          quickMasterForm.department_id &&
+          quickMasterForm.store_type,
+      );
+    }
+
+    if (quickMasterResource === "funding-sources") {
+      return Boolean(quickMasterForm.code?.trim() && quickMasterForm.name?.trim());
+    }
+
+    return Boolean(quickMasterForm.name?.trim() && quickMasterForm.email?.trim() && quickMasterForm.password?.trim());
+  };
+
+  const saveQuickMaster = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!authReady) {
+      setQuickMasterError("Please sign in before creating records.");
+      return;
+    }
+
+    if (!validateQuickMaster()) {
+      setQuickMasterError("Please fill the required fields before saving.");
+      return;
+    }
+
+    setQuickMasterSaving(true);
+    setQuickMasterError("");
+
+    try {
+      const response = await api.post(quickMasterResource === "users" ? "/users" : `/master-data/${quickMasterResource}`, quickMasterPayload());
+      const created = response.data?.data as RowData | undefined;
+      const nextRows = await reloadLookup(quickMasterResource);
+      const createdRow =
+        created?.id
+          ? created
+          : nextRows.find((row) => {
+              if (quickMasterResource === "users") {
+                return String(row.email ?? "").toLowerCase() === quickMasterForm.email?.trim().toLowerCase();
+              }
+
+              return String(row.code ?? "").toLowerCase() === quickMasterForm.code?.trim().toLowerCase();
+            });
+
+      if (createdRow?.id) {
+        if (quickMasterResource === "users" && createdRow.department_id) {
+          const departmentField =
+            form.transaction_type === "return"
+              ? "from_department_id"
+              : form.transaction_type === "issue" || form.transaction_type === "transfer"
+                ? "to_department_id"
+                : null;
+
+          if (departmentField) {
+            setFormValue(departmentField, String(createdRow.department_id));
+          }
+        }
+
+        setFormValue(quickMasterTargetField, String(createdRow.id));
+      }
+
+      setMessage(`${quickMasterResourceTitles[quickMasterResource]} created and selected for this voucher.`);
+      setError("");
+      setQuickMasterOpen(false);
+    } catch (quickError) {
+      setQuickMasterError(extractApiMessage(quickError, "Unable to create record. Verify required fields and duplicates."));
+    } finally {
+      setQuickMasterSaving(false);
+    }
+  };
+
+  const renderQuickAction = (label: string, resource: QuickMasterResource, targetField: keyof TransactionForm) => (
+    <button
+      className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
+      type="button"
+      onClick={() => openQuickMasterDialog(resource, targetField)}
+    >
+      <i className="bi bi-plus-circle me-1" />
+      New {label}
+    </button>
+  );
+
   const saveTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -734,6 +1034,263 @@ function IssuesReturnsContent() {
     setAssetIdFilter("");
   };
 
+  const renderQuickMasterFields = () => {
+    if (quickMasterResource === "departments") {
+      return (
+        <>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Code</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.code ?? ""}
+              onChange={(event) => setQuickMasterField("code", event.target.value)}
+              placeholder="e.g. CSE"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-8">
+            <FieldLabel required>Name</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.name ?? ""}
+              onChange={(event) => setQuickMasterField("name", event.target.value)}
+              placeholder="e.g. Department of Computer Science"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">ERP Department ID</label>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.erp_department_id ?? ""}
+              onChange={(event) => setQuickMasterField("erp_department_id", event.target.value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Type</FieldLabel>
+            <SearchableSelect
+              id="transaction-quick-department-type"
+              value={quickMasterForm.department_type ?? ""}
+              options={departmentTypeOptions}
+              placeholder="Search type"
+              onChange={(value) => setQuickMasterField("department_type", value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Status</label>
+            <SearchableSelect
+              id="transaction-quick-department-status"
+              value={quickMasterForm.status ?? "active"}
+              options={activeStatusOptions}
+              placeholder="Search status"
+              onChange={(value) => setQuickMasterField("status", value)}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (quickMasterResource === "stores") {
+      return (
+        <>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Code</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.code ?? ""}
+              onChange={(event) => setQuickMasterField("code", event.target.value)}
+              placeholder="e.g. CSE-STORE"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-8">
+            <FieldLabel required>Name</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.name ?? ""}
+              onChange={(event) => setQuickMasterField("name", event.target.value)}
+              placeholder="e.g. CSE Store"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Department</FieldLabel>
+            <SearchableSelect
+              id="transaction-quick-store-department"
+              value={quickMasterForm.department_id ?? ""}
+              options={departmentOptions}
+              placeholder="Search department"
+              onChange={(value) => setQuickMasterField("department_id", value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Store Type</FieldLabel>
+            <SearchableSelect
+              id="transaction-quick-store-type"
+              value={quickMasterForm.store_type ?? ""}
+              options={storeTypeOptions}
+              placeholder="Search type"
+              onChange={(value) => setQuickMasterField("store_type", value)}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Status</label>
+            <SearchableSelect
+              id="transaction-quick-store-status"
+              value={quickMasterForm.status ?? "active"}
+              options={activeStatusOptions}
+              placeholder="Search status"
+              onChange={(value) => setQuickMasterField("status", value)}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (quickMasterResource === "funding-sources") {
+      return (
+        <>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Code</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.code ?? ""}
+              onChange={(event) => setQuickMasterField("code", event.target.value)}
+              placeholder="e.g. UOH-REG"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-8">
+            <FieldLabel required>Name</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.name ?? ""}
+              onChange={(event) => setQuickMasterField("name", event.target.value)}
+              placeholder="e.g. Regular University Budget"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-6">
+            <label className="form-label small">Sponsor Type</label>
+            <SearchableSelect
+              id="transaction-quick-funding-source-sponsor-type"
+              value={quickMasterForm.sponsor_type ?? "university"}
+              options={sponsorTypeOptions}
+              placeholder="Search sponsor type"
+              onChange={(value) => setQuickMasterField("sponsor_type", value)}
+            />
+          </div>
+          <div className="col-12 col-md-6">
+            <label className="form-label small">Status</label>
+            <SearchableSelect
+              id="transaction-quick-funding-source-status"
+              value={quickMasterForm.status ?? "active"}
+              options={activeStatusOptions}
+              placeholder="Search status"
+              onChange={(value) => setQuickMasterField("status", value)}
+            />
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <div className="col-12 col-md-6">
+          <FieldLabel required>Name</FieldLabel>
+          <input
+            className="form-control form-control-sm"
+            value={quickMasterForm.name ?? ""}
+            onChange={(event) => setQuickMasterField("name", event.target.value)}
+            placeholder="e.g. Lab In-charge"
+            required
+          />
+        </div>
+        <div className="col-12 col-md-6">
+          <FieldLabel required>Email</FieldLabel>
+          <input
+            className="form-control form-control-sm"
+            type="email"
+            value={quickMasterForm.email ?? ""}
+            onChange={(event) => setQuickMasterField("email", event.target.value)}
+            placeholder="name@uoh.edu.pk"
+            required
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <FieldLabel required>Temporary Password</FieldLabel>
+          <input
+            className="form-control form-control-sm"
+            type="password"
+            value={quickMasterForm.password ?? ""}
+            onChange={(event) => setQuickMasterField("password", event.target.value)}
+            placeholder="Minimum 8 characters"
+            required
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Employee Code</label>
+          <input
+            className="form-control form-control-sm"
+            value={quickMasterForm.employee_code ?? ""}
+            onChange={(event) => setQuickMasterField("employee_code", event.target.value)}
+            placeholder="e.g. EMP-CSE-001"
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Designation</label>
+          <input
+            className="form-control form-control-sm"
+            value={quickMasterForm.designation ?? ""}
+            onChange={(event) => setQuickMasterField("designation", event.target.value)}
+            placeholder="e.g. Store Officer"
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Phone</label>
+          <input
+            className="form-control form-control-sm"
+            value={quickMasterForm.phone ?? ""}
+            onChange={(event) => setQuickMasterField("phone", event.target.value)}
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Department</label>
+          <SearchableSelect
+            id="transaction-quick-user-department"
+            value={quickMasterForm.department_id ?? ""}
+            options={departmentOptions}
+            placeholder="Search department"
+            onChange={(value) => setQuickMasterField("department_id", value)}
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Access Scope</label>
+          <SearchableSelect
+            id="transaction-quick-user-access-scope"
+            value={quickMasterForm.access_scope ?? "department"}
+            options={[
+              { value: "department", label: "Department" },
+              { value: "university", label: "University-wide" },
+            ]}
+            placeholder="Search access scope"
+            onChange={(value) => setQuickMasterField("access_scope", value)}
+          />
+        </div>
+        <div className="col-12 col-md-4">
+          <label className="form-label small">Status</label>
+          <SearchableSelect
+            id="transaction-quick-user-status"
+            value={quickMasterForm.status ?? "active"}
+            options={userStatusOptions}
+            placeholder="Search status"
+            onChange={(value) => setQuickMasterField("status", value)}
+          />
+        </div>
+      </>
+    );
+  };
+
   const transactionColumns = [
     {
       key: "voucher",
@@ -900,32 +1457,34 @@ function IssuesReturnsContent() {
 
                     {form.transaction_type === "issue" && (
                       <div className="col-12 col-md-6">
-                        <label className="form-label">To Department *</label>
-                        <select
-                          className="form-select form-select-sm"
+                        <div className="d-flex align-items-center justify-content-between">
+                          <label className="form-label">To Department *</label>
+                          {renderQuickAction("Department", "departments", "to_department_id")}
+                        </div>
+                        <SearchableSelect
+                          id="transaction-to-department-issue"
                           value={form.to_department_id}
-                          onChange={(e) => setFormValue("to_department_id", e.target.value)}
-                        >
-                          <option value="">Select</option>
-                          {lookups.departments.map((department) => (
-                            <option key={department.id} value={department.id}>
-                              {department.code} - {department.name}
-                            </option>
-                          ))}
-                        </select>
+                          options={departmentOptions}
+                          onChange={(value) => setFormValue("to_department_id", value)}
+                          placeholder="Search department"
+                          emptyLabel="No department found."
+                        />
                       </div>
                     )}
 
                     {(form.transaction_type === "issue" || form.transaction_type === "return" || form.transaction_type === "transfer") && (
                       <div className="col-12 col-md-6">
-                        <label className="form-label">
-                          {form.transaction_type === "return"
-                            ? "By Employee"
-                            : form.transaction_type === "transfer"
-                              ? "Recipient / Custodian (optional)"
-                              : "To Employee"}
-                          {form.transaction_type === "issue" || form.transaction_type === "return" ? " *" : ""}
-                        </label>
+                        <div className="d-flex align-items-center justify-content-between">
+                          <label className="form-label">
+                            {form.transaction_type === "return"
+                              ? "By Employee"
+                              : form.transaction_type === "transfer"
+                                ? "Recipient / Custodian (optional)"
+                                : "To Employee"}
+                            {form.transaction_type === "issue" || form.transaction_type === "return" ? " *" : ""}
+                          </label>
+                          {renderQuickAction("Employee", "users", "recipient_user_id")}
+                        </div>
                         <SearchableSelect
                           id="transaction-recipient-user"
                           value={form.recipient_user_id}
@@ -979,34 +1538,32 @@ function IssuesReturnsContent() {
                     {showsSourceStockFields && (
                       <>
                         <div className="col-12 col-md-6">
-                          <label className="form-label">From Department *</label>
-                          <select
-                            className="form-select form-select-sm"
+                          <div className="d-flex align-items-center justify-content-between">
+                            <label className="form-label">From Department *</label>
+                            {renderQuickAction("Department", "departments", "from_department_id")}
+                          </div>
+                          <SearchableSelect
+                            id="transaction-from-department"
                             value={form.from_department_id}
-                            onChange={(e) => setFormValue("from_department_id", e.target.value)}
-                          >
-                            <option value="">Select</option>
-                            {lookups.departments.map((department) => (
-                              <option key={department.id} value={department.id}>
-                                {department.code} - {department.name}
-                              </option>
-                            ))}
-                          </select>
+                            options={departmentOptions}
+                            onChange={(value) => setFormValue("from_department_id", value)}
+                            placeholder="Search department"
+                            emptyLabel="No department found."
+                          />
                         </div>
                         <div className="col-12 col-md-6">
-                          <label className="form-label">From Store *</label>
-                          <select
-                            className="form-select form-select-sm"
+                          <div className="d-flex align-items-center justify-content-between">
+                            <label className="form-label">From Store *</label>
+                            {renderQuickAction("Store", "stores", "from_store_id")}
+                          </div>
+                          <SearchableSelect
+                            id="transaction-from-store"
                             value={form.from_store_id}
-                            onChange={(e) => setFormValue("from_store_id", e.target.value)}
-                          >
-                            <option value="">Select</option>
-                            {lookups.stores.map((store) => (
-                              <option key={store.id} value={store.id}>
-                                {store.code} - {store.name}
-                              </option>
-                            ))}
-                          </select>
+                            options={storeOptions}
+                            onChange={(value) => setFormValue("from_store_id", value)}
+                            placeholder="Search store"
+                            emptyLabel="No store found."
+                          />
                         </div>
                         <div className="col-12 col-md-6">
                           <label className="form-label">From Storage Bin (optional)</label>
@@ -1028,54 +1585,51 @@ function IssuesReturnsContent() {
 
                     {showsReturnByDepartment && (
                       <div className="col-12 col-md-6">
-                        <label className="form-label">By Department *</label>
-                        <select
-                          className="form-select form-select-sm"
+                        <div className="d-flex align-items-center justify-content-between">
+                          <label className="form-label">By Department *</label>
+                          {renderQuickAction("Department", "departments", "from_department_id")}
+                        </div>
+                        <SearchableSelect
+                          id="transaction-by-department"
                           value={form.from_department_id}
-                          onChange={(e) => setFormValue("from_department_id", e.target.value)}
-                        >
-                          <option value="">Select</option>
-                          {lookups.departments.map((department) => (
-                            <option key={department.id} value={department.id}>
-                              {department.code} - {department.name}
-                            </option>
-                          ))}
-                        </select>
+                          options={departmentOptions}
+                          onChange={(value) => setFormValue("from_department_id", value)}
+                          placeholder="Search department"
+                          emptyLabel="No department found."
+                        />
                       </div>
                     )}
 
                     {showsToDepartment && form.transaction_type !== "issue" && (
                       <>
                         <div className="col-12 col-md-6">
-                          <label className="form-label">To Department *</label>
-                          <select
-                            className="form-select form-select-sm"
+                          <div className="d-flex align-items-center justify-content-between">
+                            <label className="form-label">To Department *</label>
+                            {renderQuickAction("Department", "departments", "to_department_id")}
+                          </div>
+                          <SearchableSelect
+                            id="transaction-to-department"
                             value={form.to_department_id}
-                            onChange={(e) => setFormValue("to_department_id", e.target.value)}
-                          >
-                            <option value="">Select</option>
-                            {lookups.departments.map((department) => (
-                              <option key={department.id} value={department.id}>
-                                {department.code} - {department.name}
-                              </option>
-                            ))}
-                          </select>
+                            options={departmentOptions}
+                            onChange={(value) => setFormValue("to_department_id", value)}
+                            placeholder="Search department"
+                            emptyLabel="No department found."
+                          />
                         </div>
                         {showsToStore ? (
                           <div className="col-12 col-md-6">
-                            <label className="form-label">To Store *</label>
-                            <select
-                              className="form-select form-select-sm"
+                            <div className="d-flex align-items-center justify-content-between">
+                              <label className="form-label">To Store *</label>
+                              {renderQuickAction("Store", "stores", "to_store_id")}
+                            </div>
+                            <SearchableSelect
+                              id="transaction-to-store"
                               value={form.to_store_id}
-                              onChange={(e) => setFormValue("to_store_id", e.target.value)}
-                            >
-                              <option value="">Select</option>
-                              {lookups.stores.map((store) => (
-                                <option key={store.id} value={store.id}>
-                                  {store.code} - {store.name}
-                                </option>
-                              ))}
-                            </select>
+                              options={storeOptions}
+                              onChange={(value) => setFormValue("to_store_id", value)}
+                              placeholder="Search store"
+                              emptyLabel="No store found."
+                            />
                           </div>
                         ) : null}
                         {showsToStore ? (
@@ -1099,35 +1653,30 @@ function IssuesReturnsContent() {
                     )}
 
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Funding Source</label>
-                      <select
-                        className="form-select form-select-sm"
+                      <div className="d-flex align-items-center justify-content-between">
+                        <label className="form-label">Funding Source</label>
+                        {renderQuickAction("Funding Source", "funding-sources", "funding_source_id")}
+                      </div>
+                      <SearchableSelect
+                        id="transaction-funding-source"
                         value={form.funding_source_id}
-                        onChange={(e) => setFormValue("funding_source_id", e.target.value)}
-                      >
-                        <option value="">Optional</option>
-                        {lookups["funding-sources"].map((source) => (
-                          <option key={source.id} value={source.id}>
-                            {source.code} - {source.name}
-                          </option>
-                        ))}
-                      </select>
+                        options={fundingSourceOptions}
+                        onChange={(value) => setFormValue("funding_source_id", value)}
+                        placeholder="Optional"
+                        emptyLabel="No funding source found."
+                      />
                     </div>
 
                     <div className="col-12 col-md-6">
                       <label className="form-label">Research Project</label>
-                      <select
-                        className="form-select form-select-sm"
+                      <SearchableSelect
+                        id="transaction-research-project"
                         value={form.project_id}
-                        onChange={(e) => setFormValue("project_id", e.target.value)}
-                      >
-                        <option value="">Optional</option>
-                        {lookups["research-projects"].map((project) => (
-                          <option key={project.id} value={project.id}>
-                            {project.project_code} - {project.title}
-                          </option>
-                        ))}
-                      </select>
+                        options={projectOptions}
+                        onChange={(value) => setFormValue("project_id", value)}
+                        placeholder="Optional"
+                        emptyLabel="No project found."
+                      />
                     </div>
 
                     <div className="col-12">
@@ -1265,6 +1814,44 @@ function IssuesReturnsContent() {
                 </form>
               </div>
             </div>
+            {quickMasterOpen ? (
+              <>
+                <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" style={{ zIndex: 1080 }}>
+                  <div
+                    className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+                    style={{ width: "min(54vw, 860px)", maxWidth: "min(54vw, 860px)" }}
+                  >
+                    <form className="modal-content border-0 shadow-lg" onSubmit={saveQuickMaster}>
+                      <div className="modal-header px-4 py-3">
+                        <div>
+                          <h3 className="modal-title h5 mb-1">Add {quickMasterResourceTitles[quickMasterResource]}</h3>
+                          <div className="small text-secondary">
+                            Create the missing record here, then continue this voucher.
+                          </div>
+                        </div>
+                        <button className="btn-close" type="button" aria-label="Close" onClick={closeQuickMasterDialog} />
+                      </div>
+
+                      <div className="modal-body px-4 py-4">
+                        {quickMasterError ? <div className="alert alert-danger py-2">{quickMasterError}</div> : null}
+                        <div className="row g-3">{renderQuickMasterFields()}</div>
+                      </div>
+
+                      <div className="modal-footer px-4 py-3">
+                        <button className="btn btn-outline-secondary" type="button" onClick={closeQuickMasterDialog}>
+                          Cancel
+                        </button>
+                        <button className="btn btn-primary" type="submit" disabled={quickMasterSaving || !authReady}>
+                          <i className="bi bi-plus-circle me-1" />
+                          {quickMasterSaving ? "Saving..." : `Create & Select ${quickMasterResourceTitles[quickMasterResource]}`}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+                <div className="modal-backdrop fade show" style={{ zIndex: 1070 }} />
+              </>
+            ) : null}
             <div className="modal-backdrop fade show" />
           </>
         ) : null}
