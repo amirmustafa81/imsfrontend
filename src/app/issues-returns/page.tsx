@@ -302,7 +302,12 @@ function IssuesReturnsContent() {
     const assetIdFromQuery = searchParams.get("asset_id");
     return assetIdFromQuery && /^\d+$/.test(assetIdFromQuery) ? assetIdFromQuery : "";
   }, [searchParams]);
+  const queryEditId = useMemo(() => {
+    const editIdFromQuery = searchParams.get("edit");
+    return editIdFromQuery && /^\d+$/.test(editIdFromQuery) ? editIdFromQuery : "";
+  }, [searchParams]);
   const [assetIdFilter, setAssetIdFilter] = useState(() => queryAssetId);
+  const [handledEditId, setHandledEditId] = useState("");
 
   const showsSourceStockFields =
     form.transaction_type === "issue" ||
@@ -694,6 +699,35 @@ function IssuesReturnsContent() {
       setError(extractApiMessage(editError, "Could not load the draft voucher for editing."));
     }
   };
+
+  useEffect(() => {
+    if (!authReady || !queryEditId || handledEditId === queryEditId) return;
+
+    setHandledEditId(queryEditId);
+    void openEditDialog({
+      id: Number(queryEditId),
+      transaction_no: "",
+      transaction_type: "issue",
+      transaction_date: new Date().toISOString().slice(0, 10),
+      status: "draft",
+      from_department_id: null,
+      to_department_id: null,
+      from_store_id: null,
+      to_store_id: null,
+      from_storage_bin_id: null,
+      to_storage_bin_id: null,
+      recipient_user_id: null,
+      project_id: null,
+      funding_source_id: null,
+      manual_approval_ref: null,
+      manual_approval_date: null,
+      manual_approved_by: null,
+      purpose: null,
+      remarks: null,
+      posted_at: null,
+      created_at: "",
+    });
+  }, [authReady, handledEditId, queryEditId]);
 
   const canSubmitType = (type: TransactionType, adjustmentDirection: TransactionForm["adjustment_direction"]): string[] => {
     if (type === "issue") {

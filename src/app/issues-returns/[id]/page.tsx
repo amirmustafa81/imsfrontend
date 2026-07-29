@@ -246,6 +246,12 @@ export default function TransactionDetailPage() {
                 <i className="bi bi-arrow-left me-1" />
                 Back
               </button>
+              {transaction?.status === "draft" ? (
+                <Link className="btn btn-sm btn-outline-primary" href={`/issues-returns?edit=${transaction.id}`}>
+                  <i className="bi bi-pencil-square me-1" />
+                  Edit Draft
+                </Link>
+              ) : null}
               <button className="btn btn-sm btn-outline-secondary" type="button" onClick={printVoucher} disabled={!transaction}>
                 <i className="bi bi-printer me-1" />
                 Print
