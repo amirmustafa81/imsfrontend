@@ -60,9 +60,14 @@ type Transaction = {
   to_department_id: number | null;
   from_store_id: number | null;
   to_store_id: number | null;
+  from_storage_bin_id: number | null;
+  to_storage_bin_id: number | null;
   recipient_user_id: number | null;
   project_id: number | null;
   funding_source_id: number | null;
+  manual_approval_ref: string | null;
+  manual_approval_date: string | null;
+  manual_approved_by: string | null;
   purpose: string | null;
   remarks: string | null;
   posted_at: string | null;
@@ -235,6 +240,10 @@ const requiredFieldLabels: Partial<Record<keyof TransactionForm, string>> = {
 
 const toPayloadDate = (value: string): string | null => (value.trim() ? value : null);
 
+const toFormDate = (value: string | null | undefined): string => (value ? String(value).slice(0, 10) : "");
+
+const toFormString = (value: string | number | null | undefined): string => (value === null || value === undefined ? "" : String(value));
+
 const numberOrNull = (value: string): number | null => {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -281,6 +290,7 @@ function IssuesReturnsContent() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [quickMasterOpen, setQuickMasterOpen] = useState(false);
   const [quickMasterResource, setQuickMasterResource] = useState<QuickMasterResource>("departments");
   const [quickMasterTargetField, setQuickMasterTargetField] = useState<keyof TransactionForm>("to_department_id");
@@ -592,6 +602,22 @@ function IssuesReturnsContent() {
     setItems((current) => current.filter((_, idx) => idx !== index));
   };
 
+  const toTransactionItemInput = (row: TransactionItem): TransactionItemInput => ({
+    item_id: toFormString(row.item_id),
+    asset_id: toFormString(row.asset_id),
+    quantity: toFormString(row.quantity),
+    unit_cost: toFormString(row.unit_cost),
+    remarks: row.remarks ?? "",
+  });
+
+  const inferAdjustmentDirection = (transaction: Transaction): TransactionForm["adjustment_direction"] => {
+    if (transaction.transaction_type !== "adjustment") {
+      return "increase";
+    }
+
+    return transaction.from_department_id || transaction.from_store_id || transaction.from_storage_bin_id ? "decrease" : "increase";
+  };
+
   const resolveMainStoreDefaults = () => {
     const mainStore = lookups.stores.find((store) => {
       const haystack = `${store.code ?? ""} ${store.name ?? ""} ${store.store_type ?? ""}`.toLowerCase();
@@ -614,6 +640,7 @@ function IssuesReturnsContent() {
   };
 
   const openCreateDialog = () => {
+    setEditingTransactionId(null);
     resetForm();
     setError("");
     setDialogOpen(true);
@@ -621,6 +648,51 @@ function IssuesReturnsContent() {
 
   const closeCreateDialog = () => {
     setDialogOpen(false);
+    setEditingTransactionId(null);
+    setQuickMasterOpen(false);
+  };
+
+  const openEditDialog = async (transaction: Transaction) => {
+    if (transaction.status !== "draft") {
+      setError("Only draft transactions can be edited.");
+      return;
+    }
+
+    try {
+      const response = await api.get(`/inventory-transactions/${transaction.id}`);
+      const detail = (response.data?.data ?? transaction) as Transaction;
+      const detailItems = Array.isArray(response.data?.items) ? (response.data.items as TransactionItem[]) : [];
+
+      setEditingTransactionId(transaction.id);
+      setForm({
+        ...defaultForm,
+        transaction_no: detail.transaction_no ?? "",
+        transaction_type: detail.transaction_type,
+        adjustment_direction: inferAdjustmentDirection(detail),
+        transaction_date: toFormDate(detail.transaction_date) || new Date().toISOString().slice(0, 10),
+        from_department_id: toFormString(detail.from_department_id),
+        to_department_id: toFormString(detail.to_department_id),
+        from_store_id: toFormString(detail.from_store_id),
+        to_store_id: toFormString(detail.to_store_id),
+        from_storage_bin_id: toFormString(detail.from_storage_bin_id),
+        to_storage_bin_id: toFormString(detail.to_storage_bin_id),
+        recipient_user_id: toFormString(detail.recipient_user_id),
+        funding_source_id: toFormString(detail.funding_source_id),
+        project_id: toFormString(detail.project_id),
+        manual_approval_ref: detail.manual_approval_ref ?? "",
+        manual_approval_date: toFormDate(detail.manual_approval_date),
+        manual_approved_by: detail.manual_approved_by ?? "",
+        purpose: detail.purpose ?? "",
+        remarks: detail.remarks ?? "",
+        status: "draft",
+        post_now: false,
+      });
+      setItems(detailItems.length ? detailItems.map(toTransactionItemInput) : [{ ...emptyItem }]);
+      setError("");
+      setDialogOpen(true);
+    } catch (editError) {
+      setError(extractApiMessage(editError, "Could not load the draft voucher for editing."));
+    }
   };
 
   const canSubmitType = (type: TransactionType, adjustmentDirection: TransactionForm["adjustment_direction"]): string[] => {
@@ -969,15 +1041,20 @@ function IssuesReturnsContent() {
     };
 
     try {
-      const response = await api.post("/inventory-transactions", payload);
+      const response =
+        editingTransactionId === null
+          ? await api.post("/inventory-transactions", payload)
+          : await api.put(`/inventory-transactions/${editingTransactionId}`, payload);
       if (response.data?.transaction) {
         setMessage(`Transaction saved with id ${response.data.transaction.id}`);
       } else if (response.data?.data?.id) {
-        setMessage("Transaction created.");
+        setMessage(editingTransactionId === null ? "Transaction created." : "Transaction updated.");
       }
 
       resetForm();
       setDialogOpen(false);
+      setEditingTransactionId(null);
+      setExpandedItems({});
       await loadRows();
     } catch (error: unknown) {
       const apiErrorMessage =
@@ -985,7 +1062,7 @@ function IssuesReturnsContent() {
           ? (error as { response?: { data?: { message?: unknown } } }).response?.data?.message
           : undefined;
 
-      setError(typeof apiErrorMessage === "string" ? apiErrorMessage : "Failed to save transaction. Check unique voucher number and fields.");
+      setError(typeof apiErrorMessage === "string" ? apiErrorMessage : "Failed to save transaction. Check voucher fields and item lines.");
     }
   };
 
@@ -1438,8 +1515,11 @@ function IssuesReturnsContent() {
           <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => printTransaction(row)} title="Print voucher">
             <i className="bi bi-printer" />
           </button>
-          {row.status !== "posted" && (
+          {row.status === "draft" && (
             <>
+              <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => openEditDialog(row)} title="Edit draft">
+                <i className="bi bi-pencil-square" />
+              </button>
               <button type="button" className="btn btn-sm btn-outline-success" onClick={() => postTransaction(row.id)} title="Post">
                 <i className="bi bi-upload" />
               </button>
@@ -1492,8 +1572,12 @@ function IssuesReturnsContent() {
                 <form className="modal-content border-0 shadow-lg" onSubmit={saveTransaction}>
                   <div className="modal-header px-4 py-3">
                     <div>
-                      <h2 className="h5 mb-1">New Voucher</h2>
-                      <p className="text-secondary mb-0">Create an issue, return, transfer, adjustment, or consumption voucher.</p>
+                      <h2 className="h5 mb-1">{editingTransactionId === null ? "New Voucher" : "Edit Draft Voucher"}</h2>
+                      <p className="text-secondary mb-0">
+                        {editingTransactionId === null
+                          ? "Create an issue, return, transfer, adjustment, or consumption voucher."
+                          : "Update the draft voucher before posting stock movement."}
+                      </p>
                     </div>
                     <button
                       className="btn-close"
@@ -1524,12 +1608,14 @@ function IssuesReturnsContent() {
                       <label className="form-label">Transaction no</label>
                       <input
                         className="form-control form-control-sm bg-light text-muted"
-                        value={previewTransactionNo(form.transaction_type, form.transaction_date)}
+                        value={editingTransactionId === null ? previewTransactionNo(form.transaction_type, form.transaction_date) : form.transaction_no}
                         readOnly
                         aria-readonly="true"
                       />
                       <div className="form-text small">
-                        Preview only. The backend assigns the next available {transactionNoPrefixes[form.transaction_type]} number when saved.
+                        {editingTransactionId === null
+                          ? `Preview only. The backend assigns the next available ${transactionNoPrefixes[form.transaction_type]} number when saved.`
+                          : "Draft voucher number is retained unless the type or year changes."}
                       </div>
                     </div>
 
@@ -1896,7 +1982,7 @@ function IssuesReturnsContent() {
                     </button>
                     <button type="submit" className="btn btn-primary">
                       <i className="bi bi-save me-2" />
-                      Save Transaction
+                      {editingTransactionId === null ? "Save Transaction" : "Update Transaction"}
                     </button>
                   </div>
                 </form>
