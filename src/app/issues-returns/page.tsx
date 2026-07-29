@@ -36,6 +36,16 @@ type RowData = {
   [key: string]: string | number | null | undefined;
 };
 
+type StockSourceRow = {
+  id: number;
+  item_id: number;
+  department_id: number | null;
+  store_id: number | null;
+  project_id: number | null;
+  funding_source_id: number | null;
+  available_quantity: number;
+};
+
 type QuickMasterResource = "departments" | "stores" | "funding-sources" | "users";
 
 type QuickMasterForm = Record<string, string>;
@@ -213,6 +223,14 @@ const defaultForm: TransactionForm = {
   remarks: "",
   status: "draft",
   post_now: false,
+};
+
+const requiredFieldLabels: Partial<Record<keyof TransactionForm, string>> = {
+  from_department_id: "From Department",
+  to_department_id: "To Department",
+  from_store_id: "From Store",
+  to_store_id: "To Store",
+  recipient_user_id: "Employee",
 };
 
 const toPayloadDate = (value: string): string | null => (value.trim() ? value : null);
@@ -486,6 +504,28 @@ function IssuesReturnsContent() {
       return;
     }
 
+    if (key === "recipient_user_id" && typeof value === "string") {
+      setForm((current) => {
+        const next: TransactionForm = {
+          ...current,
+          recipient_user_id: value,
+        };
+        const recipient = value ? lookups.users.find((user) => String(user.id) === value) : null;
+        const recipientDepartmentId = recipient?.department_id ? String(recipient.department_id) : "";
+
+        if (recipientDepartmentId) {
+          if (current.transaction_type === "return") {
+            next.from_department_id = recipientDepartmentId;
+          } else if (current.transaction_type === "issue" || current.transaction_type === "transfer") {
+            next.to_department_id = recipientDepartmentId;
+          }
+        }
+
+        return next;
+      });
+      return;
+    }
+
     setForm((current) => ({
       ...current,
       [key]: value,
@@ -499,6 +539,51 @@ function IssuesReturnsContent() {
         return { ...row, [key]: value };
       }),
     );
+  };
+
+  const fillSourceFromStock = async (itemId: string) => {
+    if (!itemId || !showsSourceStockFields) return;
+
+    try {
+      const response = await api.get<{ data?: StockSourceRow[] }>("/reports/stock-balance", {
+        params: { item_id: itemId },
+      });
+      const stockRows = Array.isArray(response.data?.data) ? response.data.data : [];
+      const availableRows = stockRows.filter((row) => Number(row.available_quantity ?? 0) > 0);
+
+      if (availableRows.length !== 1) return;
+
+      const stockSource = availableRows[0];
+      setForm((current) => {
+        if (
+          current.from_department_id &&
+          current.from_store_id &&
+          String(stockSource.department_id ?? "") === current.from_department_id &&
+          String(stockSource.store_id ?? "") === current.from_store_id
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          from_department_id: stockSource.department_id ? String(stockSource.department_id) : current.from_department_id,
+          from_store_id: stockSource.store_id ? String(stockSource.store_id) : current.from_store_id,
+          from_storage_bin_id: "",
+          project_id: stockSource.project_id ? String(stockSource.project_id) : current.project_id,
+          funding_source_id: stockSource.funding_source_id ? String(stockSource.funding_source_id) : current.funding_source_id,
+        };
+      });
+    } catch {
+      // Stock source auto-fill is advisory; normal save/post validation remains authoritative.
+    }
+  };
+
+  const setTransactionItemValue = (index: number, key: keyof TransactionItemInput, value: string) => {
+    setItemValue(index, key, value);
+
+    if (key === "item_id") {
+      void fillSourceFromStock(value);
+    }
   };
 
   const addItemRow = () => setItems((current) => [...current, { ...emptyItem }]);
@@ -822,6 +907,8 @@ function IssuesReturnsContent() {
     </button>
   );
 
+  const requiredMarker = <span className="text-danger">*</span>;
+
   const saveTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -833,7 +920,8 @@ function IssuesReturnsContent() {
     const required = canSubmitType(form.transaction_type, form.adjustment_direction);
     for (const field of required) {
       if (!String(form[field as keyof TransactionForm] ?? "").trim()) {
-        setError(`Please complete ${field.replaceAll("_", " ")} for ${form.transaction_type}.`);
+        const label = requiredFieldLabels[field as keyof TransactionForm] ?? field.replaceAll("_", " ");
+        setError(`Please complete ${label} for ${toTransactionTypeLabel(form.transaction_type)}.`);
         return;
       }
     }
@@ -991,8 +1079,8 @@ function IssuesReturnsContent() {
       setMessage(response.data?.message ?? "Transaction posted.");
       setError("");
       await loadRows();
-    } catch {
-      setError("Post failed. Verify stock and transaction status.");
+    } catch (postError: unknown) {
+      setError(extractApiMessage(postError, "Post failed. Verify stock and transaction status."));
     }
   };
 
@@ -1458,7 +1546,7 @@ function IssuesReturnsContent() {
                     {form.transaction_type === "issue" && (
                       <div className="col-12 col-md-6">
                         <div className="d-flex align-items-center justify-content-between">
-                          <label className="form-label">To Department *</label>
+                          <label className="form-label">To Department {requiredMarker}</label>
                           {renderQuickAction("Department", "departments", "to_department_id")}
                         </div>
                         <SearchableSelect
@@ -1479,9 +1567,9 @@ function IssuesReturnsContent() {
                             {form.transaction_type === "return"
                               ? "By Employee"
                               : form.transaction_type === "transfer"
-                                ? "Recipient / Custodian (optional)"
-                                : "To Employee"}
-                            {form.transaction_type === "issue" || form.transaction_type === "return" ? " *" : ""}
+                              ? "Recipient / Custodian (optional)"
+                              : "To Employee"}
+                            {form.transaction_type === "issue" || form.transaction_type === "return" ? <> {requiredMarker}</> : ""}
                           </label>
                           {renderQuickAction("Employee", "users", "recipient_user_id")}
                         </div>
@@ -1539,7 +1627,7 @@ function IssuesReturnsContent() {
                       <>
                         <div className="col-12 col-md-6">
                           <div className="d-flex align-items-center justify-content-between">
-                            <label className="form-label">From Department *</label>
+                            <label className="form-label">From Department {requiredMarker}</label>
                             {renderQuickAction("Department", "departments", "from_department_id")}
                           </div>
                           <SearchableSelect
@@ -1553,7 +1641,7 @@ function IssuesReturnsContent() {
                         </div>
                         <div className="col-12 col-md-6">
                           <div className="d-flex align-items-center justify-content-between">
-                            <label className="form-label">From Store *</label>
+                            <label className="form-label">From Store {requiredMarker}</label>
                             {renderQuickAction("Store", "stores", "from_store_id")}
                           </div>
                           <SearchableSelect
@@ -1586,7 +1674,7 @@ function IssuesReturnsContent() {
                     {showsReturnByDepartment && (
                       <div className="col-12 col-md-6">
                         <div className="d-flex align-items-center justify-content-between">
-                          <label className="form-label">By Department *</label>
+                          <label className="form-label">By Department {requiredMarker}</label>
                           {renderQuickAction("Department", "departments", "from_department_id")}
                         </div>
                         <SearchableSelect
@@ -1604,7 +1692,7 @@ function IssuesReturnsContent() {
                       <>
                         <div className="col-12 col-md-6">
                           <div className="d-flex align-items-center justify-content-between">
-                            <label className="form-label">To Department *</label>
+                            <label className="form-label">To Department {requiredMarker}</label>
                             {renderQuickAction("Department", "departments", "to_department_id")}
                           </div>
                           <SearchableSelect
@@ -1619,7 +1707,7 @@ function IssuesReturnsContent() {
                         {showsToStore ? (
                           <div className="col-12 col-md-6">
                             <div className="d-flex align-items-center justify-content-between">
-                              <label className="form-label">To Store *</label>
+                              <label className="form-label">To Store {requiredMarker}</label>
                               {renderQuickAction("Store", "stores", "to_store_id")}
                             </div>
                             <SearchableSelect
@@ -1726,7 +1814,7 @@ function IssuesReturnsContent() {
                           id={`transaction-item-${index}`}
                           value={item.item_id}
                           options={itemOptions}
-                          onChange={(value) => setItemValue(index, "item_id", value)}
+                          onChange={(value) => setTransactionItemValue(index, "item_id", value)}
                           placeholder="Search item by code or name"
                           emptyLabel="No item found."
                         />
