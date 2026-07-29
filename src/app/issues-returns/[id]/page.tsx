@@ -87,6 +87,7 @@ export default function TransactionDetailPage() {
   const [lookups, setLookups] = useState<Record<LookupKey, LookupRow[]>>(initialLookups);
   const [message, setMessage] = useState("Loading voucher details...");
   const [error, setError] = useState("");
+  const [posting, setPosting] = useState(false);
 
   const lookupLabel = useCallback(
     (source: LookupKey, value: unknown) => {
@@ -222,6 +223,29 @@ export default function TransactionDetailPage() {
     }
   };
 
+  const postVoucher = async () => {
+    if (!transaction || transaction.status !== "draft" || posting) return;
+
+    setPosting(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await api.post(`/inventory-transactions/${transaction.id}/post`, {});
+      setMessage("Transaction posted.");
+      await loadTransaction();
+    } catch (postError) {
+      const apiMessage =
+        typeof postError === "object" && postError !== null && "response" in postError
+          ? (postError as { response?: { data?: { message?: unknown } } }).response?.data?.message
+          : undefined;
+
+      setError(typeof apiMessage === "string" && apiMessage.trim() ? apiMessage : "Post failed. Verify stock and transaction status.");
+    } finally {
+      setPosting(false);
+    }
+  };
+
   if (Number.isNaN(id) || id <= 0) {
     return (
       <main className="min-vh-100 bg-body-tertiary">
@@ -247,10 +271,16 @@ export default function TransactionDetailPage() {
                 Back
               </button>
               {transaction?.status === "draft" ? (
-                <Link className="btn btn-sm btn-outline-primary" href={`/issues-returns?edit=${transaction.id}`}>
-                  <i className="bi bi-pencil-square me-1" />
-                  Edit Draft
-                </Link>
+                <>
+                  <Link className="btn btn-sm btn-outline-primary" href={`/issues-returns?edit=${transaction.id}`}>
+                    <i className="bi bi-pencil-square me-1" />
+                    Edit Draft
+                  </Link>
+                  <button className="btn btn-sm btn-outline-success" type="button" onClick={postVoucher} disabled={posting}>
+                    <i className="bi bi-upload me-1" />
+                    {posting ? "Posting..." : "Post"}
+                  </button>
+                </>
               ) : null}
               <button className="btn btn-sm btn-outline-secondary" type="button" onClick={printVoucher} disabled={!transaction}>
                 <i className="bi bi-printer me-1" />
