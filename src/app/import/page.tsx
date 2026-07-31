@@ -56,6 +56,7 @@ export default function ImportPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState("");
 
   const loadBatches = useCallback(async () => {
     if (!authReady) {
@@ -105,6 +106,42 @@ export default function ImportPage() {
     setImportTypeFilter("");
     setSelectedBatchId(null);
     setErrors([]);
+  };
+
+  const downloadTemplate = async (templateType: string, templateLabel: string) => {
+    if (!authReady) {
+      setError("Please sign in before downloading templates.");
+      return;
+    }
+
+    setDownloadingTemplate(templateType);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await api.get<Blob>(`/excel-import/templates/${templateType}`, {
+        responseType: "blob",
+      });
+      const contentDisposition = response.headers["content-disposition"];
+      const filenameMatch =
+        typeof contentDisposition === "string"
+          ? /filename="?([^"]+)"?/i.exec(contentDisposition)
+          : null;
+      const filename = filenameMatch?.[1] ?? `ims-${templateType}-template.csv`;
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setMessage(`${templateLabel} template download started.`);
+    } catch {
+      setError("Unable to download template. Verify token and backend connectivity.");
+    } finally {
+      setDownloadingTemplate("");
+    }
   };
 
   const upload = async (event: FormEvent<HTMLFormElement>) => {
@@ -188,15 +225,15 @@ export default function ImportPage() {
                 <div className="row g-2">
                   {templateTypeOptions.map((template) => (
                     <div className="col-12 col-sm-6" key={template.value}>
-                      <a
+                      <button
                         className="btn btn-sm btn-outline-primary w-100"
-                        href={`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api"}/excel-import/templates/${template.value}`}
-                        target="_blank"
-                        rel="noreferrer"
+                        type="button"
+                        disabled={!authReady || downloadingTemplate === template.value}
+                        onClick={() => void downloadTemplate(template.value, template.label)}
                       >
                         <i className="bi bi-download me-1" />
-                        {template.label}
-                      </a>
+                        {downloadingTemplate === template.value ? "Downloading" : template.label}
+                      </button>
                     </div>
                   ))}
                 </div>
