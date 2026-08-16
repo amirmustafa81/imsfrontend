@@ -6,9 +6,12 @@ import { useAuth } from "@/lib/auth";
 import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type ResourceKey =
+  | "faculties"
   | "departments"
+  | "designations"
   | "buildings"
   | "rooms"
+  | "room-holders"
   | "stores"
   | "asset-categories"
   | "asset-subcategories"
@@ -59,14 +62,29 @@ type RowData = {
 type FormState = Record<string, string | number | boolean | null>;
 
 const resources: Record<ResourceKey, ResourceDef> = {
+  faculties: {
+    label: "Faculties",
+    endpoint: "faculties",
+    tableColumns: ["id", "erp_faculty_id", "code", "name", "status"],
+    fields: [
+      { key: "erp_faculty_id", label: "ERP Faculty ID", type: "text" },
+      { key: "code", label: "Code", type: "text" },
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "description", label: "Description", type: "textarea" },
+      { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
+      { key: "last_synced_at", label: "Last Synced", type: "date" },
+    ],
+  },
   departments: {
     label: "Departments",
     endpoint: "departments",
-    tableColumns: ["id", "code", "name", "department_type", "status"],
+    tableColumns: ["id", "code", "name", "faculty_id", "department_type", "status"],
     fields: [
+      { key: "erp_department_id", label: "ERP Department ID", type: "text" },
+      { key: "faculty_id", label: "Faculty", type: "select", source: "faculties" },
       { key: "code", label: "Code", type: "text", required: true },
       { key: "name", label: "Name", type: "text", required: true },
-      { key: "erp_department_id", label: "ERP Department ID", type: "text" },
+      { key: "head", label: "Head", type: "text" },
       { key: "department_type", label: "Type", type: "select", required: true, options: [
         { value: "academic", label: "Academic" },
         { value: "administrative", label: "Administrative" },
@@ -81,28 +99,76 @@ const resources: Record<ResourceKey, ResourceDef> = {
       { key: "last_synced_at", label: "Last Synced", type: "date" },
     ],
   },
+  designations: {
+    label: "Designations",
+    endpoint: "designations",
+    tableColumns: ["id", "erp_designation_id", "name", "scale", "sort_order", "status"],
+    fields: [
+      { key: "erp_designation_id", label: "ERP Lookup ID", type: "text" },
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "scale", label: "Scale", type: "text" },
+      { key: "sort_order", label: "Sort Order", type: "number" },
+      { key: "remarks", label: "Remarks", type: "textarea" },
+      { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
+      { key: "last_synced_at", label: "Last Synced", type: "date" },
+    ],
+  },
   buildings: {
     label: "Buildings",
     endpoint: "buildings",
-    tableColumns: ["id", "code", "name", "status"],
+    tableColumns: ["id", "building_code", "campus_map_code", "code", "name", "nature", "status"],
     fields: [
+      { key: "erp_building_id", label: "ERP Building ID", type: "text" },
+      { key: "building_code", label: "Building Code", type: "number" },
+      { key: "campus_map_code", label: "Campus Map Code", type: "text" },
       { key: "code", label: "Code", type: "text", required: true },
       { key: "name", label: "Name", type: "text", required: true },
+      { key: "nature", label: "Nature", type: "text" },
+      { key: "faculty_id", label: "Faculty", type: "select", source: "faculties" },
+      { key: "department_id", label: "Department", type: "select", source: "departments" },
+      { key: "default_length_ft", label: "Default Length (ft)", type: "number" },
+      { key: "default_width_ft", label: "Default Width (ft)", type: "number" },
       { key: "description", label: "Description", type: "textarea" },
+      { key: "remarks", label: "Remarks", type: "textarea" },
       { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
+      { key: "last_synced_at", label: "Last Synced", type: "date" },
     ],
   },
   rooms: {
     label: "Rooms",
     endpoint: "rooms",
-    tableColumns: ["id", "code", "building_id", "name", "status"],
+    tableColumns: ["id", "code", "room_no", "building_id", "nature", "status"],
     fields: [
+      { key: "erp_room_id", label: "ERP Room ID", type: "text" },
       { key: "building_id", label: "Building", type: "select", required: true, source: "buildings" },
+      { key: "building_map_code", label: "Building Map Code", type: "text" },
       { key: "code", label: "Code", type: "text", required: true },
+      { key: "room_no", label: "Room No", type: "text" },
       { key: "name", label: "Name", type: "text" },
+      { key: "nature", label: "Nature", type: "text" },
       { key: "floor", label: "Floor", type: "text" },
       { key: "department_id", label: "Department", type: "select", source: "departments" },
+      { key: "length_ft", label: "Length (ft)", type: "number" },
+      { key: "width_ft", label: "Width (ft)", type: "number" },
+      { key: "area_sqft", label: "Area (sq ft)", type: "number" },
+      { key: "remarks", label: "Remarks", type: "textarea" },
       { key: "status", label: "Status", type: "select", options: [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }] },
+      { key: "last_synced_at", label: "Last Synced", type: "date" },
+    ],
+  },
+  "room-holders": {
+    label: "Room Holders",
+    endpoint: "room-holders",
+    tableColumns: ["id", "room_id", "employee_code", "holder_name", "holder_type"],
+    fields: [
+      { key: "erp_room_holder_id", label: "ERP Holder ID", type: "text" },
+      { key: "room_id", label: "Room", type: "select", required: true, source: "rooms" },
+      { key: "user_id", label: "IMS User ID", type: "number" },
+      { key: "erp_employee_id", label: "ERP Employee ID", type: "text" },
+      { key: "employee_code", label: "Employee Code", type: "text" },
+      { key: "holder_name", label: "Holder Name", type: "text", required: true },
+      { key: "holder_type", label: "Holder Type", type: "text" },
+      { key: "last_synced_at", label: "Last Synced", type: "date" },
     ],
   },
   stores: {
@@ -285,9 +351,12 @@ const resources: Record<ResourceKey, ResourceDef> = {
 const resourceEntries = Object.entries(resources) as [ResourceKey, ResourceDef][];
 
 const createEmptyLookups = (): Record<ResourceKey, RowData[]> => ({
+  faculties: [],
   departments: [],
+  designations: [],
   buildings: [],
   rooms: [],
+  "room-holders": [],
   stores: [],
   "asset-categories": [],
   "asset-subcategories": [],
@@ -345,9 +414,32 @@ const getFieldPlaceholder = (field: FieldDef): string => {
   const examples: Record<string, string> = {
     code: "e.g. CSE, BLK-01, LAP",
     name: "e.g. Civil Engineering",
+    erp_faculty_id: "e.g. 1",
     erp_department_id: "e.g. DEPT-1001",
+    erp_designation_id: "e.g. 14",
+    erp_building_id: "e.g. 3",
+    erp_room_id: "e.g. 102",
+    erp_room_holder_id: "e.g. 45",
+    faculty_id: "Select faculty",
     department_type: "e.g. Academic",
+    head: "e.g. Dr. Ahmed",
+    building_code: "e.g. 1",
+    campus_map_code: "e.g. B1",
+    building_map_code: "e.g. B1",
+    room_no: "e.g. 101",
+    nature: "e.g. Office, Classroom, Laboratory",
     floor: "e.g. 1",
+    default_length_ft: "e.g. 24",
+    default_width_ft: "e.g. 16",
+    length_ft: "e.g. 20",
+    width_ft: "e.g. 14",
+    area_sqft: "e.g. 280",
+    remarks: "Enter remarks",
+    scale: "e.g. BPS-17",
+    erp_employee_id: "e.g. 650",
+    employee_code: "e.g. EMP-001",
+    holder_name: "e.g. Muhammad Ali",
+    holder_type: "e.g. Primary, Secondary",
     store_type: "e.g. Central, Departmental",
     parent_category_id: "Select a parent category if any",
     useful_life_years: "e.g. 5",
@@ -472,7 +564,7 @@ export default function MasterDataPage() {
     if (!authReady) return;
 
     const loadLookup = async () => {
-      const required: ResourceKey[] = ["departments", "buildings", "rooms", "asset-categories", "funding-sources"];
+      const required: ResourceKey[] = ["faculties", "departments", "buildings", "rooms", "asset-categories", "funding-sources"];
       const updates: Array<Promise<void>> = [];
       const copy = createEmptyLookups();
 
@@ -505,7 +597,10 @@ export default function MasterDataPage() {
     const matches = lookups[source]?.find((item) => String(item.id) === String(value));
     if (!matches) return String(value);
 
-    return `${matches.code ?? matches.project_code ?? matches.id} - ${matches.name ?? matches.title ?? ""}`;
+    const primary = matches.code ?? matches.campus_map_code ?? matches.project_code ?? matches.room_no ?? matches.employee_code ?? matches.id;
+    const label = matches.name ?? matches.title ?? matches.holder_name ?? "";
+
+    return `${primary} - ${label}`;
   };
 
   const setFieldValue = (key: string, value: string) => {
@@ -691,7 +786,7 @@ export default function MasterDataPage() {
           : lookups[field.source] ?? [];
         return list.map((row) => ({
           value: String(row.id),
-          label: `${row.code ?? row.project_code ?? row.id} - ${row.name ?? row.title ?? ""}`,
+          label: `${row.code ?? row.campus_map_code ?? row.project_code ?? row.room_no ?? row.id} - ${row.name ?? row.title ?? ""}`,
         }));
       })();
 
@@ -753,6 +848,7 @@ export default function MasterDataPage() {
         const isRelational =
           [
             "department_id",
+            "faculty_id",
             "building_id",
             "room_id",
             "funding_source_id",
@@ -760,12 +856,13 @@ export default function MasterDataPage() {
             "parent_category_id",
             "category_id",
             "subcategory_id",
-            "department_type",
           ].includes(column);
 
         if (isRelational) {
           const source: ResourceKey =
-            column === "department_id" || column === "parent_department_id"
+            column === "faculty_id"
+              ? "faculties"
+              : column === "department_id" || column === "parent_department_id"
               ? "departments"
               : column === "building_id"
                 ? "buildings"

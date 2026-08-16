@@ -13,13 +13,18 @@ type Role = {
   permissions?: Permission[];
 };
 type Department = { id: number; name: string; code: string };
+type Designation = { id: number; name: string; scale?: string | null };
 type UserRow = {
   id: number;
   name: string;
   email: string;
   employee_code: string | null;
   phone?: string | null;
+  gender?: string | null;
+  designation_id?: number | null;
   designation?: string | null;
+  scale?: string | null;
+  nature_of_job?: string | null;
   access_scope: "department" | "university";
   status: "active" | "inactive" | "suspended";
   department_id: number | null;
@@ -43,7 +48,11 @@ type UserForm = {
   password: string;
   employee_code: string;
   phone: string;
+  gender: string;
+  designation_id: string;
   designation: string;
+  scale: string;
+  nature_of_job: string;
   department_id: string;
   access_scope: "department" | "university";
   status: "active" | "inactive" | "suspended";
@@ -56,7 +65,11 @@ const emptyForm: UserForm = {
   password: "",
   employee_code: "",
   phone: "",
+  gender: "",
+  designation_id: "",
   designation: "",
+  scale: "",
+  nature_of_job: "",
   department_id: "",
   access_scope: "department",
   status: "active",
@@ -67,8 +80,11 @@ const userFieldInfo = {
   name: "Full display name shown in audit logs, approvals, and user lists.",
   email: "Login email address for the IMS account.",
   password: "Set a temporary password for new users, or leave blank while editing to keep the current password.",
-  designation: "Official role/title of the employee, such as HOD, Store Officer, or Lab In-charge.",
+  designation: "Official role/title of the employee from the designation master; legacy text is preserved for older records.",
   employeeCode: "Employee code used for ERP matching and custodian references.",
+  gender: "Gender value preserved from the ERP employee record.",
+  scale: "Pay scale or grade imported from the ERP lookup data.",
+  natureOfJob: "Job nature imported from ERP, such as regular, contract, or visiting.",
   phone: "Contact number for user records and future notification support.",
   department: "Primary department used for department-scoped access and inventory visibility.",
   accessScope: "Department scope limits visibility to the assigned department; university-wide scope allows cross-department access where permitted.",
@@ -86,6 +102,7 @@ export default function UsersPage() {
   const [rows, setRows] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
   const [filters, setFilters] = useState<RowFilter>({ search: "", status: "", accessScope: "", department: "" });
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
@@ -101,15 +118,18 @@ export default function UsersPage() {
   const loadLookups = useCallback(async () => {
     if (!authReady) return;
     try {
-      const [rolesResponse, deptResponse] = await Promise.all([
+      const [rolesResponse, deptResponse, designationResponse] = await Promise.all([
         api.get<{ data: Role[] }>("/roles", headers),
         api.get<{ data: Department[] }>("/master-data/departments", headers),
+        api.get<{ data: Designation[] }>("/master-data/designations", headers),
       ]);
       setRoles(rolesResponse.data?.data ?? []);
       setDepartments(deptResponse.data?.data ?? []);
+      setDesignations(designationResponse.data?.data ?? []);
     } catch {
       setRoles([]);
       setDepartments([]);
+      setDesignations([]);
     }
   }, [headers, authReady]);
 
@@ -168,7 +188,11 @@ export default function UsersPage() {
       password: "",
       employee_code: user.employee_code ?? "",
       phone: user.phone ?? "",
+      gender: user.gender ?? "",
+      designation_id: user.designation_id ? String(user.designation_id) : "",
       designation: user.designation ?? "",
+      scale: user.scale ?? "",
+      nature_of_job: user.nature_of_job ?? "",
       department_id: user.department_id ? String(user.department_id) : "",
       access_scope: user.access_scope,
       status: user.status,
@@ -248,7 +272,11 @@ export default function UsersPage() {
       password: form.password.trim() || undefined,
       employee_code: form.employee_code.trim() || null,
       phone: form.phone.trim() || null,
+      gender: form.gender.trim() || null,
+      designation_id: form.designation_id ? Number(form.designation_id) : null,
       designation: form.designation.trim() || null,
+      scale: form.scale.trim() || null,
+      nature_of_job: form.nature_of_job.trim() || null,
       department_id: form.department_id ? Number(form.department_id) : null,
       access_scope: form.access_scope,
       status: form.status,
@@ -282,7 +310,14 @@ export default function UsersPage() {
     { key: "name", header: "User" },
     { key: "email", header: "Email" },
     { key: "employee_code", header: "Employee Code" },
-    { key: "designation", header: "Designation" },
+    {
+      key: "designation",
+      header: "Designation",
+      render: (row: UserRow) => {
+        const masterDesignation = designations.find((designation) => designation.id === row.designation_id);
+        return masterDesignation?.name ?? row.designation ?? "-";
+      },
+    },
     {
       key: "department_id",
       header: "Department",
@@ -436,11 +471,48 @@ export default function UsersPage() {
                     </div>
                     <div className="col-12 col-md-6">
                       <FieldLabel htmlFor="user-designation" info={userFieldInfo.designation}>Designation</FieldLabel>
-                      <input id="user-designation" className="form-control" value={form.designation} onChange={(event) => setForm((current) => ({ ...current, designation: event.target.value }))} />
+                      <select
+                        id="user-designation"
+                        className="form-select"
+                        value={form.designation_id}
+                        onChange={(event) => {
+                          const designationId = event.target.value;
+                          const selected = designations.find((designation) => String(designation.id) === designationId);
+                          setForm((current) => ({
+                            ...current,
+                            designation_id: designationId,
+                            designation: selected?.name ?? current.designation,
+                            scale: selected?.scale ?? current.scale,
+                          }));
+                        }}
+                      >
+                        <option value="">Select designation</option>
+                        {designations.map((designation) => (
+                          <option key={designation.id} value={designation.id}>
+                            {designation.scale ? `${designation.name} (${designation.scale})` : designation.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <FieldLabel htmlFor="user-designation-text" info={userFieldInfo.designation}>Legacy Designation Text</FieldLabel>
+                      <input id="user-designation-text" className="form-control" value={form.designation} onChange={(event) => setForm((current) => ({ ...current, designation: event.target.value }))} />
                     </div>
                     <div className="col-12 col-md-6">
                       <FieldLabel htmlFor="user-employee-code" info={userFieldInfo.employeeCode}>Employee Code</FieldLabel>
                       <input id="user-employee-code" className="form-control" value={form.employee_code} onChange={(event) => setForm((current) => ({ ...current, employee_code: event.target.value }))} />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <FieldLabel htmlFor="user-gender" info={userFieldInfo.gender}>Gender</FieldLabel>
+                      <input id="user-gender" className="form-control" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))} />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <FieldLabel htmlFor="user-scale" info={userFieldInfo.scale}>Scale</FieldLabel>
+                      <input id="user-scale" className="form-control" value={form.scale} onChange={(event) => setForm((current) => ({ ...current, scale: event.target.value }))} />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <FieldLabel htmlFor="user-nature-of-job" info={userFieldInfo.natureOfJob}>Nature of Job</FieldLabel>
+                      <input id="user-nature-of-job" className="form-control" value={form.nature_of_job} onChange={(event) => setForm((current) => ({ ...current, nature_of_job: event.target.value }))} />
                     </div>
                     <div className="col-12 col-md-6">
                       <FieldLabel htmlFor="user-phone" info={userFieldInfo.phone}>Phone</FieldLabel>
