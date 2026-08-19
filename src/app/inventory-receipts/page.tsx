@@ -1951,17 +1951,7 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <label className="form-label small">Store</label>
-                      <button
-                        className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
-                        type="button"
-                        onClick={() => openQuickMasterDialog("stores")}
-                      >
-                        <i className="bi bi-plus-circle me-1" />
-                        New Store
-                      </button>
-                    </div>
+                    <label className="form-label small">Store</label>
                     <SearchableSelect
                       id="receipt-store"
                       value={form.store_id}
@@ -1972,17 +1962,7 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12 col-md-6">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <label className="form-label small">Department</label>
-                      <button
-                        className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
-                        type="button"
-                        onClick={() => openQuickMasterDialog("departments")}
-                      >
-                        <i className="bi bi-plus-circle me-1" />
-                        New Department
-                      </button>
-                    </div>
+                    <label className="form-label small">Department</label>
                     <SearchableSelect
                       id="receipt-department"
                       value={form.department_id}

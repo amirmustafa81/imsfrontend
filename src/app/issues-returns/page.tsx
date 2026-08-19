@@ -1665,10 +1665,7 @@ function IssuesReturnsContent() {
 
                     {form.transaction_type === "issue" && (
                       <div className="col-12 col-md-6">
-                        <div className="d-flex align-items-center justify-content-between">
-                          <label className="form-label">To Department {requiredMarker}</label>
-                          {renderQuickAction("Department", "departments", "to_department_id")}
-                        </div>
+                        <label className="form-label">To Department {requiredMarker}</label>
                         <SearchableSelect
                           id="transaction-to-department-issue"
                           value={form.to_department_id}
@@ -1682,17 +1679,14 @@ function IssuesReturnsContent() {
 
                     {(form.transaction_type === "issue" || form.transaction_type === "return" || form.transaction_type === "transfer") && (
                       <div className="col-12 col-md-6">
-                        <div className="d-flex align-items-center justify-content-between">
-                          <label className="form-label">
-                            {form.transaction_type === "return"
-                              ? "By Employee"
-                              : form.transaction_type === "transfer"
-                              ? "Recipient / Custodian (optional)"
-                              : "To Employee"}
-                            {form.transaction_type === "issue" || form.transaction_type === "return" ? <> {requiredMarker}</> : ""}
-                          </label>
-                          {renderQuickAction("Employee", "users", "recipient_user_id")}
-                        </div>
+                        <label className="form-label">
+                          {form.transaction_type === "return"
+                            ? "By Employee"
+                            : form.transaction_type === "transfer"
+                            ? "Recipient / Custodian (optional)"
+                            : "To Employee"}
+                          {form.transaction_type === "issue" || form.transaction_type === "return" ? <> {requiredMarker}</> : ""}
+                        </label>
                         <SearchableSelect
                           id="transaction-recipient-user"
                           value={form.recipient_user_id}
@@ -1746,10 +1740,7 @@ function IssuesReturnsContent() {
                     {showsSourceStockFields && (
                       <>
                         <div className="col-12 col-md-6">
-                          <div className="d-flex align-items-center justify-content-between">
-                            <label className="form-label">From Department {requiredMarker}</label>
-                            {renderQuickAction("Department", "departments", "from_department_id")}
-                          </div>
+                          <label className="form-label">From Department {requiredMarker}</label>
                           <SearchableSelect
                             id="transaction-from-department"
                             value={form.from_department_id}
@@ -1760,10 +1751,7 @@ function IssuesReturnsContent() {
                           />
                         </div>
                         <div className="col-12 col-md-6">
-                          <div className="d-flex align-items-center justify-content-between">
-                            <label className="form-label">From Store {requiredMarker}</label>
-                            {renderQuickAction("Store", "stores", "from_store_id")}
-                          </div>
+                          <label className="form-label">From Store {requiredMarker}</label>
                           <SearchableSelect
                             id="transaction-from-store"
                             value={form.from_store_id}
@@ -1793,10 +1781,7 @@ function IssuesReturnsContent() {
 
                     {showsReturnByDepartment && (
                       <div className="col-12 col-md-6">
-                        <div className="d-flex align-items-center justify-content-between">
-                          <label className="form-label">By Department {requiredMarker}</label>
-                          {renderQuickAction("Department", "departments", "from_department_id")}
-                        </div>
+                        <label className="form-label">By Department {requiredMarker}</label>
                         <SearchableSelect
                           id="transaction-by-department"
                           value={form.from_department_id}
@@ -1811,10 +1796,7 @@ function IssuesReturnsContent() {
                     {showsToDepartment && form.transaction_type !== "issue" && (
                       <>
                         <div className="col-12 col-md-6">
-                          <div className="d-flex align-items-center justify-content-between">
-                            <label className="form-label">To Department {requiredMarker}</label>
-                            {renderQuickAction("Department", "departments", "to_department_id")}
-                          </div>
+                          <label className="form-label">To Department {requiredMarker}</label>
                           <SearchableSelect
                             id="transaction-to-department"
                             value={form.to_department_id}
@@ -1826,10 +1808,7 @@ function IssuesReturnsContent() {
                         </div>
                         {showsToStore ? (
                           <div className="col-12 col-md-6">
-                            <div className="d-flex align-items-center justify-content-between">
-                              <label className="form-label">To Store {requiredMarker}</label>
-                              {renderQuickAction("Store", "stores", "to_store_id")}
-                            </div>
+                            <label className="form-label">To Store {requiredMarker}</label>
                             <SearchableSelect
                               id="transaction-to-store"
                               value={form.to_store_id}
