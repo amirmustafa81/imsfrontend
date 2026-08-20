@@ -502,20 +502,32 @@ function IssuesReturnsContent() {
     }
 
     if (key === "from_store_id" && typeof value === "string") {
-      setForm((current) => ({
-        ...current,
-        [key]: value,
-        from_storage_bin_id: "",
-      }));
+      setForm((current) => {
+        const store = value ? lookups.stores.find((candidate) => String(candidate.id) === value) : null;
+        const storeDepartmentId = store?.department_id ? String(store.department_id) : "";
+
+        return {
+          ...current,
+          from_store_id: value,
+          from_department_id: storeDepartmentId || current.from_department_id,
+          from_storage_bin_id: "",
+        };
+      });
       return;
     }
 
     if (key === "to_store_id" && typeof value === "string") {
-      setForm((current) => ({
-        ...current,
-        [key]: value,
-        to_storage_bin_id: "",
-      }));
+      setForm((current) => {
+        const store = value ? lookups.stores.find((candidate) => String(candidate.id) === value) : null;
+        const storeDepartmentId = store?.department_id ? String(store.department_id) : "";
+
+        return {
+          ...current,
+          to_store_id: value,
+          to_department_id: storeDepartmentId || current.to_department_id,
+          to_storage_bin_id: "",
+        };
+      });
       return;
     }
 
