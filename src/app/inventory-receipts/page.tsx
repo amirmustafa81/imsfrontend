@@ -363,6 +363,53 @@ const createQuickItemForm = (): QuickItemForm => ({
   status: "active",
 });
 
+const quickItemDefaultsForCategory = (
+  category: RowData | null | undefined,
+): Pick<
+  QuickItemForm,
+  | "item_type"
+  | "is_capitalizable"
+  | "is_sensitive_controlled"
+  | "requires_serial_tracking"
+  | "requires_batch_tracking"
+  | "requires_expiry_tracking"
+> => {
+  const code = String(category?.code ?? "").trim().toUpperCase();
+  const name = String(category?.name ?? "").trim().toLowerCase();
+  const haystack = `${code} ${name}`;
+
+  if (code === "STR" || haystack.includes("station")) {
+    return {
+      item_type: "consumable",
+      is_capitalizable: false,
+      is_sensitive_controlled: false,
+      requires_serial_tracking: false,
+      requires_batch_tracking: false,
+      requires_expiry_tracking: false,
+    };
+  }
+
+  if (haystack.includes("controlled")) {
+    return {
+      item_type: "controlled_item",
+      is_capitalizable: false,
+      is_sensitive_controlled: true,
+      requires_serial_tracking: true,
+      requires_batch_tracking: false,
+      requires_expiry_tracking: false,
+    };
+  }
+
+  return {
+    item_type: "fixed_asset",
+    is_capitalizable: true,
+    is_sensitive_controlled: false,
+    requires_serial_tracking: false,
+    requires_batch_tracking: false,
+    requires_expiry_tracking: false,
+  };
+};
+
 const createQuickMasterForm = (resource: QuickMasterResource, receiptForm: ReceiptForm): QuickMasterForm => {
   if (resource === "departments") {
     return {
@@ -936,8 +983,11 @@ export default function InventoryReceiptsPage() {
   };
 
   const selectQuickItemCategory = (categoryId: string) => {
+    const selectedCategory = parentCategories.find((category) => String(category.id) === categoryId);
+
     setQuickItemForm((current) => ({
       ...current,
+      ...quickItemDefaultsForCategory(selectedCategory),
       category_id: categoryId,
       subcategory_id: "",
       attributes: {},
