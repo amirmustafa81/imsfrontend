@@ -798,6 +798,8 @@ function IssuesReturnsContent() {
       to_store_id: null,
       from_storage_bin_id: null,
       to_storage_bin_id: null,
+      to_building_id: null,
+      to_room_id: null,
       recipient_user_id: null,
       project_id: null,
       funding_source_id: null,
