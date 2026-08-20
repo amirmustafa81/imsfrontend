@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { printTransactionDocument } from "@/lib/transaction-print";
 import { DataTable, EmptyState, PageHeader, StatusBadge } from "@/components/ims";
 
-type LookupKey = "departments" | "stores" | "items" | "funding-sources" | "research-projects" | "storage-bins";
+type LookupKey = "departments" | "stores" | "buildings" | "rooms" | "items" | "funding-sources" | "research-projects" | "storage-bins";
 
 type LookupRow = {
   id: number;
@@ -30,6 +30,8 @@ type Transaction = {
   to_store_id: number | null;
   from_storage_bin_id?: number | null;
   to_storage_bin_id?: number | null;
+  to_building_id?: number | null;
+  to_room_id?: number | null;
   funding_source_id: number | null;
   project_id: number | null;
   purpose: string | null;
@@ -54,6 +56,8 @@ type TransactionItem = {
 const initialLookups: Record<LookupKey, LookupRow[]> = {
   departments: [],
   stores: [],
+  buildings: [],
+  rooms: [],
   items: [],
   "funding-sources": [],
   "research-projects": [],
@@ -106,7 +110,7 @@ export default function TransactionDetailPage() {
   const loadLookups = useCallback(async () => {
     if (!authReady) return;
 
-    const keys: LookupKey[] = ["departments", "stores", "items", "funding-sources", "research-projects", "storage-bins"];
+    const keys: LookupKey[] = ["departments", "stores", "buildings", "rooms", "items", "funding-sources", "research-projects", "storage-bins"];
     const next: Record<LookupKey, LookupRow[]> = { ...initialLookups };
 
     await Promise.all(
@@ -199,6 +203,8 @@ export default function TransactionDetailPage() {
         { label: "To Department", value: lookupLabel("departments", transaction.to_department_id) },
         { label: "To Store", value: lookupLabel("stores", transaction.to_store_id) },
         { label: "To Bin", value: lookupLabel("storage-bins", transaction.to_storage_bin_id) },
+        { label: "To Building", value: lookupLabel("buildings", transaction.to_building_id) },
+        { label: "To Room", value: lookupLabel("rooms", transaction.to_room_id) },
         { label: "Funding", value: lookupLabel("funding-sources", transaction.funding_source_id) },
         { label: "Project", value: lookupLabel("research-projects", transaction.project_id) },
         { label: "Approval Ref", value: transaction.manual_approval_ref },
@@ -344,6 +350,10 @@ export default function TransactionDetailPage() {
                       <dd className="col-7">{lookupLabel("stores", transaction.to_store_id)}</dd>
                       <dt className="col-5 text-secondary">To Bin</dt>
                       <dd className="col-7">{lookupLabel("storage-bins", transaction.to_storage_bin_id)}</dd>
+                      <dt className="col-5 text-secondary">To Building</dt>
+                      <dd className="col-7">{lookupLabel("buildings", transaction.to_building_id)}</dd>
+                      <dt className="col-5 text-secondary">To Room</dt>
+                      <dd className="col-7">{lookupLabel("rooms", transaction.to_room_id)}</dd>
                     </dl>
                   </div>
                 </div>

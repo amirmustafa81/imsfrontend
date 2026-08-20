@@ -21,6 +21,8 @@ import {
 type LookupKey =
   | "departments"
   | "stores"
+  | "buildings"
+  | "rooms"
   | "items"
   | "funding-sources"
   | "research-projects"
@@ -62,6 +64,8 @@ type Transaction = {
   to_store_id: number | null;
   from_storage_bin_id: number | null;
   to_storage_bin_id: number | null;
+  to_building_id: number | null;
+  to_room_id: number | null;
   recipient_user_id: number | null;
   project_id: number | null;
   funding_source_id: number | null;
@@ -103,6 +107,8 @@ type TransactionForm = {
   to_store_id: string;
   from_storage_bin_id: string;
   to_storage_bin_id: string;
+  to_building_id: string;
+  to_room_id: string;
   recipient_user_id: string;
   funding_source_id: string;
   project_id: string;
@@ -218,6 +224,8 @@ const defaultForm: TransactionForm = {
   to_store_id: "",
   from_storage_bin_id: "",
   to_storage_bin_id: "",
+  to_building_id: "",
+  to_room_id: "",
   recipient_user_id: "",
   funding_source_id: "",
   project_id: "",
@@ -271,6 +279,8 @@ function IssuesReturnsContent() {
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>({
     departments: [],
     stores: [],
+    buildings: [],
+    rooms: [],
     items: [],
     "funding-sources": [],
     "research-projects": [],
@@ -324,6 +334,7 @@ function IssuesReturnsContent() {
     form.transaction_type === "return" ||
     form.transaction_type === "transfer" ||
     (form.transaction_type === "adjustment" && form.adjustment_direction === "increase");
+  const showsReceivingLocation = form.transaction_type === "issue" || form.transaction_type === "transfer";
   const recipientDepartmentId =
     form.transaction_type === "return"
       ? form.from_department_id
@@ -376,6 +387,8 @@ function IssuesReturnsContent() {
     const requiredLookups: LookupKey[] = [
       "departments",
       "stores",
+      "buildings",
+      "rooms",
       "items",
       "funding-sources",
       "research-projects",
@@ -392,6 +405,8 @@ function IssuesReturnsContent() {
         {
           departments: [],
           stores: [],
+          buildings: [],
+          rooms: [],
           items: [],
           "funding-sources": [],
           "research-projects": [],
@@ -427,6 +442,8 @@ function IssuesReturnsContent() {
         if (value === "return") {
           next.from_store_id = "";
           next.from_storage_bin_id = "";
+          next.to_building_id = "";
+          next.to_room_id = "";
           next.adjustment_direction = "increase";
         }
 
@@ -436,6 +453,8 @@ function IssuesReturnsContent() {
           next.adjustment_direction = "decrease";
           if (value === "consumption") {
             next.to_department_id = "";
+            next.to_building_id = "";
+            next.to_room_id = "";
             next.recipient_user_id = "";
           }
         }
@@ -447,6 +466,8 @@ function IssuesReturnsContent() {
           next.to_department_id = "";
           next.to_store_id = "";
           next.to_storage_bin_id = "";
+          next.to_building_id = "";
+          next.to_room_id = "";
           next.recipient_user_id = "";
           next.adjustment_direction = "increase";
         }
@@ -471,6 +492,8 @@ function IssuesReturnsContent() {
           to_department_id: "",
           to_store_id: "",
           to_storage_bin_id: "",
+          to_building_id: "",
+          to_room_id: "",
         };
 
         return next;
@@ -493,6 +516,29 @@ function IssuesReturnsContent() {
         [key]: value,
         to_storage_bin_id: "",
       }));
+      return;
+    }
+
+    if (key === "to_building_id" && typeof value === "string") {
+      setForm((current) => ({
+        ...current,
+        to_building_id: value,
+        to_room_id: "",
+      }));
+      return;
+    }
+
+    if (key === "to_room_id" && typeof value === "string") {
+      setForm((current) => {
+        const room = value ? lookups.rooms.find((candidate) => String(candidate.id) === value) : null;
+        const roomBuildingId = room?.building_id ? String(room.building_id) : "";
+
+        return {
+          ...current,
+          to_room_id: value,
+          to_building_id: roomBuildingId || current.to_building_id,
+        };
+      });
       return;
     }
 
@@ -715,6 +761,8 @@ function IssuesReturnsContent() {
         to_store_id: toFormString(detail.to_store_id),
         from_storage_bin_id: toFormString(detail.from_storage_bin_id),
         to_storage_bin_id: toFormString(detail.to_storage_bin_id),
+        to_building_id: toFormString(detail.to_building_id),
+        to_room_id: toFormString(detail.to_room_id),
         recipient_user_id: toFormString(detail.recipient_user_id),
         funding_source_id: toFormString(detail.funding_source_id),
         project_id: toFormString(detail.project_id),
@@ -830,6 +878,32 @@ function IssuesReturnsContent() {
         keywords: [store.code, store.name, store.store_type, store.department_id].filter(Boolean).join(" "),
       })),
     [lookups.stores],
+  );
+
+  const buildingOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups.buildings.map((building) => ({
+        value: String(building.id),
+        label: `${building.code ?? building.building_code ?? building.id} - ${building.name ?? ""}`.trim(),
+        keywords: [building.code, building.building_code, building.campus_map_code, building.name, building.nature]
+          .filter(Boolean)
+          .join(" "),
+      })),
+    [lookups.buildings],
+  );
+
+  const roomOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      lookups.rooms
+        .filter((room) => !form.to_building_id || String(room.building_id ?? "") === form.to_building_id)
+        .map((room) => ({
+          value: String(room.id),
+          label: `${room.code ?? room.room_no ?? room.id} - ${room.name ?? room.room_no ?? ""}`.trim(),
+          keywords: [room.code, room.room_no, room.name, room.nature, room.floor, room.department_id, room.building_id]
+            .filter(Boolean)
+            .join(" "),
+        })),
+    [form.to_building_id, lookups.rooms],
   );
 
   const fundingSourceOptions = useMemo<SearchableSelectOption[]>(
@@ -1089,6 +1163,8 @@ function IssuesReturnsContent() {
       to_store_id: numberOrNull(form.to_store_id),
       from_storage_bin_id: numberOrNull(form.from_storage_bin_id),
       to_storage_bin_id: numberOrNull(form.to_storage_bin_id),
+      to_building_id: numberOrNull(form.to_building_id),
+      to_room_id: numberOrNull(form.to_room_id),
       funding_source_id: numberOrNull(form.funding_source_id),
       project_id: numberOrNull(form.project_id),
       recipient_user_id: numberOrNull(form.recipient_user_id),
@@ -1180,6 +1256,8 @@ function IssuesReturnsContent() {
           { label: "From Store", value: lookupLabel("stores", transaction.from_store_id) },
           { label: "To Department", value: lookupLabel("departments", transaction.to_department_id) },
           { label: "To Store", value: lookupLabel("stores", transaction.to_store_id) },
+          { label: "To Building", value: lookupLabel("buildings", transaction.to_building_id) },
+          { label: "To Room", value: lookupLabel("rooms", transaction.to_room_id) },
           {
             label: transaction.transaction_type === "return" ? "Returned By Employee" : "Issued To / Recipient",
             value: lookupLabel("users", transaction.recipient_user_id),
@@ -1735,6 +1813,33 @@ function IssuesReturnsContent() {
                             : "Select the employee who will be accountable for the issued item."}
                         </div>
                       </div>
+                    )}
+
+                    {showsReceivingLocation && (
+                      <>
+                        <div className="col-12 col-md-6">
+                          <label className="form-label">To Building</label>
+                          <SearchableSelect
+                            id="transaction-to-building"
+                            value={form.to_building_id}
+                            options={buildingOptions}
+                            onChange={(value) => setFormValue("to_building_id", value)}
+                            placeholder="Optional"
+                            emptyLabel="No building found."
+                          />
+                        </div>
+                        <div className="col-12 col-md-6">
+                          <label className="form-label">To Room</label>
+                          <SearchableSelect
+                            id="transaction-to-room"
+                            value={form.to_room_id}
+                            options={roomOptions}
+                            onChange={(value) => setFormValue("to_room_id", value)}
+                            placeholder={form.to_building_id ? "Optional" : "Optional, select building to filter"}
+                            emptyLabel={form.to_building_id ? "No room found for selected building." : "No room found."}
+                          />
+                        </div>
+                      </>
                     )}
 
                     {form.transaction_type === "adjustment" && (
