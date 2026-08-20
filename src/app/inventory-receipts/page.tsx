@@ -549,11 +549,13 @@ export default function InventoryReceiptsPage() {
 
   const itemOptions = useMemo(
     () =>
-      lookups.items.map((row) => ({
-        value: String(row.id),
-        label: itemOptionLabel(row),
-        keywords: [row.item_code, row.code, row.name, row.title].filter(Boolean).join(" "),
-      })),
+      [...lookups.items]
+        .sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0))
+        .map((row) => ({
+          value: String(row.id),
+          label: itemOptionLabel(row),
+          keywords: [row.item_code, row.code, row.name, row.title].filter(Boolean).join(" "),
+        })),
     [lookups.items],
   );
 

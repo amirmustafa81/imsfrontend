@@ -866,11 +866,13 @@ function IssuesReturnsContent() {
   );
   const itemOptions = useMemo(
     () =>
-      lookups.items.map((item) => ({
-        value: String(item.id),
-        label: `${item.item_code ?? item.code ?? item.id} - ${item.name ?? ""}`,
-        keywords: `${item.category_code ?? ""} ${item.subcategory_code ?? ""} ${item.type ?? ""}`,
-      })),
+      [...lookups.items]
+        .sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0))
+        .map((item) => ({
+          value: String(item.id),
+          label: `${item.item_code ?? item.code ?? item.id} - ${item.name ?? ""}`,
+          keywords: `${item.category_code ?? ""} ${item.subcategory_code ?? ""} ${item.type ?? ""}`,
+        })),
     [lookups.items],
   );
 
