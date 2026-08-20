@@ -24,6 +24,8 @@ type LookupKey =
   | "buildings"
   | "rooms"
   | "items"
+  | "asset-categories"
+  | "units-of-measure"
   | "funding-sources"
   | "research-projects"
   | "storage-bins"
@@ -51,6 +53,33 @@ type StockSourceRow = {
 type QuickMasterResource = "departments" | "stores" | "funding-sources" | "users";
 
 type QuickMasterForm = Record<string, string>;
+
+type ItemType =
+  | "consumable"
+  | "fixed_asset"
+  | "repairable"
+  | "controlled_item"
+  | "project_inventory"
+  | "sample_prototype"
+  | "software_license";
+
+type QuickItemForm = {
+  name: string;
+  item_type: ItemType;
+  category_id: string;
+  subcategory_id: string;
+  unit_id: string;
+  description: string;
+  brand: string;
+  model: string;
+  minimum_stock_level: string;
+  is_capitalizable: boolean;
+  is_sensitive_controlled: boolean;
+  requires_serial_tracking: boolean;
+  requires_batch_tracking: boolean;
+  requires_expiry_tracking: boolean;
+  status: "active" | "inactive";
+};
 
 type Transaction = {
   id: number;
@@ -178,6 +207,21 @@ const sponsorTypeOptions: SearchableSelectOption[] = [
   { value: "other", label: "Other" },
 ];
 
+const itemTypeOptions: SearchableSelectOption[] = [
+  { value: "consumable", label: "Consumable" },
+  { value: "fixed_asset", label: "Fixed Asset" },
+  { value: "repairable", label: "Repairable" },
+  { value: "controlled_item", label: "Controlled Item" },
+  { value: "project_inventory", label: "Project Inventory" },
+  { value: "sample_prototype", label: "Sample/Prototype" },
+  { value: "software_license", label: "Software License" },
+];
+
+const quickItemStatusOptions: SearchableSelectOption[] = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
 const transactionNoPrefixes: Record<TransactionType, string> = {
   issue: "ISS",
   return: "RET",
@@ -212,6 +256,24 @@ const emptyItem: TransactionItemInput = {
   unit_cost: "",
   remarks: "",
 };
+
+const createQuickItemForm = (): QuickItemForm => ({
+  name: "",
+  item_type: "fixed_asset",
+  category_id: "",
+  subcategory_id: "",
+  unit_id: "",
+  description: "",
+  brand: "",
+  model: "",
+  minimum_stock_level: "0",
+  is_capitalizable: true,
+  is_sensitive_controlled: false,
+  requires_serial_tracking: false,
+  requires_batch_tracking: false,
+  requires_expiry_tracking: false,
+  status: "active",
+});
 
 const defaultForm: TransactionForm = {
   transaction_no: "",
@@ -259,6 +321,18 @@ const numberOrNull = (value: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const itemCodeSegment = (value: unknown) =>
+  String(value ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const toLookupOption = (row: RowData): SearchableSelectOption => ({
+  value: String(row.id),
+  label: `${row.code ?? ""}${row.code && row.name ? " - " : ""}${row.name ?? ""}`.trim() || `#${row.id}`,
+  keywords: [row.code, row.name].filter(Boolean).join(" "),
+});
+
 const extractApiMessage = (error: unknown, fallback: string) => {
   const message = (error as { response?: { data?: { message?: unknown } } }).response?.data?.message;
   return typeof message === "string" && message.trim() ? message : fallback;
@@ -282,6 +356,8 @@ function IssuesReturnsContent() {
     buildings: [],
     rooms: [],
     items: [],
+    "asset-categories": [],
+    "units-of-measure": [],
     "funding-sources": [],
     "research-projects": [],
     "storage-bins": [],
@@ -307,6 +383,11 @@ function IssuesReturnsContent() {
   const [quickMasterForm, setQuickMasterForm] = useState<QuickMasterForm>({});
   const [quickMasterSaving, setQuickMasterSaving] = useState(false);
   const [quickMasterError, setQuickMasterError] = useState("");
+  const [quickItemOpen, setQuickItemOpen] = useState(false);
+  const [quickItemRowIndex, setQuickItemRowIndex] = useState<number | null>(null);
+  const [quickItemSaving, setQuickItemSaving] = useState(false);
+  const [quickItemForm, setQuickItemForm] = useState<QuickItemForm>(createQuickItemForm);
+  const [quickItemError, setQuickItemError] = useState("");
   const searchParams = useSearchParams();
   const queryAssetId = useMemo(() => {
     const assetIdFromQuery = searchParams.get("asset_id");
@@ -390,6 +471,8 @@ function IssuesReturnsContent() {
       "buildings",
       "rooms",
       "items",
+      "asset-categories",
+      "units-of-measure",
       "funding-sources",
       "research-projects",
       "storage-bins",
@@ -408,6 +491,8 @@ function IssuesReturnsContent() {
           buildings: [],
           rooms: [],
           items: [],
+          "asset-categories": [],
+          "units-of-measure": [],
           "funding-sources": [],
           "research-projects": [],
           "storage-bins": [],
@@ -747,6 +832,9 @@ function IssuesReturnsContent() {
     setDialogOpen(false);
     setEditingTransactionId(null);
     setQuickMasterOpen(false);
+    setQuickItemOpen(false);
+    setQuickItemRowIndex(null);
+    setQuickItemError("");
   };
 
   const openEditDialog = async (transaction: Transaction) => {
@@ -876,6 +964,62 @@ function IssuesReturnsContent() {
     [lookups.items],
   );
 
+  const parentCategories = useMemo(
+    () => lookups["asset-categories"].filter((category) => !category.parent_category_id),
+    [lookups],
+  );
+
+  const selectedQuickItemCategory = useMemo(
+    () => parentCategories.find((category) => String(category.id) === quickItemForm.category_id),
+    [parentCategories, quickItemForm.category_id],
+  );
+
+  const quickItemSubcategories = useMemo(
+    () =>
+      selectedQuickItemCategory
+        ? lookups["asset-categories"].filter(
+            (category) => String(category.parent_category_id ?? "") === String(selectedQuickItemCategory.id),
+          )
+        : [],
+    [lookups, selectedQuickItemCategory],
+  );
+
+  const categoryOptions = useMemo(() => parentCategories.map(toLookupOption), [parentCategories]);
+  const subcategoryOptions = useMemo(() => quickItemSubcategories.map(toLookupOption), [quickItemSubcategories]);
+  const unitOptions = useMemo(() => lookups["units-of-measure"].map(toLookupOption), [lookups]);
+  const generatedQuickItemCode = useMemo(() => {
+    if (!selectedQuickItemCategory?.code) {
+      return "";
+    }
+
+    const subcategory = quickItemForm.subcategory_id
+      ? lookups["asset-categories"].find((category) => String(category.id) === quickItemForm.subcategory_id)
+      : null;
+    const prefix = [itemCodeSegment(selectedQuickItemCategory.code), itemCodeSegment(subcategory?.code)]
+      .filter(Boolean)
+      .join("-");
+
+    if (!prefix) {
+      return "";
+    }
+
+    const maxSequence = lookups.items.reduce((max, item) => {
+      const code = String(item.item_code ?? item.code ?? "");
+      if (!code.startsWith(`${prefix}-`)) {
+        return max;
+      }
+
+      const match = code.match(/-(\d{4})$/);
+      if (!match) {
+        return max;
+      }
+
+      return Math.max(max, Number(match[1]));
+    }, 0);
+
+    return `${prefix}-${String(maxSequence + 1).padStart(4, "0")}`;
+  }, [lookups, quickItemForm.subcategory_id, selectedQuickItemCategory]);
+
   const departmentOptions = useMemo<SearchableSelectOption[]>(
     () =>
       lookups.departments.map((department) => ({
@@ -948,6 +1092,100 @@ function IssuesReturnsContent() {
     const nextRows = Array.isArray(payload) ? (payload as RowData[]) : [];
     setLookups((current) => ({ ...current, [resource]: nextRows }));
     return nextRows;
+  };
+
+  const reloadItemLookup = async () => {
+    const response = await api.get("/master-data/items");
+    const payload = response.data?.data;
+    const nextRows = Array.isArray(payload) ? (payload as RowData[]) : [];
+    setLookups((current) => ({ ...current, items: nextRows }));
+    return nextRows;
+  };
+
+  const openQuickItemDialog = (rowIndex: number) => {
+    setQuickItemRowIndex(rowIndex);
+    setQuickItemForm(createQuickItemForm());
+    setQuickItemError("");
+    setQuickItemOpen(true);
+  };
+
+  const closeQuickItemDialog = () => {
+    setQuickItemOpen(false);
+    setQuickItemRowIndex(null);
+    setQuickItemSaving(false);
+    setQuickItemError("");
+  };
+
+  const setQuickItemField = <K extends keyof QuickItemForm>(key: K, value: QuickItemForm[K]) => {
+    setQuickItemForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const selectQuickItemCategory = (categoryId: string) => {
+    setQuickItemForm((current) => ({
+      ...current,
+      category_id: categoryId,
+      subcategory_id: "",
+    }));
+  };
+
+  const saveQuickItem = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!authReady) {
+      setQuickItemError("Please sign in before creating item records.");
+      return;
+    }
+
+    if (!generatedQuickItemCode || !quickItemForm.name.trim() || !quickItemForm.category_id || !quickItemForm.unit_id) {
+      setQuickItemError("Item Code, Item Name, Category, and Unit of Measure are required.");
+      return;
+    }
+
+    setQuickItemSaving(true);
+    setQuickItemError("");
+
+    try {
+      const payload = {
+        item_code: generatedQuickItemCode,
+        name: quickItemForm.name.trim(),
+        item_type: quickItemForm.item_type,
+        category_id: Number(quickItemForm.category_id),
+        subcategory_id: quickItemForm.subcategory_id ? Number(quickItemForm.subcategory_id) : null,
+        unit_id: Number(quickItemForm.unit_id),
+        description: quickItemForm.description.trim() || null,
+        brand: quickItemForm.brand.trim() || null,
+        model: quickItemForm.model.trim() || null,
+        minimum_stock_level: Number(quickItemForm.minimum_stock_level || 0),
+        is_capitalizable: quickItemForm.is_capitalizable,
+        is_sensitive_controlled: quickItemForm.is_sensitive_controlled,
+        requires_serial_tracking: quickItemForm.requires_serial_tracking,
+        requires_batch_tracking: quickItemForm.requires_batch_tracking,
+        requires_expiry_tracking: quickItemForm.requires_expiry_tracking,
+        status: quickItemForm.status,
+      };
+
+      const response = await api.post("/master-data/items", payload);
+      const created = response.data?.data as RowData | undefined;
+      const nextItems = await reloadItemLookup();
+      const createdItem =
+        created?.id
+          ? created
+          : nextItems.find((item) => String(item.item_code ?? item.code ?? "") === generatedQuickItemCode);
+
+      if (createdItem?.id && quickItemRowIndex !== null) {
+        setTransactionItemValue(quickItemRowIndex, "item_id", String(createdItem.id));
+      }
+
+      setMessage("Item created in Item Master and selected for this voucher.");
+      setError("");
+      setQuickItemOpen(false);
+      setQuickItemRowIndex(null);
+      setQuickItemForm(createQuickItemForm());
+    } catch (itemError) {
+      setQuickItemError(extractApiMessage(itemError, "Unable to create item. Verify required fields and duplicate code."));
+    } finally {
+      setQuickItemSaving(false);
+    }
   };
 
   const createQuickMasterForm = (resource: QuickMasterResource, targetField: keyof TransactionForm): QuickMasterForm => {
@@ -2063,7 +2301,17 @@ function IssuesReturnsContent() {
                   {items.map((item, index) => (
                     <div className="row g-2 align-items-end mb-3" key={`${index}-${item.item_id || "new"}`}>
                       <div className="col-12 col-xl-3">
-                        <label className="form-label mb-1 small">Item</label>
+                        <div className="d-flex align-items-center justify-content-between">
+                          <label className="form-label mb-1 small">Item</label>
+                          <button
+                            className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
+                            type="button"
+                            onClick={() => openQuickItemDialog(index)}
+                          >
+                            <i className="bi bi-plus-circle me-1" />
+                            New Item
+                          </button>
+                        </div>
                         <SearchableSelect
                           id={`transaction-item-${index}`}
                           value={item.item_id}
@@ -2186,6 +2434,194 @@ function IssuesReturnsContent() {
                         <button className="btn btn-primary" type="submit" disabled={quickMasterSaving || !authReady}>
                           <i className="bi bi-plus-circle me-1" />
                           {quickMasterSaving ? "Saving..." : `Create & Select ${quickMasterResourceTitles[quickMasterResource]}`}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+                <div className="modal-backdrop fade show" style={{ zIndex: 1070 }} />
+              </>
+            ) : null}
+            {quickItemOpen ? (
+              <>
+                <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" style={{ zIndex: 1080 }}>
+                  <div
+                    className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+                    style={{ width: "min(58vw, 920px)", maxWidth: "min(58vw, 920px)" }}
+                  >
+                    <form className="modal-content border-0 shadow-lg" onSubmit={saveQuickItem}>
+                      <div className="modal-header px-4 py-3">
+                        <div>
+                          <h3 className="modal-title h5 mb-1">Add Item to Item Master</h3>
+                          <div className="small text-secondary">Create the missing item here, then continue this voucher.</div>
+                        </div>
+                        <button className="btn-close" type="button" aria-label="Close" onClick={closeQuickItemDialog} />
+                      </div>
+
+                      <div className="modal-body px-4 py-4">
+                        {quickItemError ? <div className="alert alert-danger py-2">{quickItemError}</div> : null}
+
+                        <div className="row g-3">
+                          <div className="col-12 col-md-4">
+                            <FieldLabel required>Item Code</FieldLabel>
+                            <input
+                              className="form-control form-control-sm"
+                              value={generatedQuickItemCode}
+                              placeholder={quickItemForm.category_id ? "Auto-generating..." : "Select category first"}
+                              readOnly
+                              required
+                            />
+                            <div className="form-text">Generated as Category-Subcategory-0001 when saved.</div>
+                          </div>
+
+                          <div className="col-12 col-md-8">
+                            <FieldLabel required>Item Name</FieldLabel>
+                            <input
+                              className="form-control form-control-sm"
+                              value={quickItemForm.name}
+                              onChange={(event) => setQuickItemField("name", event.target.value)}
+                              placeholder="e.g. Office Table"
+                              required
+                            />
+                          </div>
+
+                          <div className="col-12 col-md-4">
+                            <FieldLabel required>Item Type</FieldLabel>
+                            <SearchableSelect
+                              id="transaction-quick-item-type"
+                              value={quickItemForm.item_type}
+                              options={itemTypeOptions}
+                              placeholder="Search item type"
+                              onChange={(value) => setQuickItemField("item_type", value as ItemType)}
+                            />
+                          </div>
+
+                          <div className="col-12 col-md-4">
+                            <FieldLabel required>Category</FieldLabel>
+                            <SearchableSelect
+                              id="transaction-quick-item-category"
+                              value={quickItemForm.category_id}
+                              options={categoryOptions}
+                              placeholder="Search category"
+                              onChange={selectQuickItemCategory}
+                            />
+                          </div>
+
+                          <div className="col-12 col-md-4">
+                            <FieldLabel>Subcategory</FieldLabel>
+                            <SearchableSelect
+                              id="transaction-quick-item-subcategory"
+                              value={quickItemForm.subcategory_id}
+                              options={subcategoryOptions}
+                              placeholder={!quickItemForm.category_id ? "Choose category first" : "Search subcategory"}
+                              emptyLabel="No subcategories configured."
+                              disabled={!quickItemForm.category_id || quickItemSubcategories.length === 0}
+                              onChange={(value) => setQuickItemField("subcategory_id", value)}
+                            />
+                          </div>
+
+                          <div className="col-12 col-md-4">
+                            <FieldLabel required>Unit of Measure</FieldLabel>
+                            <SearchableSelect
+                              id="transaction-quick-item-unit"
+                              value={quickItemForm.unit_id}
+                              options={unitOptions}
+                              placeholder="Search UoM"
+                              onChange={(value) => setQuickItemField("unit_id", value)}
+                            />
+                          </div>
+
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small">Brand</label>
+                            <input
+                              className="form-control form-control-sm"
+                              value={quickItemForm.brand}
+                              onChange={(event) => setQuickItemField("brand", event.target.value)}
+                              placeholder="Optional"
+                            />
+                          </div>
+
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small">Model</label>
+                            <input
+                              className="form-control form-control-sm"
+                              value={quickItemForm.model}
+                              onChange={(event) => setQuickItemField("model", event.target.value)}
+                              placeholder="Optional"
+                            />
+                          </div>
+
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small">Minimum Stock Level</label>
+                            <input
+                              className="form-control form-control-sm"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={quickItemForm.minimum_stock_level}
+                              onChange={(event) => setQuickItemField("minimum_stock_level", event.target.value)}
+                            />
+                          </div>
+
+                          <div className="col-12 col-md-8">
+                            <label className="form-label small">Description</label>
+                            <input
+                              className="form-control form-control-sm"
+                              value={quickItemForm.description}
+                              onChange={(event) => setQuickItemField("description", event.target.value)}
+                              placeholder="Optional item description"
+                            />
+                          </div>
+
+                          <div className="col-12">
+                            <div className="row g-2">
+                              {[
+                                ["is_capitalizable", "Capitalizable"],
+                                ["is_sensitive_controlled", "Sensitive / Controlled"],
+                                ["requires_serial_tracking", "Serial Tracking"],
+                                ["requires_batch_tracking", "Batch Tracking"],
+                                ["requires_expiry_tracking", "Expiry Tracking"],
+                              ].map(([key, label]) => (
+                                <div className="col-12 col-md-4" key={key}>
+                                  <div className="form-check">
+                                    <input
+                                      id={`transaction-quick-item-${key}`}
+                                      className="form-check-input"
+                                      type="checkbox"
+                                      checked={Boolean(quickItemForm[key as keyof QuickItemForm])}
+                                      onChange={(event) =>
+                                        setQuickItemField(key as keyof QuickItemForm, event.target.checked as never)
+                                      }
+                                    />
+                                    <label className="form-check-label small" htmlFor={`transaction-quick-item-${key}`}>
+                                      {label}
+                                    </label>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small">Status</label>
+                            <SearchableSelect
+                              id="transaction-quick-item-status"
+                              value={quickItemForm.status}
+                              options={quickItemStatusOptions}
+                              placeholder="Search status"
+                              onChange={(value) => setQuickItemField("status", value as QuickItemForm["status"])}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="modal-footer px-4 py-3">
+                        <button className="btn btn-outline-secondary" type="button" onClick={closeQuickItemDialog}>
+                          Cancel
+                        </button>
+                        <button className="btn btn-primary" type="submit" disabled={quickItemSaving || !authReady}>
+                          <i className="bi bi-plus-circle me-1" />
+                          {quickItemSaving ? "Saving..." : "Create & Select Item"}
                         </button>
                       </div>
                     </form>
