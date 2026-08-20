@@ -623,15 +623,27 @@ function IssuesReturnsContent() {
     return transaction.from_department_id || transaction.from_store_id || transaction.from_storage_bin_id ? "decrease" : "increase";
   };
 
+  const resolveProcurementDepartmentId = useCallback(() => {
+    const procurementDepartment = lookups.departments.find((department) => {
+      const code = String(department.code ?? "").trim().toLowerCase();
+      const name = String(department.name ?? "").trim().toLowerCase();
+
+      return code === "dpt-023" || name === "procurement section" || name.includes("procurement");
+    });
+
+    return procurementDepartment ? String(procurementDepartment.id) : "";
+  }, [lookups.departments]);
+
   const resolveMainStoreDefaults = () => {
     const mainStore = lookups.stores.find((store) => {
       const haystack = `${store.code ?? ""} ${store.name ?? ""} ${store.store_type ?? ""}`.toLowerCase();
       return haystack.includes("main") || haystack.includes("central");
     });
+    const procurementDepartmentId = resolveProcurementDepartmentId();
 
     return {
       from_store_id: mainStore ? String(mainStore.id) : "",
-      from_department_id: mainStore?.department_id ? String(mainStore.department_id) : "",
+      from_department_id: procurementDepartmentId || (mainStore?.department_id ? String(mainStore.department_id) : ""),
     };
   };
 
@@ -650,6 +662,28 @@ function IssuesReturnsContent() {
     setError("");
     setDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!dialogOpen || editingTransactionId !== null || form.transaction_type !== "issue" || form.from_department_id) {
+      return;
+    }
+
+    const procurementDepartmentId = resolveProcurementDepartmentId();
+    if (!procurementDepartmentId) {
+      return;
+    }
+
+    setForm((current) => {
+      if (current.transaction_type !== "issue" || current.from_department_id) {
+        return current;
+      }
+
+      return {
+        ...current,
+        from_department_id: procurementDepartmentId,
+      };
+    });
+  }, [dialogOpen, editingTransactionId, form.from_department_id, form.transaction_type, resolveProcurementDepartmentId]);
 
   const closeCreateDialog = () => {
     setDialogOpen(false);
