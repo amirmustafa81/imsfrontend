@@ -37,6 +37,7 @@ const importTypeOptions = [
   { value: "buildings", label: "Buildings" },
   { value: "rooms", label: "Rooms" },
   { value: "room_holders", label: "Room Holders" },
+  { value: "old_stock_issue_history", label: "Old Stock Issue History" },
   { value: "locations", label: "Locations" },
   { value: "projects", label: "Projects" },
 ];
@@ -53,6 +54,7 @@ const templateTypeOptions = [
   { value: "buildings", label: "Buildings" },
   { value: "rooms", label: "Rooms" },
   { value: "room_holders", label: "Room Holders" },
+  { value: "old_stock_issue_history", label: "Old Stock Issue History" },
 ];
 
 export default function ImportPage() {

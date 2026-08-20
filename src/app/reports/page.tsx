@@ -18,6 +18,7 @@ type ReportType =
   | "controlled_stationery_batches"
   | "controlled_stationery_serials"
   | "controlled_stationery_movements"
+  | "old_stock_issue_history"
   | "fixed_assets"
   | "stock_balance"
   | "low_stock"
@@ -302,6 +303,35 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       includeStore: true,
       includeSerial: true,
       movementTypeFilter: { field: "movement_type", options: controlledMovementOptions },
+    },
+  },
+  old_stock_issue_history: {
+    title: "Old Stock Issue History",
+    subtitle: "Imported legacy issue rows with linked taggable assets where available.",
+    endpoint: "/reports/old-stock-issue-history",
+    columns: [
+      { key: "issue_date", label: "Issue Date" },
+      { key: "source_sheet", label: "Source Sheet" },
+      { key: "source_row_no", label: "Source Row" },
+      { key: "source_unit_no", label: "Unit" },
+      { key: "item_code", label: "Item Code" },
+      { key: "item_name", label: "Item" },
+      { key: "quantity_issued", label: "Qty" },
+      { key: "department_code", label: "Dept Code" },
+      { key: "department_name", label: "Department" },
+      { key: "recipient_name", label: "Received By" },
+      { key: "asset_tag", label: "Asset Tag" },
+      { key: "printable_tag_id", label: "Printable Tag" },
+      { key: "asset_status", label: "Asset Status" },
+      { key: "remarks", label: "Remarks" },
+    ],
+    filters: {
+      includeSearch: true,
+      includeDates: true,
+      includeDepartment: true,
+      includeItem: true,
+      includeBuilding: true,
+      includeRoom: true,
     },
   },
   fixed_assets: {
@@ -835,6 +865,7 @@ export default function ReportsPage() {
     controlled_stationery_batches: { ...emptyFilters },
     controlled_stationery_serials: { ...emptyFilters },
     controlled_stationery_movements: { ...emptyFilters },
+    old_stock_issue_history: { ...emptyFilters },
     fixed_assets: { ...emptyFilters },
     stock_balance: { ...emptyFilters },
     low_stock: { ...emptyFilters },
