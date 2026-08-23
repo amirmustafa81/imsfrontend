@@ -477,9 +477,12 @@ function IssuesReturnsContent() {
     const match = rows.find((row) => String(row.id) === String(value));
     if (!match) return String(value);
     if (source === "users") return String(match.name ?? value);
+    if (source === "departments") return formatDepartmentLabel(match);
 
     return `${match.code ?? match.project_code ?? match.id} - ${match.name ?? match.title ?? match.title_code ?? ""}`;
   };
+
+  const formatDepartmentLabel = (department: RowData): string => String(department.name ?? department.code ?? department.id);
 
   const loadRows = useCallback(async () => {
     if (!authReady) return;
@@ -1071,7 +1074,7 @@ function IssuesReturnsContent() {
     () =>
       lookups.departments.map((department) => ({
         value: String(department.id),
-        label: `${department.code ?? department.id} - ${department.name ?? ""}`.trim(),
+        label: formatDepartmentLabel(department),
         keywords: [department.code, department.name, department.department_type].filter(Boolean).join(" "),
       })),
     [lookups.departments],
@@ -2735,7 +2738,7 @@ function IssuesReturnsContent() {
                       <option value="">All departments</option>
                       {lookups.departments.map((department) => (
                         <option key={department.id} value={department.id}>
-                          {department.code}
+                          {formatDepartmentLabel(department)}
                         </option>
                       ))}
                     </select>
