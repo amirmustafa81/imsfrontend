@@ -221,6 +221,10 @@ function TagPrintLogContent() {
         return loadedAssets;
       }
 
+      if (fallbackAsset && (prefillAssetCode || prefillSuggestedTag)) {
+        return mergeAssetOptions(loadedAssets, [fallbackAsset]);
+      }
+
       try {
         if (prefillAssetId > 0) {
           const detailResponse = await api.get<{ data: AssetOption }>(`/assets/${prefillAssetId}`);
@@ -325,6 +329,13 @@ function TagPrintLogContent() {
       return;
     }
 
+    const hasUrlPrefill = prefillAssetId > 0 || Boolean(prefillAssetCode) || Boolean(prefillSuggestedTag);
+    if (hasUrlPrefill && !search.trim()) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -347,7 +358,7 @@ function TagPrintLogContent() {
     } finally {
       setLoading(false);
     }
-  }, [assetFilterId, authLoading, isAuthenticated, prefillAssetId, search]);
+  }, [assetFilterId, authLoading, isAuthenticated, prefillAssetCode, prefillAssetId, prefillSuggestedTag, search]);
 
   const applyPrefillFromQuery = useCallback(() => {
     if (prefillAssetId > 0) {
