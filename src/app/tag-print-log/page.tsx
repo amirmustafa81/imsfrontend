@@ -301,14 +301,15 @@ function TagPrintLogContent() {
     setError("");
 
     try {
+      const effectiveAssetFilterId = assetFilterId || (prefillAssetId > 0 ? prefillAssetId : 0);
       const response = await api.get<{ data: TagPrintLog[] }>(
         "/asset-tag-print-logs",
         {
-          params: assetFilterId
-            ? { asset_id: assetFilterId }
+          params: effectiveAssetFilterId
+            ? { asset_id: effectiveAssetFilterId, per_page: 50 }
             : search.trim()
-              ? { searchable_tag_id: search.trim() }
-              : undefined,
+              ? { searchable_tag_id: search.trim(), per_page: 50 }
+              : { per_page: 50 },
         },
       );
       setRows(response.data.data ?? []);
@@ -318,7 +319,7 @@ function TagPrintLogContent() {
     } finally {
       setLoading(false);
     }
-  }, [assetFilterId, authLoading, isAuthenticated, search]);
+  }, [assetFilterId, authLoading, isAuthenticated, prefillAssetId, search]);
 
   const applyPrefillFromQuery = useCallback(() => {
     if (prefillAssetId > 0) {
