@@ -108,6 +108,8 @@ const mergeAssetOptions = (baseAssets: AssetOption[], extraAssets: AssetOption[]
   return Array.from(merged.values());
 };
 
+const MAX_ASSET_OPTIONS = 100;
+
 export default function TagPrintLogPage() {
   return (
     <Suspense fallback={<main className="p-4 text-secondary">Loading tag print log...</main>}>
@@ -145,6 +147,16 @@ function TagPrintLogContent() {
     () => assets.find((asset) => String(asset.id) === form.asset_id) ?? null,
     [assets, form.asset_id],
   );
+  const visibleAssets = useMemo(() => {
+    const limitedAssets = assets.slice(0, MAX_ASSET_OPTIONS);
+
+    if (!form.asset_id || limitedAssets.some((asset) => String(asset.id) === form.asset_id)) {
+      return limitedAssets;
+    }
+
+    const selectedOption = assets.find((asset) => String(asset.id) === form.asset_id);
+    return selectedOption ? [...limitedAssets, selectedOption] : limitedAssets;
+  }, [assets, form.asset_id]);
   const suggestedTag = useMemo(() => {
     if (!selectedAsset) return "";
     return `${selectedAsset.asset_id || `FA-${selectedAsset.id}`}-TAG`;
@@ -202,7 +214,7 @@ function TagPrintLogContent() {
       const searchResponse = await api.get<{ data: AssetOption[] }>("/assets", {
         params: { search: searchValue },
       });
-      const searchedAssets = searchResponse.data.data ?? [];
+      const searchedAssets = (searchResponse.data.data ?? []).slice(0, MAX_ASSET_OPTIONS);
       const matchedAsset = searchedAssets.find((asset) => {
         if (prefillAssetId > 0 && asset.id === prefillAssetId) return true;
         if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
@@ -222,16 +234,23 @@ function TagPrintLogContent() {
 
     setLoadingAssets(true);
     try {
-      const response = await api.get<{ data: AssetOption[] }>("/assets");
-      const loadedAssets = response.data.data ?? [];
+      if (prefillAssetId > 0 || prefillAssetCode || prefillSuggestedTag) {
+        setAssets(await loadPrefillAsset([]));
+        return;
+      }
+
+      const response = await api.get<{ data: AssetOption[] }>("/assets", {
+        params: { per_page: MAX_ASSET_OPTIONS, limit: MAX_ASSET_OPTIONS },
+      });
+      const loadedAssets = (response.data.data ?? []).slice(0, MAX_ASSET_OPTIONS);
       const assetsWithPrefill = await loadPrefillAsset(loadedAssets);
-      setAssets(assetsWithPrefill);
+      setAssets(assetsWithPrefill.slice(0, MAX_ASSET_OPTIONS));
     } catch {
       setError("Unable to load asset list for tagging.");
     } finally {
       setLoadingAssets(false);
     }
-  }, [authLoading, isAuthenticated, loadPrefillAsset]);
+  }, [authLoading, isAuthenticated, loadPrefillAsset, prefillAssetCode, prefillAssetId, prefillSuggestedTag]);
 
   const loadRows = useCallback(async () => {
     if (authLoading || !isAuthenticated) {
@@ -644,7 +663,7 @@ function TagPrintLogContent() {
                       required
                     >
                       <option value="">{isInitialLoading ? "Loading assets..." : "Choose asset"}</option>
-                      {assets.map((asset) => (
+                      {visibleAssets.map((asset) => (
                         <option key={asset.id} value={asset.id}>
                           {asset.asset_id} — {asset.serial_number || "No serial"}
                         </option>
