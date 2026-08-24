@@ -11,7 +11,8 @@ import { DataTable, FieldLabel, FilterBar, PageHeader, StatusBadge } from "@/com
 type AssetOption = {
   id: number;
   asset_id: string;
-  serial_number: string;
+  serial_number: string | null;
+  printable_tag_id?: string | null;
   department?: {
     code?: string | null;
     name?: string | null;
@@ -100,6 +101,13 @@ const assetLocationLabel = (asset: AssetOption | null) => {
   return buildingRoom || store || department || "No location recorded";
 };
 
+const mergeAssetOptions = (baseAssets: AssetOption[], extraAssets: AssetOption[]) => {
+  const merged = new Map<number, AssetOption>();
+  baseAssets.forEach((asset) => merged.set(asset.id, asset));
+  extraAssets.forEach((asset) => merged.set(asset.id, asset));
+  return Array.from(merged.values());
+};
+
 export default function TagPrintLogPage() {
   return (
     <Suspense fallback={<main className="p-4 text-secondary">Loading tag print log...</main>}>
@@ -152,6 +160,58 @@ function TagPrintLogContent() {
   );
   const selectedAssetLocation = useMemo(() => assetLocationLabel(selectedAsset), [selectedAsset]);
 
+  const loadPrefillAsset = useCallback(
+    async (loadedAssets: AssetOption[]) => {
+      if (!prefillAssetId && !prefillAssetCode && !prefillSuggestedTag) {
+        return loadedAssets;
+      }
+
+      const alreadyLoaded = loadedAssets.some((asset) => {
+        if (prefillAssetId > 0 && asset.id === prefillAssetId) return true;
+        if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
+        if (prefillSuggestedTag && asset.printable_tag_id === prefillSuggestedTag) return true;
+        return false;
+      });
+
+      if (alreadyLoaded) {
+        return loadedAssets;
+      }
+
+      try {
+        if (prefillAssetId > 0) {
+          const detailResponse = await api.get<{ data: AssetOption }>(`/assets/${prefillAssetId}`);
+          const prefillAsset = detailResponse.data.data;
+
+          if (prefillAsset?.id) {
+            return mergeAssetOptions(loadedAssets, [prefillAsset]);
+          }
+        }
+      } catch {
+        // Search fallback supports deployments where asset detail is not exposed to this page.
+      }
+
+      const searchValue = prefillAssetCode || prefillSuggestedTag || (prefillAssetId > 0 ? String(prefillAssetId) : "");
+
+      if (!searchValue) {
+        return loadedAssets;
+      }
+
+      const searchResponse = await api.get<{ data: AssetOption[] }>("/assets", {
+        params: { search: searchValue },
+      });
+      const searchedAssets = searchResponse.data.data ?? [];
+      const matchedAsset = searchedAssets.find((asset) => {
+        if (prefillAssetId > 0 && asset.id === prefillAssetId) return true;
+        if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
+        if (prefillSuggestedTag && asset.printable_tag_id === prefillSuggestedTag) return true;
+        return false;
+      });
+
+      return mergeAssetOptions(loadedAssets, matchedAsset ? [matchedAsset] : searchedAssets);
+    },
+    [prefillAssetCode, prefillAssetId, prefillSuggestedTag],
+  );
+
   const loadLookups = useCallback(async () => {
     if (authLoading || !isAuthenticated) {
       return;
@@ -159,11 +219,13 @@ function TagPrintLogContent() {
 
     try {
       const response = await api.get<{ data: AssetOption[] }>("/assets");
-      setAssets(response.data.data ?? []);
+      const loadedAssets = response.data.data ?? [];
+      const assetsWithPrefill = await loadPrefillAsset(loadedAssets);
+      setAssets(assetsWithPrefill);
     } catch {
       setError("Unable to load asset list for tagging.");
     }
-  }, [authLoading, isAuthenticated]);
+  }, [authLoading, isAuthenticated, loadPrefillAsset]);
 
   const loadRows = useCallback(async () => {
     if (authLoading || !isAuthenticated) {

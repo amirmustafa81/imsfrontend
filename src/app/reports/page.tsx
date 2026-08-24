@@ -897,6 +897,7 @@ export default function ReportsPage() {
   const [exportArtifacts, setExportArtifacts] = useState<ExportArtifact[]>([]);
   const [message, setMessage] = useState("Load a report to begin.");
   const [error, setError] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
 
   const reportConfig = reportConfigs[activeReport];
   const currentFilters = filters[activeReport];
@@ -947,6 +948,10 @@ export default function ReportsPage() {
   const loadRows = useCallback(async () => {
     if (!authReady) return;
 
+    setReportLoading(true);
+    setError("");
+    setMessage(`Loading ${reportConfig.title}...`);
+
     try {
       const payload = buildFilterPayload(reportConfig, currentFilters);
       const response = await api.get(reportConfig.endpoint, { params: payload });
@@ -958,6 +963,8 @@ export default function ReportsPage() {
       setRows([]);
       setMessage("");
       setError("Failed to load report. Verify token and endpoint availability.");
+    } finally {
+      setReportLoading(false);
     }
   }, [authReady, currentFilters, reportConfig]);
 
@@ -1184,8 +1191,10 @@ export default function ReportsPage() {
               key={reportKey}
               type="button"
               onClick={() => {
+                setRows([]);
                 setActiveReport(reportKey);
                 setError("");
+                setMessage(`Loading ${reportConfigs[reportKey].title}...`);
               }}
             >
               <i className="bi bi-bar-chart-line me-1" />
@@ -1199,7 +1208,11 @@ export default function ReportsPage() {
             <i className="bi bi-graph-up me-2" />
             {reportConfig.title}
           </div>
-          {(message || error) && <small className={error ? "text-danger" : "text-success"}>{error || message}</small>}
+          {(message || error || reportLoading) && (
+            <small className={error ? "text-danger" : reportLoading ? "text-primary" : "text-success"}>
+              {error || (reportLoading ? `Loading ${reportConfig.title}...` : message)}
+            </small>
+          )}
         </div>
 
         <FilterBar onReset={resetFilters}>
@@ -1273,7 +1286,17 @@ export default function ReportsPage() {
 
         <div className="row g-3">
           <div className="col-12">
-            <DataTable columns={tableColumns} rows={rows} empty="No rows found." />
+            {reportLoading ? (
+              <div className="card shadow-sm">
+                <div className="card-body py-5 text-center text-secondary">
+                  <div className="spinner-border text-primary mb-3" role="status" aria-hidden="true" />
+                  <div className="fw-semibold">Loading report...</div>
+                  <div className="small">{reportConfig.title}</div>
+                </div>
+              </div>
+            ) : (
+              <DataTable columns={tableColumns} rows={rows} empty="No rows found." />
+            )}
           </div>
           <div className="col-12">
             <FileAttachmentList files={exportArtifacts} />
