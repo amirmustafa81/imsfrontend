@@ -84,6 +84,8 @@ const normalizePrintFormat = (format: string | null | undefined): NormalizedPrin
   return "QR";
 };
 
+const svgToDataUrl = (svgMarkup: string) => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgMarkup)}`;
+
 const relationLabel = (relation?: { code?: string | null; name?: string | null } | null, fallback?: string | null) =>
   relation?.name || relation?.code || fallback || "";
 
@@ -403,8 +405,23 @@ function TagPrintLogContent() {
       .then((dataUrl) => {
         if (isMounted) setQrDataUrl(dataUrl);
       })
-      .catch(() => {
-        if (isMounted) setQrDataUrl("");
+      .catch(async () => {
+        try {
+          const svgMarkup = await QRCode.toString(qrValue, {
+            type: "svg",
+            errorCorrectionLevel: "M",
+            margin: 2,
+            width: 192,
+            color: {
+              dark: "#20242a",
+              light: "#ffffff",
+            },
+          });
+
+          if (isMounted) setQrDataUrl(svgToDataUrl(svgMarkup));
+        } catch {
+          if (isMounted) setQrDataUrl("");
+        }
       });
 
     return () => {
