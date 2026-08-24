@@ -138,6 +138,13 @@ export default function TagPrintLogPage() {
 function TagPrintLogContent() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
+  const prefillAssetId = Number(searchParams.get("asset_id") ?? "");
+  const prefillAssetCode = searchParams.get("asset_code") || "";
+  const prefillSuggestedTag = searchParams.get("suggested_tag") || "";
+  const prefillFallbackAsset = useMemo(
+    () => createPrefillFallbackAsset(prefillAssetId, prefillAssetCode, prefillSuggestedTag),
+    [prefillAssetCode, prefillAssetId, prefillSuggestedTag],
+  );
 
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const [rows, setRows] = useState<TagPrintLog[]>([]);
@@ -149,31 +156,31 @@ function TagPrintLogContent() {
   const [deletingLogId, setDeletingLogId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [form, setForm] = useState<TagPrintForm>({
-    asset_id: "",
-    printable_tag_id: "",
+    asset_id: prefillAssetId > 0 ? String(prefillAssetId) : "",
+    printable_tag_id: prefillSuggestedTag,
     print_format: "",
-    remarks: "",
+    remarks: prefillAssetCode ? `Tag print entry for ${prefillAssetCode}` : "",
   });
   const [message, setMessage] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState("");
 
-  const prefillAssetId = useMemo(() => Number(searchParams.get("asset_id") ?? ""), [searchParams]);
-  const prefillAssetCode = searchParams.get("asset_code") || "";
-  const prefillSuggestedTag = searchParams.get("suggested_tag") || "";
   const selectedAsset = useMemo(
-    () => assets.find((asset) => String(asset.id) === form.asset_id) ?? null,
-    [assets, form.asset_id],
+    () =>
+      assets.find((asset) => String(asset.id) === form.asset_id) ??
+      (prefillFallbackAsset && form.asset_id === String(prefillFallbackAsset.id) ? prefillFallbackAsset : null),
+    [assets, form.asset_id, prefillFallbackAsset],
   );
   const visibleAssets = useMemo(() => {
-    const limitedAssets = assets.slice(0, MAX_ASSET_OPTIONS);
+    const sourceAssets = prefillFallbackAsset ? mergeAssetOptions(assets, [prefillFallbackAsset]) : assets;
+    const limitedAssets = sourceAssets.slice(0, MAX_ASSET_OPTIONS);
 
     if (!form.asset_id || limitedAssets.some((asset) => String(asset.id) === form.asset_id)) {
       return limitedAssets;
     }
 
-    const selectedOption = assets.find((asset) => String(asset.id) === form.asset_id);
+    const selectedOption = sourceAssets.find((asset) => String(asset.id) === form.asset_id);
     return selectedOption ? [...limitedAssets, selectedOption] : limitedAssets;
-  }, [assets, form.asset_id]);
+  }, [assets, form.asset_id, prefillFallbackAsset]);
   const suggestedTag = useMemo(() => {
     if (!selectedAsset) return "";
     return `${selectedAsset.asset_id || `FA-${selectedAsset.id}`}-TAG`;
@@ -323,12 +330,21 @@ function TagPrintLogContent() {
       setForm((current) => {
         const nextAssetId = matchedAsset?.id ? String(matchedAsset.id) : String(prefillAssetId);
         const nextPrintableTagId = prefillSuggestedTag || current.printable_tag_id;
+        const nextRemarks = current.remarks || `Tag print entry for ${matchedAsset?.asset_id || prefillAssetCode || nextAssetId}`;
+
+        if (
+          current.asset_id === nextAssetId &&
+          current.printable_tag_id === nextPrintableTagId &&
+          current.remarks === nextRemarks
+        ) {
+          return current;
+        }
 
         return {
           ...current,
           asset_id: nextAssetId,
           printable_tag_id: nextPrintableTagId,
-          remarks: current.remarks || (matchedAsset ? `Tag print entry for ${matchedAsset.asset_id}` : current.remarks),
+          remarks: nextRemarks,
         };
       });
 
@@ -619,7 +635,8 @@ function TagPrintLogContent() {
     setError("");
     setMessage("");
 
-    if (!assets.some((asset) => String(asset.id) === form.asset_id)) {
+    const isUrlPrefilledAsset = prefillAssetId > 0 && form.asset_id === String(prefillAssetId);
+    if (!assets.some((asset) => String(asset.id) === form.asset_id) && !isUrlPrefilledAsset) {
       setError("Please choose a valid asset before saving the print log.");
       return;
     }
