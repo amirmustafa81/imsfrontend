@@ -83,6 +83,8 @@ type QuickItemForm = {
 
 type Transaction = {
   id: number;
+  source_type?: "inventory_transaction" | "old_stock_issue_history";
+  legacy_history_id?: number | null;
   transaction_no: string;
   transaction_type: TransactionType;
   transaction_date: string;
@@ -105,6 +107,11 @@ type Transaction = {
   remarks: string | null;
   posted_at: string | null;
   created_at: string;
+  legacy_to_department_name?: string | null;
+  legacy_to_building_name?: string | null;
+  legacy_to_room_name?: string | null;
+  legacy_recipient_name?: string | null;
+  items?: TransactionItem[];
 };
 
 type TransactionItem = {
@@ -115,6 +122,8 @@ type TransactionItem = {
   quantity: number;
   unit_cost: number | null;
   remarks: string | null;
+  item_label?: string | null;
+  asset_label?: string | null;
 };
 
 type TransactionItemInput = {
@@ -483,6 +492,14 @@ function IssuesReturnsContent() {
   };
 
   const formatDepartmentLabel = (department: RowData): string => String(department.name ?? department.code ?? department.id);
+
+  const isLegacyTransaction = (transaction: Transaction): boolean => transaction.source_type === "old_stock_issue_history";
+
+  const displayDepartment = (departmentId: number | null, fallback?: string | null): string =>
+    departmentId ? lookupLabel("departments", departmentId) : fallback || "-";
+
+  const displayLookup = (source: LookupKey, value: number | null, fallback?: string | null): string =>
+    value ? lookupLabel(source, value) : fallback || "-";
 
   const loadRows = useCallback(async () => {
     if (!authReady) return;
@@ -1520,6 +1537,15 @@ function IssuesReturnsContent() {
   const loadItems = async (transactionId: number) => {
     if (expandedItems[transactionId]) return;
 
+    const legacyTransaction = rows.find((row) => row.id === transactionId && isLegacyTransaction(row));
+    if (legacyTransaction) {
+      setExpandedItems((prev) => ({
+        ...prev,
+        [transactionId]: Array.isArray(legacyTransaction.items) ? legacyTransaction.items : [],
+      }));
+      return;
+    }
+
     setExpandedLoading((prev) => ({ ...prev, [transactionId]: true }));
     try {
       const response = await api.get(`/inventory-transactions/${transactionId}`);
@@ -1539,6 +1565,11 @@ function IssuesReturnsContent() {
   };
 
   const fetchTransactionItems = async (transactionId: number): Promise<TransactionItem[]> => {
+    const legacyTransaction = rows.find((row) => row.id === transactionId && isLegacyTransaction(row));
+    if (legacyTransaction) {
+      return Array.isArray(legacyTransaction.items) ? legacyTransaction.items : [];
+    }
+
     const response = await api.get(`/inventory-transactions/${transactionId}`);
     const data = response.data?.data ?? response.data?.transaction;
     const itemRows = response.data?.items ?? data?.items;
@@ -1551,31 +1582,33 @@ function IssuesReturnsContent() {
       setExpandedItems((prev) => ({ ...prev, [transaction.id]: itemRows }));
 
       const printed = printTransactionDocument<TransactionItem>({
-        title: `${toTransactionTypeLabel(transaction.transaction_type)} Voucher`,
-        subtitle: "Inventory movement voucher for stock issue, return, transfer, consumption, or adjustment.",
+        title: `${isLegacyTransaction(transaction) ? "Legacy Issue" : toTransactionTypeLabel(transaction.transaction_type)} Voucher`,
+        subtitle: isLegacyTransaction(transaction)
+          ? "Read-only issue imported from the old stock register."
+          : "Inventory movement voucher for stock issue, return, transfer, consumption, or adjustment.",
         reference: transaction.transaction_no,
         status: transaction.status,
         meta: [
           { label: "Voucher No", value: transaction.transaction_no },
-          { label: "Type", value: toTransactionTypeLabel(transaction.transaction_type) },
+          { label: "Type", value: isLegacyTransaction(transaction) ? "Legacy Issue" : toTransactionTypeLabel(transaction.transaction_type) },
           { label: "Date", value: transaction.transaction_date },
-          { label: "From Department", value: lookupLabel("departments", transaction.from_department_id) },
+          { label: "From Department", value: displayDepartment(transaction.from_department_id) },
           { label: "From Store", value: lookupLabel("stores", transaction.from_store_id) },
-          { label: "To Department", value: lookupLabel("departments", transaction.to_department_id) },
+          { label: "To Department", value: displayDepartment(transaction.to_department_id, transaction.legacy_to_department_name) },
           { label: "To Store", value: lookupLabel("stores", transaction.to_store_id) },
-          { label: "To Building", value: lookupLabel("buildings", transaction.to_building_id) },
-          { label: "To Room", value: lookupLabel("rooms", transaction.to_room_id) },
+          { label: "To Building", value: displayLookup("buildings", transaction.to_building_id, transaction.legacy_to_building_name) },
+          { label: "To Room", value: displayLookup("rooms", transaction.to_room_id, transaction.legacy_to_room_name) },
           {
             label: transaction.transaction_type === "return" ? "Returned By Employee" : "Issued To / Recipient",
-            value: lookupLabel("users", transaction.recipient_user_id),
+            value: displayLookup("users", transaction.recipient_user_id, transaction.legacy_recipient_name),
           },
           { label: "Funding Source", value: lookupLabel("funding-sources", transaction.funding_source_id) },
           { label: "Research Project", value: lookupLabel("research-projects", transaction.project_id) },
           { label: "Posted At", value: transaction.posted_at },
         ],
         columns: [
-          { header: "Item", render: (item) => lookupLabel("items", item.item_id) },
-          { header: "Asset", render: (item) => item.asset_id ? `#${item.asset_id}` : "-" },
+          { header: "Item", render: (item) => item.item_label ?? lookupLabel("items", item.item_id) },
+          { header: "Asset", render: (item) => item.asset_label ?? (item.asset_id ? `#${item.asset_id}` : "-") },
           { header: "Quantity", render: (item) => item.quantity },
           { header: "Unit Cost", render: (item) => item.unit_cost },
           { header: "Total", render: (item) => item.unit_cost === null ? null : Number(item.quantity) * Number(item.unit_cost) },
@@ -1917,9 +1950,14 @@ function IssuesReturnsContent() {
         <>
           <div className="d-flex align-items-center gap-2">
             <i className="bi bi-receipt text-primary" />
-            <Link className="fw-semibold" href={`/issues-returns/${row.id}`}>
-            {row.transaction_no}
-            </Link>
+            {isLegacyTransaction(row) ? (
+              <span className="fw-semibold">{row.transaction_no}</span>
+            ) : (
+              <Link className="fw-semibold" href={`/issues-returns/${row.id}`}>
+                {row.transaction_no}
+              </Link>
+            )}
+            {isLegacyTransaction(row) ? <span className="badge bg-secondary-subtle text-secondary">Legacy</span> : null}
           </div>
           <div className="small text-secondary">{row.purpose ?? "-"}</div>
         </>
@@ -1928,7 +1966,7 @@ function IssuesReturnsContent() {
     {
       key: "type",
       header: "Type",
-      render: (row: Transaction) => <StatusBadge status={toTransactionTypeLabel(row.transaction_type)} />,
+      render: (row: Transaction) => <StatusBadge status={isLegacyTransaction(row) ? "Legacy Issue" : toTransactionTypeLabel(row.transaction_type)} />,
     },
     { key: "transaction_date", header: "Date", render: (row: Transaction) => row.transaction_date },
     {
@@ -1937,15 +1975,21 @@ function IssuesReturnsContent() {
       render: (row: Transaction) => (
         <div className="small">
           <div>
-            <strong>From:</strong> {lookupLabel("departments", row.from_department_id)} / {lookupLabel("stores", row.from_store_id)}
+            <strong>From:</strong> {displayDepartment(row.from_department_id)} / {lookupLabel("stores", row.from_store_id)}
           </div>
           <div>
-            <strong>To:</strong> {lookupLabel("departments", row.to_department_id)} / {lookupLabel("stores", row.to_store_id)}
+            <strong>To:</strong> {displayDepartment(row.to_department_id, row.legacy_to_department_name)} / {lookupLabel("stores", row.to_store_id)}
           </div>
-          {row.recipient_user_id ? (
+          {row.to_building_id || row.to_room_id || row.legacy_to_building_name || row.legacy_to_room_name ? (
+            <div>
+              <strong>Location:</strong> {displayLookup("buildings", row.to_building_id, row.legacy_to_building_name)} /{" "}
+              {displayLookup("rooms", row.to_room_id, row.legacy_to_room_name)}
+            </div>
+          ) : null}
+          {row.recipient_user_id || row.legacy_recipient_name ? (
             <div>
               <strong>{row.transaction_type === "return" ? "Returned by" : "Employee"}:</strong>{" "}
-              {lookupLabel("users", row.recipient_user_id)}
+              {displayLookup("users", row.recipient_user_id, row.legacy_recipient_name)}
             </div>
           ) : null}
         </div>
@@ -1987,8 +2031,8 @@ function IssuesReturnsContent() {
   ];
 
   const expandedItemColumns = [
-    { key: "item", header: "Item", render: (item: TransactionItem) => lookupLabel("items", item.item_id) },
-    { key: "asset", header: "Asset", render: (item: TransactionItem) => item.asset_id ?? "-" },
+    { key: "item", header: "Item", render: (item: TransactionItem) => item.item_label ?? lookupLabel("items", item.item_id) },
+    { key: "asset", header: "Asset", render: (item: TransactionItem) => item.asset_label ?? item.asset_id ?? "-" },
     { key: "qty", header: "Qty", render: (item: TransactionItem) => item.quantity },
     { key: "unitCost", header: "Unit Cost", render: (item: TransactionItem) => item.unit_cost ?? "-" },
     { key: "remarks", header: "Remarks", render: (item: TransactionItem) => item.remarks ?? "-" },
