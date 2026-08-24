@@ -151,6 +151,7 @@ function TagPrintLogContent() {
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const [rows, setRows] = useState<TagPrintLog[]>([]);
   const [search, setSearch] = useState("");
+  const [assetSearch, setAssetSearch] = useState("");
   const [assetFilterId, setAssetFilterId] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
@@ -272,25 +273,52 @@ function TagPrintLogContent() {
       return;
     }
 
+    if (!prefillAssetId && !prefillAssetCode && !prefillSuggestedTag) {
+      setAssets([]);
+      return;
+    }
+
     setLoadingAssets(true);
     try {
-      if (prefillAssetId > 0 || prefillAssetCode || prefillSuggestedTag) {
-        setAssets(await loadPrefillAsset([]));
-        return;
-      }
-
-      const response = await api.get<{ data: AssetOption[] }>("/assets", {
-        params: { per_page: MAX_ASSET_OPTIONS, limit: MAX_ASSET_OPTIONS },
-      });
-      const loadedAssets = (response.data.data ?? []).slice(0, MAX_ASSET_OPTIONS);
-      const assetsWithPrefill = await loadPrefillAsset(loadedAssets);
-      setAssets(assetsWithPrefill.slice(0, MAX_ASSET_OPTIONS));
+      setAssets(await loadPrefillAsset([]));
     } catch {
       setError("Unable to load asset list for tagging.");
     } finally {
       setLoadingAssets(false);
     }
   }, [authLoading, isAuthenticated, loadPrefillAsset, prefillAssetCode, prefillAssetId, prefillSuggestedTag]);
+
+  const searchAssetOptions = useCallback(async () => {
+    if (authLoading || !isAuthenticated) {
+      setError("Please log in before searching assets.");
+      return;
+    }
+
+    const query = assetSearch.trim();
+    if (!query) {
+      setError("Enter an asset code, tag, or serial number to search.");
+      return;
+    }
+
+    setLoadingAssets(true);
+    setError("");
+
+    try {
+      const response = await api.get<{ data: AssetOption[] }>("/assets", {
+        params: { search: query, per_page: MAX_ASSET_OPTIONS, limit: MAX_ASSET_OPTIONS },
+      });
+      const nextAssets = (response.data.data ?? []).slice(0, MAX_ASSET_OPTIONS);
+      setAssets((currentAssets) => mergeAssetOptions(currentAssets, nextAssets).slice(0, MAX_ASSET_OPTIONS));
+
+      if (nextAssets.length === 0) {
+        setError("No assets found for that search.");
+      }
+    } catch {
+      setError("Unable to search assets.");
+    } finally {
+      setLoadingAssets(false);
+    }
+  }, [assetSearch, authLoading, isAuthenticated]);
 
   const loadRows = useCallback(async () => {
     if (authLoading || !isAuthenticated) {
@@ -726,6 +754,29 @@ function TagPrintLogContent() {
                 <form className="row g-3" onSubmit={saveLog}>
                   <div className="col-12">
                     <FieldLabel className="mb-1" info={tagPrintFieldInfo.asset}>Asset</FieldLabel>
+                    <div className="input-group input-group-sm mb-2">
+                      <input
+                        className="form-control"
+                        value={assetSearch}
+                        onChange={(event) => setAssetSearch(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void searchAssetOptions();
+                          }
+                        }}
+                        placeholder="Search asset code, tag, or serial"
+                        disabled={isInitialLoading}
+                      />
+                      <button
+                        className="btn btn-outline-secondary"
+                        type="button"
+                        disabled={isInitialLoading || !assetSearch.trim()}
+                        onClick={() => void searchAssetOptions()}
+                      >
+                        Search
+                      </button>
+                    </div>
                     <select
                       className="form-select form-select-sm"
                       value={form.asset_id}
@@ -733,7 +784,13 @@ function TagPrintLogContent() {
                       disabled={isInitialLoading}
                       required
                     >
-                      <option value="">{isInitialLoading ? "Loading assets..." : "Choose asset"}</option>
+                      <option value="">
+                        {isInitialLoading
+                          ? "Loading assets..."
+                          : visibleAssets.length > 0
+                            ? "Choose asset"
+                            : "Search asset to choose"}
+                      </option>
                       {visibleAssets.map((asset) => (
                         <option key={asset.id} value={asset.id}>
                           {asset.asset_id} — {asset.serial_number || "No serial"}
