@@ -536,7 +536,7 @@ function IssuesReturnsContent() {
     try {
       const response = await api.get("/inventory-transactions", { params });
       const data = response.data?.data;
-      setRows(Array.isArray(data) ? data : []);
+      setRows(Array.isArray(data) ? data.filter((row) => !isLegacyTransaction(row)) : []);
       setError("");
     } catch {
       setRows([]);
