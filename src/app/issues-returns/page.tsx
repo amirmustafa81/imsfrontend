@@ -13,6 +13,7 @@ import {
   FieldLabel,
   FilterBar,
   PageHeader,
+  PaginationControls,
   SearchableSelect,
   StatusBadge,
   type SearchableSelectOption,
@@ -216,6 +217,8 @@ const sponsorTypeOptions: SearchableSelectOption[] = [
   { value: "international", label: "International" },
   { value: "other", label: "Other" },
 ];
+
+const DEFAULT_PAGE_SIZE = 25;
 
 const itemTypeOptions: SearchableSelectOption[] = [
   { value: "consumable", label: "Consumable" },
@@ -425,6 +428,8 @@ function IssuesReturnsContent() {
   const [typeFilter, setTypeFilter] = useState<TransactionType | "">("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [storeFilter, setStoreFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [form, setForm] = useState<TransactionForm>(defaultForm);
   const [items, setItems] = useState<TransactionItemInput[]>([emptyItem]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -546,6 +551,11 @@ function IssuesReturnsContent() {
       await loadRows();
     })();
   }, [loadRows]);
+
+  useEffect(() => {
+    setPage(1);
+    setExpandedId(null);
+  }, [search, statusFilter, typeFilter, departmentFilter, storeFilter, assetIdFilter]);
 
   useEffect(() => {
     if (!authReady) return;
@@ -2090,6 +2100,17 @@ function IssuesReturnsContent() {
     { key: "remarks", header: "Remarks", render: (item: TransactionItem) => item.remarks ?? "-" },
   ];
 
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [currentPage, pageSize, rows]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
@@ -2872,7 +2893,23 @@ function IssuesReturnsContent() {
           ) : rows.length === 0 ? (
             <EmptyState title="No transactions found" message="No records match the current filters." icon="bi-receipt" />
           ) : (
-            <DataTable columns={transactionColumns} rows={rows} />
+            <>
+              <DataTable columns={transactionColumns} rows={paginatedRows} />
+              <PaginationControls
+                page={currentPage}
+                pageSize={pageSize}
+                totalItems={rows.length}
+                onPageChange={(nextPage) => {
+                  setPage(nextPage);
+                  setExpandedId(null);
+                }}
+                onPageSizeChange={(nextPageSize) => {
+                  setPageSize(nextPageSize);
+                  setPage(1);
+                  setExpandedId(null);
+                }}
+              />
+            </>
           )}
 
           {expandedId && (

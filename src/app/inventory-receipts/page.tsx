@@ -12,6 +12,7 @@ import {
   FieldLabel,
   FilterBar,
   PageHeader,
+  PaginationControls,
   SearchableSelect,
   StatusBadge,
   type SearchableSelectOption,
@@ -474,6 +475,7 @@ const toLookupOption = (row: RowData): SearchableSelectOption => ({
 
 const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 50 * 1024 * 1024;
+const DEFAULT_PAGE_SIZE = 25;
 
 const defaultForm: ReceiptForm = {
   receipt_no: "",
@@ -514,6 +516,8 @@ export default function InventoryReceiptsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [storeFilter, setStoreFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [currency, setCurrency] = useState("PKR");
   const [form, setForm] = useState<ReceiptForm>(defaultForm);
   const [approvalReference, setApprovalReference] = useState<ApprovalReferenceState>({
@@ -786,6 +790,11 @@ export default function InventoryReceiptsPage() {
 
     void loadRows();
   }, [search, statusFilter, storeFilter, departmentFilter, authReady]);
+
+  useEffect(() => {
+    setPage(1);
+    setExpandedId(null);
+  }, [search, statusFilter, storeFilter, departmentFilter]);
 
   useEffect(() => {
     if (!authReady) {
@@ -1915,6 +1924,17 @@ export default function InventoryReceiptsPage() {
     );
   };
 
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [currentPage, pageSize, rows]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
@@ -2748,7 +2768,21 @@ export default function InventoryReceiptsPage() {
                           ),
                         },
                       ]}
-                      rows={rows as never}
+                      rows={paginatedRows as never}
+                    />
+                    <PaginationControls
+                      page={currentPage}
+                      pageSize={pageSize}
+                      totalItems={rows.length}
+                      onPageChange={(nextPage) => {
+                        setPage(nextPage);
+                        setExpandedId(null);
+                      }}
+                      onPageSizeChange={(nextPageSize) => {
+                        setPageSize(nextPageSize);
+                        setPage(1);
+                        setExpandedId(null);
+                      }}
                     />
 
                     {expandedId && expandedItems[expandedId] ? (

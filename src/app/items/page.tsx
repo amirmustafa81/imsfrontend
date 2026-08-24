@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AttributeFields, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
-import { DataTable, FieldLabel, FilterBar, PageHeader, SearchableSelect, StatusBadge, type SearchableSelectOption } from "@/components/ims";
+import { DataTable, FieldLabel, FilterBar, PageHeader, PaginationControls, SearchableSelect, StatusBadge, type SearchableSelectOption } from "@/components/ims";
 
 type ItemType =
   | "consumable"
@@ -101,6 +101,8 @@ const statusOptions = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
+
+const DEFAULT_PAGE_SIZE = 25;
 
 const itemTypeLabelMap: Record<ItemType, string> = {
   consumable: "Consumable",
@@ -201,6 +203,8 @@ export default function ItemsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Load data to begin.");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -289,6 +293,10 @@ export default function ItemsPage() {
 
     void reloadLookups();
   }, [loadLookups]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, typeFilter, statusFilter]);
 
   const resetFilters = () => {
     setSearch("");
@@ -579,6 +587,17 @@ export default function ItemsPage() {
     return rows.filter((row) => row.item_type === normalizedType);
   }, [rows, typeFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [currentPage, filteredRows, pageSize]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
   const columns = [
     { key: "item_code", header: "Code" },
     { key: "name", header: "Name" },
@@ -789,7 +808,17 @@ export default function ItemsPage() {
           {loading ? <span className="small text-secondary">Loading…</span> : null}
         </div>
 
-        <DataTable columns={columns} rows={filteredRows} empty="No items found." />
+        <DataTable columns={columns} rows={paginatedRows} empty="No items found." />
+        <PaginationControls
+          page={currentPage}
+          pageSize={pageSize}
+          totalItems={filteredRows.length}
+          onPageChange={setPage}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setPage(1);
+          }}
+        />
 
         {dialogOpen ? (
           <>

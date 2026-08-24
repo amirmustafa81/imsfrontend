@@ -209,6 +209,124 @@ export function FilterBar({ children, onReset }: { children: ReactNode; onReset?
   );
 }
 
+const DEFAULT_PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+export function PaginationControls({
+  page,
+  pageSize,
+  totalItems,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
+}: {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  pageSizeOptions?: number[];
+}) {
+  if (totalItems <= 0) {
+    return null;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const currentPage = Math.min(Math.max(page, 1), totalPages);
+  const startItem = (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+  const firstPage = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+  const lastPage = Math.min(totalPages, firstPage + 4);
+  const visiblePages = Array.from({ length: lastPage - firstPage + 1 }, (_, index) => firstPage + index);
+
+  return (
+    <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mt-3">
+      <div className="small text-secondary">
+        Showing {startItem.toLocaleString()}-{endItem.toLocaleString()} of {totalItems.toLocaleString()}
+      </div>
+
+      <div className="d-flex flex-wrap align-items-center gap-2">
+        <label className="small text-secondary mb-0" htmlFor="pagination-page-size">
+          Rows per page
+        </label>
+        <select
+          id="pagination-page-size"
+          className="form-select form-select-sm"
+          style={{ width: 88 }}
+          value={pageSize}
+          onChange={(event) => onPageSizeChange(Number(event.target.value))}
+        >
+          {pageSizeOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+
+        <nav aria-label="Table pagination">
+          <ul className="pagination pagination-sm mb-0">
+            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                type="button"
+                onClick={() => onPageChange(1)}
+                disabled={currentPage === 1}
+                aria-label="First page"
+              >
+                <i className="bi bi-chevron-double-left" />
+              </button>
+            </li>
+            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                type="button"
+                onClick={() => onPageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                aria-label="Previous page"
+              >
+                <i className="bi bi-chevron-left" />
+              </button>
+            </li>
+            {visiblePages.map((visiblePage) => (
+              <li className={`page-item ${visiblePage === currentPage ? "active" : ""}`} key={visiblePage}>
+                <button
+                  className="page-link"
+                  type="button"
+                  onClick={() => onPageChange(visiblePage)}
+                  aria-current={visiblePage === currentPage ? "page" : undefined}
+                >
+                  {visiblePage}
+                </button>
+              </li>
+            ))}
+            <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                type="button"
+                onClick={() => onPageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                aria-label="Next page"
+              >
+                <i className="bi bi-chevron-right" />
+              </button>
+            </li>
+            <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                type="button"
+                onClick={() => onPageChange(totalPages)}
+                disabled={currentPage === totalPages}
+                aria-label="Last page"
+              >
+                <i className="bi bi-chevron-double-right" />
+              </button>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+  );
+}
+
 export function DataTable<T extends Record<string, unknown>>({
   columns,
   rows,

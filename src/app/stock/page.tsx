@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, FilterBar, PageHeader, PaginationControls, StatusBadge } from "@/components/ims";
 
 type Lookup = {
   id: number;
@@ -56,6 +56,8 @@ const reportEndpoints: Record<"stock_balance" | "low_stock", string> = {
   low_stock: "low-stock",
 };
 
+const DEFAULT_PAGE_SIZE = 25;
+
 const unwrapRows = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) {
     return payload as T[];
@@ -86,6 +88,8 @@ export default function StockPage() {
   const [departments, setDepartments] = useState<Lookup[]>([]);
   const [stores, setStores] = useState<Lookup[]>([]);
   const [projects, setProjects] = useState<Lookup[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
@@ -166,11 +170,26 @@ export default function StockPage() {
     void loadReportRows();
   }, [loadReportRows]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [filter, reportType]);
+
   const totalRows = useMemo(() => {
     const availableTotal = rows.reduce((sum, row) => sum + Number(row.available_quantity || 0), 0);
     const onHandTotal = rows.reduce((sum, row) => sum + Number(row.quantity_on_hand || 0), 0);
     return { availableTotal, onHandTotal, count: rows.length };
   }, [rows]);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [currentPage, pageSize, rows]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   return (
     <main className="min-vh-100 bg-body-tertiary">
@@ -306,13 +325,23 @@ export default function StockPage() {
                   { key: "status", header: "Status", render: (row: StockRow) => <StatusBadge status={row.status || "Active"} /> },
                 ]
           }
-          rows={rows}
+          rows={paginatedRows}
           empty={
             reportType === "stock_balance"
               ? "No stock balance rows match current filters."
               : "No low-stock rows match current filters."
           }
           rowClassName={() => ""}
+        />
+        <PaginationControls
+          page={currentPage}
+          pageSize={pageSize}
+          totalItems={rows.length}
+          onPageChange={setPage}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setPage(1);
+          }}
         />
 
         {!isAuthenticated || authLoading ? (
