@@ -430,6 +430,7 @@ function IssuesReturnsContent() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<number, TransactionItem[]>>({});
   const [expandedLoading, setExpandedLoading] = useState<Record<number, boolean>>({});
+  const [listLoading, setListLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -518,6 +519,7 @@ function IssuesReturnsContent() {
   const loadRows = useCallback(async () => {
     if (!authReady) return;
 
+    setListLoading(true);
     const params: Record<string, string> = {};
     if (search.trim()) params.search = search.trim();
     if (statusFilter) params.status = statusFilter;
@@ -534,6 +536,8 @@ function IssuesReturnsContent() {
     } catch {
       setRows([]);
       setError("Unable to load transactions.");
+    } finally {
+      setListLoading(false);
     }
   }, [authReady, search, statusFilter, typeFilter, departmentFilter, storeFilter, assetIdFilter]);
 
@@ -2852,10 +2856,20 @@ function IssuesReturnsContent() {
 
           <div className="d-flex justify-content-between align-items-center mb-2">
             <h2 className="h6 fw-semibold mb-0">Transaction list</h2>
-            <span className="small text-secondary">{rows.length} record{rows.length === 1 ? "" : "s"}</span>
+            <span className={listLoading ? "small text-primary" : "small text-secondary"}>
+              {listLoading ? "Loading transactions..." : `${rows.length} record${rows.length === 1 ? "" : "s"}`}
+            </span>
           </div>
 
-          {rows.length === 0 ? (
+          {listLoading ? (
+            <div className="card shadow-sm">
+              <div className="card-body py-5 text-center text-secondary">
+                <div className="spinner-border text-primary mb-3" role="status" aria-hidden="true" />
+                <div className="fw-semibold">Loading transaction list...</div>
+                <div className="small">Fetching issue, return, transfer, adjustment, and legacy issue records.</div>
+              </div>
+            </div>
+          ) : rows.length === 0 ? (
             <EmptyState title="No transactions found" message="No records match the current filters." icon="bi-receipt" />
           ) : (
             <DataTable columns={transactionColumns} rows={rows} />
