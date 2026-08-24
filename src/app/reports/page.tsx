@@ -117,6 +117,8 @@ const escapeHtml = (value: string) =>
 
 const svgToDataUrl = (svgMarkup: string) => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgMarkup)}`;
 
+const tagRowKey = (row: RowData) => String(row.id);
+
 const buildReportTagPrintPreview = (row: RowData): TagPrintPreview | null => {
   const assetRecordId = row.asset_record_id;
   const printableTag = textValue(row.printable_tag_id);
@@ -135,6 +137,134 @@ const buildReportTagPrintPreview = (row: RowData): TagPrintPreview | null => {
     serialNumber: textValue(row.serial_number) || "No serial recorded",
     location: buildingRoom || department || "No location recorded",
   };
+};
+
+const buildTagQrPayload = (preview: TagPrintPreview) => {
+  if (typeof window === "undefined") return preview.printableTag;
+  return new URL(`/assets/${preview.assetId}`, window.location.origin).toString();
+};
+
+const generateQrDataUrl = async (value: string): Promise<string> => {
+  try {
+    return await QRCode.toDataURL(value, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      scale: 8,
+      color: {
+        dark: "#20242a",
+        light: "#ffffff",
+      },
+    });
+  } catch {
+    const svgMarkup = await QRCode.toString(value, {
+      type: "svg",
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 192,
+      color: {
+        dark: "#20242a",
+        light: "#ffffff",
+      },
+    });
+
+    return svgToDataUrl(svgMarkup);
+  }
+};
+
+const buildPrintableTagHtml = (tags: Array<TagPrintPreview & { qrDataUrl: string }>) => {
+  const labels = tags.map((tag) => {
+    const qrImageMarkup = tag.qrDataUrl
+      ? `<img src="${escapeHtml(tag.qrDataUrl)}" alt="QR code for ${escapeHtml(tag.printableTag)}" />`
+      : `<span class="unavailable">QR unavailable</span>`;
+
+    return `
+      <div class="label">
+        <div class="qr">${qrImageMarkup}</div>
+        <div class="text">
+          <div class="tag">${escapeHtml(tag.printableTag)}</div>
+          <div class="meta">${escapeHtml(tag.assetCode || "No asset selected")}</div>
+          <div class="meta">${escapeHtml(tag.serialNumber)}</div>
+          <div class="meta">${escapeHtml(tag.location)}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <title>IMS tag print</title>
+        <style>
+          @page { size: A4; margin: 8mm; }
+          * { box-sizing: border-box; }
+          html, body {
+            margin: 0;
+            background: #fff;
+            color: #20242a;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+          .sheet {
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            align-items: flex-start;
+            justify-content: flex-start;
+            gap: 4mm;
+          }
+          .label {
+            width: 80mm;
+            height: 50mm;
+            padding: 7mm;
+            display: flex;
+            align-items: center;
+            gap: 5mm;
+            border: 1px solid #20242a;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          .qr {
+            width: 24mm;
+            height: 24mm;
+            flex: 0 0 24mm;
+            border: 1px solid #dfe3ea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .qr img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          }
+          .text {
+            min-width: 0;
+            flex: 1;
+            line-height: 1.25;
+          }
+          .tag {
+            font-size: 11pt;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+          }
+          .meta {
+            margin-top: 2mm;
+            color: #4f5865;
+            font-size: 8.4pt;
+            overflow-wrap: anywhere;
+          }
+          .unavailable {
+            color: #9a1f2b;
+            font-size: 7pt;
+            text-align: center;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="sheet">${labels}</div>
+      </body>
+    </html>
+  `;
 };
 
 type ReportConfig = {
@@ -934,6 +1064,8 @@ export default function ReportsPage() {
   const [pageSize, setPageSize] = useState(25);
   const [tagPreview, setTagPreview] = useState<TagPrintPreview | null>(null);
   const [tagQrDataUrl, setTagQrDataUrl] = useState("");
+  const [selectedTagKeys, setSelectedTagKeys] = useState<string[]>([]);
+  const [printingTags, setPrintingTags] = useState(false);
 
   const reportConfig = reportConfigs[activeReport];
   const currentFilters = filters[activeReport];
@@ -950,9 +1082,15 @@ export default function ReportsPage() {
 
   const tagQrPayload = useMemo(() => {
     if (!tagPreview) return "";
-    if (typeof window === "undefined") return tagPreview.printableTag;
-    return new URL(`/assets/${tagPreview.assetId}`, window.location.origin).toString();
+    return buildTagQrPayload(tagPreview);
   }, [tagPreview]);
+  const selectedTagPreviews = useMemo(
+    () => rows
+      .filter((row) => selectedTagKeys.includes(tagRowKey(row)))
+      .map(buildReportTagPrintPreview)
+      .filter((preview): preview is TagPrintPreview => Boolean(preview)),
+    [rows, selectedTagKeys],
+  );
 
   const lookupLabel = useCallback((rows: RowData[], value: unknown, fallback?: string) => {
     if (value === null || value === undefined || value === "") return fallback ?? "-";
@@ -1007,11 +1145,13 @@ export default function ReportsPage() {
       const data = response.data?.data;
       setRows(Array.isArray(data) ? data : []);
       setPage(1);
+      setSelectedTagKeys([]);
       setError("");
       setMessage(`${reportConfig.title} loaded`);
     } catch {
       setRows([]);
       setPage(1);
+      setSelectedTagKeys([]);
       setMessage("");
       setError("Failed to load report. Verify token and endpoint availability.");
     } finally {
@@ -1046,35 +1186,12 @@ export default function ReportsPage() {
     }
 
     let isMounted = true;
-    QRCode.toDataURL(qrValue, {
-      errorCorrectionLevel: "M",
-      margin: 2,
-      scale: 8,
-      color: {
-        dark: "#20242a",
-        light: "#ffffff",
-      },
-    })
+    generateQrDataUrl(qrValue)
       .then((dataUrl) => {
         if (isMounted) setTagQrDataUrl(dataUrl);
       })
-      .catch(async () => {
-        try {
-          const svgMarkup = await QRCode.toString(qrValue, {
-            type: "svg",
-            errorCorrectionLevel: "M",
-            margin: 2,
-            width: 192,
-            color: {
-              dark: "#20242a",
-              light: "#ffffff",
-            },
-          });
-
-          if (isMounted) setTagQrDataUrl(svgToDataUrl(svgMarkup));
-        } catch {
-          if (isMounted) setTagQrDataUrl("");
-        }
+      .catch(() => {
+        if (isMounted) setTagQrDataUrl("");
       });
 
     return () => {
@@ -1094,12 +1211,43 @@ export default function ReportsPage() {
     setError("");
   }, []);
 
-  const printTagPreview = useCallback(() => {
-    if (typeof window === "undefined" || !tagPreview) return;
+  const toggleTagSelection = useCallback((row: RowData, selected: boolean) => {
+    const preview = buildReportTagPrintPreview(row);
+    const key = tagRowKey(row);
 
-    const qrImageMarkup = tagQrDataUrl
-      ? `<img src="${escapeHtml(tagQrDataUrl)}" alt="QR code for ${escapeHtml(tagPreview.printableTag)}" />`
-      : `<span class="unavailable">QR unavailable</span>`;
+    if (!preview) {
+      return;
+    }
+
+    setSelectedTagKeys((current) => {
+      if (selected) {
+        return current.includes(key) ? current : [...current, key];
+      }
+
+      return current.filter((currentKey) => currentKey !== key);
+    });
+  }, []);
+
+  const printTagPreviews = useCallback(async (previews: TagPrintPreview[]) => {
+    if (typeof window === "undefined" || previews.length === 0) return;
+
+    setPrintingTags(true);
+    setError("");
+
+    let printableTags: Array<TagPrintPreview & { qrDataUrl: string }>;
+    try {
+      printableTags = await Promise.all(
+        previews.map(async (preview) => ({
+          ...preview,
+          qrDataUrl: await generateQrDataUrl(buildTagQrPayload(preview)),
+        })),
+      );
+    } catch {
+      setPrintingTags(false);
+      setError("Unable to generate one or more tag QR codes.");
+      return;
+    }
+
     const frame = document.createElement("iframe");
     frame.setAttribute("title", "IMS report tag print");
     frame.style.position = "fixed";
@@ -1114,98 +1262,46 @@ export default function ReportsPage() {
     const frameDocument = frameWindow?.document;
     if (!frameWindow || !frameDocument) {
       frame.remove();
+      setPrintingTags(false);
       setError("Unable to prepare tag print preview.");
       return;
     }
 
     frameDocument.open();
-    frameDocument.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <title>${escapeHtml(tagPreview.printableTag)}</title>
-          <style>
-            @page { size: 80mm 50mm; margin: 0; }
-            * { box-sizing: border-box; }
-            html, body {
-              width: 80mm;
-              height: 50mm;
-              margin: 0;
-              background: #fff;
-              color: #20242a;
-              font-family: Arial, Helvetica, sans-serif;
-            }
-            .label {
-              width: 80mm;
-              height: 50mm;
-              padding: 7mm;
-              display: flex;
-              align-items: center;
-              gap: 5mm;
-              border: 1px solid #20242a;
-            }
-            .qr {
-              width: 24mm;
-              height: 24mm;
-              flex: 0 0 24mm;
-              border: 1px solid #dfe3ea;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            }
-            .qr img {
-              width: 100%;
-              height: 100%;
-              object-fit: contain;
-            }
-            .text {
-              min-width: 0;
-              flex: 1;
-              line-height: 1.25;
-            }
-            .tag {
-              font-size: 11pt;
-              font-weight: 700;
-              overflow-wrap: anywhere;
-            }
-            .meta {
-              margin-top: 2mm;
-              color: #4f5865;
-              font-size: 8.4pt;
-              overflow-wrap: anywhere;
-            }
-            .unavailable {
-              color: #9a1f2b;
-              font-size: 7pt;
-              text-align: center;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="label">
-            <div class="qr">${qrImageMarkup}</div>
-            <div class="text">
-              <div class="tag">${escapeHtml(tagPreview.printableTag)}</div>
-              <div class="meta">${escapeHtml(tagPreview.assetCode || "No asset selected")}</div>
-              <div class="meta">${escapeHtml(tagPreview.serialNumber)}</div>
-              <div class="meta">${escapeHtml(tagPreview.location)}</div>
-            </div>
-          </div>
-        </body>
-      </html>
-    `);
+    frameDocument.write(buildPrintableTagHtml(printableTags));
     frameDocument.close();
 
-    frameWindow.onafterprint = () => frame.remove();
+    frameWindow.onafterprint = () => {
+      frame.remove();
+      setPrintingTags(false);
+    };
     window.setTimeout(() => {
       frameWindow.focus();
       frameWindow.print();
-      window.setTimeout(() => frame.remove(), 1000);
+      window.setTimeout(() => {
+        frame.remove();
+        setPrintingTags(false);
+      }, 1000);
     }, 100);
-  }, [tagPreview, tagQrDataUrl]);
+  }, []);
+
+  const printTagPreview = useCallback(() => {
+    if (!tagPreview) return;
+    void printTagPreviews([tagPreview]);
+  }, [printTagPreviews, tagPreview]);
+
+  const printSelectedTags = useCallback(() => {
+    if (selectedTagPreviews.length === 0) {
+      setError("Select at least one printable tag first.");
+      return;
+    }
+
+    void printTagPreviews(selectedTagPreviews);
+  }, [printTagPreviews, selectedTagPreviews]);
 
   const updateFilter = (key: FilterKey, value: string) => {
     setPage(1);
+    setSelectedTagKeys([]);
     setFilters((current) => ({
       ...current,
       [activeReport]: {
@@ -1217,6 +1313,7 @@ export default function ReportsPage() {
 
   const resetFilters = () => {
     setPage(1);
+    setSelectedTagKeys([]);
     setFilters((current) => ({
       ...current,
       [activeReport]: { ...emptyFilters },
@@ -1361,8 +1458,8 @@ export default function ReportsPage() {
   );
 
   const tableColumns = useMemo(
-    () =>
-      reportConfig.columns.map((column) => ({
+    () => {
+      const baseColumns = reportConfig.columns.map((column) => ({
         key: column.key,
         header: column.label,
         render: (row: RowData) => {
@@ -1390,8 +1487,36 @@ export default function ReportsPage() {
           }
           return renderCellValue(column.key, raw);
         },
-      })),
-    [activeReport, openTagPreview, reportConfig.columns, renderCellValue],
+      }));
+
+      if (activeReport !== "old_stock_issue_history") {
+        return baseColumns;
+      }
+
+      return [
+        {
+          key: "tag_select",
+          header: "Select",
+          render: (row: RowData) => {
+            const preview = buildReportTagPrintPreview(row);
+            const key = tagRowKey(row);
+
+            return (
+              <input
+                className="form-check-input"
+                type="checkbox"
+                aria-label={`Select ${preview?.printableTag ?? "tag"}`}
+                checked={selectedTagKeys.includes(key)}
+                disabled={!preview}
+                onChange={(event) => toggleTagSelection(row, event.target.checked)}
+              />
+            );
+          },
+        },
+        ...baseColumns,
+      ];
+    },
+    [activeReport, openTagPreview, renderCellValue, reportConfig.columns, selectedTagKeys, toggleTagSelection],
   );
 
   return (
@@ -1425,6 +1550,7 @@ export default function ReportsPage() {
               onClick={() => {
                 setRows([]);
                 setPage(1);
+                setSelectedTagKeys([]);
                 setActiveReport(reportKey);
                 setError("");
                 setMessage(`Loading ${reportConfigs[reportKey].title}...`);
@@ -1529,6 +1655,32 @@ export default function ReportsPage() {
               </div>
             ) : (
               <>
+                {activeReport === "old_stock_issue_history" ? (
+                  <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <div className="small text-secondary">
+                      {selectedTagPreviews.length.toLocaleString()} tag{selectedTagPreviews.length === 1 ? "" : "s"} selected
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button
+                        className="btn btn-sm btn-outline-secondary"
+                        type="button"
+                        disabled={selectedTagPreviews.length === 0 || printingTags}
+                        onClick={() => setSelectedTagKeys([])}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        type="button"
+                        disabled={selectedTagPreviews.length === 0 || printingTags}
+                        onClick={printSelectedTags}
+                      >
+                        <i className="bi bi-printer me-1" />
+                        {printingTags ? "Preparing..." : "Print Selected"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 <DataTable columns={tableColumns} rows={paginatedRows} empty="No rows found." />
                 <PaginationControls
                   page={currentPage}
@@ -1589,9 +1741,18 @@ export default function ReportsPage() {
                     <button className="btn btn-outline-secondary" type="button" onClick={() => setTagPreview(null)}>
                       Close
                     </button>
-                    <button className="btn btn-primary" type="button" disabled={!tagQrDataUrl} onClick={printTagPreview}>
+                    <button
+                      className="btn btn-outline-primary"
+                      type="button"
+                      disabled={selectedTagPreviews.length === 0 || printingTags}
+                      onClick={printSelectedTags}
+                    >
                       <i className="bi bi-printer me-1" />
-                      Print Tag
+                      {printingTags ? "Preparing..." : `Print Selected (${selectedTagPreviews.length})`}
+                    </button>
+                    <button className="btn btn-primary" type="button" disabled={!tagQrDataUrl || printingTags} onClick={printTagPreview}>
+                      <i className="bi bi-printer me-1" />
+                      {printingTags ? "Preparing..." : "Print This Tag"}
                     </button>
                   </div>
                 </div>
