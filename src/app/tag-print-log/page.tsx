@@ -116,6 +116,12 @@ const createPrefillFallbackAsset = (
   assetId: number,
   assetCode: string,
   suggestedTag: string,
+  location?: {
+    departmentCode?: string;
+    departmentName?: string;
+    buildingName?: string;
+    roomName?: string;
+  },
 ): AssetOption | null => {
   if (assetId <= 0) {
     return null;
@@ -126,6 +132,11 @@ const createPrefillFallbackAsset = (
     asset_id: assetCode || suggestedTag.replace(/^TAG-/, "") || `FA-${assetId}`,
     serial_number: null,
     printable_tag_id: suggestedTag || null,
+    department: location?.departmentCode || location?.departmentName
+      ? { code: location.departmentCode || null, name: location.departmentName || null }
+      : null,
+    building: location?.buildingName ? { name: location.buildingName } : null,
+    room: location?.roomName ? { name: location.roomName } : null,
   };
 };
 
@@ -143,9 +154,22 @@ function TagPrintLogContent() {
   const prefillAssetId = Number(searchParams.get("asset_id") ?? "");
   const prefillAssetCode = searchParams.get("asset_code") || "";
   const prefillSuggestedTag = searchParams.get("suggested_tag") || "";
+  const prefillDepartmentCode = searchParams.get("department_code") || "";
+  const prefillDepartmentName = searchParams.get("department_name") || "";
+  const prefillBuildingName = searchParams.get("building_name") || "";
+  const prefillRoomName = searchParams.get("room_name") || "";
+  const prefillLocation = useMemo(
+    () => ({
+      departmentCode: prefillDepartmentCode,
+      departmentName: prefillDepartmentName,
+      buildingName: prefillBuildingName,
+      roomName: prefillRoomName,
+    }),
+    [prefillBuildingName, prefillDepartmentCode, prefillDepartmentName, prefillRoomName],
+  );
   const prefillFallbackAsset = useMemo(
-    () => createPrefillFallbackAsset(prefillAssetId, prefillAssetCode, prefillSuggestedTag),
-    [prefillAssetCode, prefillAssetId, prefillSuggestedTag],
+    () => createPrefillFallbackAsset(prefillAssetId, prefillAssetCode, prefillSuggestedTag, prefillLocation),
+    [prefillAssetCode, prefillAssetId, prefillLocation, prefillSuggestedTag],
   );
 
   const [assets, setAssets] = useState<AssetOption[]>([]);
@@ -208,7 +232,7 @@ function TagPrintLogContent() {
         return loadedAssets;
       }
 
-      const fallbackAsset = createPrefillFallbackAsset(prefillAssetId, prefillAssetCode, prefillSuggestedTag);
+      const fallbackAsset = createPrefillFallbackAsset(prefillAssetId, prefillAssetCode, prefillSuggestedTag, prefillLocation);
 
       const alreadyLoaded = loadedAssets.some((asset) => {
         if (prefillAssetId > 0 && asset.id === prefillAssetId) return true;
@@ -269,7 +293,7 @@ function TagPrintLogContent() {
 
       return fallbackAsset ? mergeAssetOptions(loadedAssets, [fallbackAsset]) : loadedAssets;
     },
-    [prefillAssetCode, prefillAssetId, prefillSuggestedTag],
+    [prefillAssetCode, prefillAssetId, prefillLocation, prefillSuggestedTag],
   );
 
   const loadLookups = useCallback(async () => {

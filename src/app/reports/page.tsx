@@ -101,8 +101,25 @@ const buildReportTagPrintUrl = (row: RowData): string | null => {
   }
 
   const assetCode = String(row.asset_tag ?? "");
+  const params = new URLSearchParams({
+    asset_id: String(assetRecordId),
+    asset_code: assetCode,
+    suggested_tag: printableTag,
+  });
 
-  return `/tag-print-log?asset_id=${assetRecordId}&asset_code=${encodeURIComponent(assetCode)}&suggested_tag=${encodeURIComponent(printableTag)}`;
+  [
+    "department_code",
+    "department_name",
+    "building_name",
+    "room_name",
+  ].forEach((key) => {
+    const value = row[key];
+    if (value !== null && value !== undefined && String(value).trim()) {
+      params.set(key, String(value));
+    }
+  });
+
+  return `/tag-print-log?${params.toString()}`;
 };
 
 type ReportConfig = {
