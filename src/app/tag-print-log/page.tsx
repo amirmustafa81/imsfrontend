@@ -110,6 +110,23 @@ const mergeAssetOptions = (baseAssets: AssetOption[], extraAssets: AssetOption[]
 
 const MAX_ASSET_OPTIONS = 100;
 
+const createPrefillFallbackAsset = (
+  assetId: number,
+  assetCode: string,
+  suggestedTag: string,
+): AssetOption | null => {
+  if (assetId <= 0) {
+    return null;
+  }
+
+  return {
+    id: assetId,
+    asset_id: assetCode || suggestedTag.replace(/^TAG-/, "") || `FA-${assetId}`,
+    serial_number: null,
+    printable_tag_id: suggestedTag || null,
+  };
+};
+
 export default function TagPrintLogPage() {
   return (
     <Suspense fallback={<main className="p-4 text-secondary">Loading tag print log...</main>}>
@@ -181,6 +198,8 @@ function TagPrintLogContent() {
         return loadedAssets;
       }
 
+      const fallbackAsset = createPrefillFallbackAsset(prefillAssetId, prefillAssetCode, prefillSuggestedTag);
+
       const alreadyLoaded = loadedAssets.some((asset) => {
         if (prefillAssetId > 0 && asset.id === prefillAssetId) return true;
         if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
@@ -211,18 +230,30 @@ function TagPrintLogContent() {
         return loadedAssets;
       }
 
-      const searchResponse = await api.get<{ data: AssetOption[] }>("/assets", {
-        params: { search: searchValue },
-      });
-      const searchedAssets = (searchResponse.data.data ?? []).slice(0, MAX_ASSET_OPTIONS);
-      const matchedAsset = searchedAssets.find((asset) => {
-        if (prefillAssetId > 0 && asset.id === prefillAssetId) return true;
-        if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
-        if (prefillSuggestedTag && asset.printable_tag_id === prefillSuggestedTag) return true;
-        return false;
-      });
+      try {
+        const searchResponse = await api.get<{ data: AssetOption[] }>("/assets", {
+          params: { search: searchValue },
+        });
+        const searchedAssets = (searchResponse.data.data ?? []).slice(0, MAX_ASSET_OPTIONS);
+        const matchedAsset = searchedAssets.find((asset) => {
+          if (prefillAssetId > 0 && asset.id === prefillAssetId) return true;
+          if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
+          if (prefillSuggestedTag && asset.printable_tag_id === prefillSuggestedTag) return true;
+          return false;
+        });
 
-      return mergeAssetOptions(loadedAssets, matchedAsset ? [matchedAsset] : searchedAssets);
+        if (matchedAsset) {
+          return mergeAssetOptions(loadedAssets, [matchedAsset]);
+        }
+
+        if (searchedAssets.length > 0) {
+          return mergeAssetOptions(loadedAssets, searchedAssets);
+        }
+      } catch {
+        // The URL still contains enough legacy asset context to prefill the form.
+      }
+
+      return fallbackAsset ? mergeAssetOptions(loadedAssets, [fallbackAsset]) : loadedAssets;
     },
     [prefillAssetCode, prefillAssetId, prefillSuggestedTag],
   );
@@ -282,10 +313,15 @@ function TagPrintLogContent() {
 
   const applyPrefillFromQuery = useCallback(() => {
     if (prefillAssetId > 0) {
-      const matchedAsset = assets.find((asset) => asset.id === prefillAssetId);
+      const matchedAsset = assets.find((asset) => {
+        if (asset.id === prefillAssetId) return true;
+        if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
+        if (prefillSuggestedTag && asset.printable_tag_id === prefillSuggestedTag) return true;
+        return false;
+      });
 
       setForm((current) => {
-        const nextAssetId = matchedAsset?.id ? String(matchedAsset.id) : current.asset_id;
+        const nextAssetId = matchedAsset?.id ? String(matchedAsset.id) : String(prefillAssetId);
         const nextPrintableTagId = prefillSuggestedTag || current.printable_tag_id;
 
         return {
