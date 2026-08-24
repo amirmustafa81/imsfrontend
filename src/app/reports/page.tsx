@@ -10,6 +10,7 @@ import {
   FileAttachmentList,
   FilterBar,
   PageHeader,
+  PaginationControls,
   SearchableSelect,
   StatusBadge,
   type SearchableSelectOption,
@@ -915,9 +916,18 @@ export default function ReportsPage() {
   const [message, setMessage] = useState("Load a report to begin.");
   const [error, setError] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const reportConfig = reportConfigs[activeReport];
   const currentFilters = filters[activeReport];
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(Math.max(page, 1), totalPages);
+  const paginatedRows = useMemo(
+    () => rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, pageSize, rows],
+  );
+
   const addExportArtifact = useCallback((artifact: ExportArtifact) => {
     setExportArtifacts((current) => [artifact, ...current].slice(0, 12));
   }, []);
@@ -974,16 +984,25 @@ export default function ReportsPage() {
       const response = await api.get(reportConfig.endpoint, { params: payload });
       const data = response.data?.data;
       setRows(Array.isArray(data) ? data : []);
+      setPage(1);
       setError("");
       setMessage(`${reportConfig.title} loaded`);
     } catch {
       setRows([]);
+      setPage(1);
       setMessage("");
       setError("Failed to load report. Verify token and endpoint availability.");
     } finally {
       setReportLoading(false);
     }
   }, [authReady, currentFilters, reportConfig]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -996,6 +1015,7 @@ export default function ReportsPage() {
   }, [loadLookups]);
 
   const updateFilter = (key: FilterKey, value: string) => {
+    setPage(1);
     setFilters((current) => ({
       ...current,
       [activeReport]: {
@@ -1006,6 +1026,7 @@ export default function ReportsPage() {
   };
 
   const resetFilters = () => {
+    setPage(1);
     setFilters((current) => ({
       ...current,
       [activeReport]: { ...emptyFilters },
@@ -1209,6 +1230,7 @@ export default function ReportsPage() {
               type="button"
               onClick={() => {
                 setRows([]);
+                setPage(1);
                 setActiveReport(reportKey);
                 setError("");
                 setMessage(`Loading ${reportConfigs[reportKey].title}...`);
@@ -1312,7 +1334,19 @@ export default function ReportsPage() {
                 </div>
               </div>
             ) : (
-              <DataTable columns={tableColumns} rows={rows} empty="No rows found." />
+              <>
+                <DataTable columns={tableColumns} rows={paginatedRows} empty="No rows found." />
+                <PaginationControls
+                  page={currentPage}
+                  pageSize={pageSize}
+                  totalItems={rows.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={(nextPageSize) => {
+                    setPageSize(nextPageSize);
+                    setPage(1);
+                  }}
+                />
+              </>
             )}
           </div>
           <div className="col-12">
