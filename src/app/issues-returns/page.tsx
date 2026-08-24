@@ -124,6 +124,7 @@ type TransactionItem = {
   remarks: string | null;
   item_label?: string | null;
   asset_label?: string | null;
+  printable_tag_id?: string | null;
 };
 
 type TransactionItemInput = {
@@ -500,6 +501,19 @@ function IssuesReturnsContent() {
 
   const displayLookup = (source: LookupKey, value: number | null, fallback?: string | null): string =>
     value ? lookupLabel(source, value) : fallback || "-";
+
+  const firstAssetItem = (transaction: Transaction): TransactionItem | null =>
+    transaction.items?.find((item) => item.asset_id) ?? null;
+
+  const buildAssetTagUrl = (transaction: Transaction): string | null => {
+    const assetItem = firstAssetItem(transaction);
+    if (!assetItem?.asset_id) return null;
+
+    const assetCode = assetItem.asset_label ?? "";
+    const suggestedTag = assetItem.printable_tag_id || (assetCode ? `${assetCode}-TAG` : `FA-${assetItem.asset_id}-TAG`);
+
+    return `/tag-print-log?asset_id=${assetItem.asset_id}&asset_code=${encodeURIComponent(assetCode)}&suggested_tag=${encodeURIComponent(suggestedTag)}`;
+  };
 
   const loadRows = useCallback(async () => {
     if (!authReady) return;
@@ -2004,29 +2018,63 @@ function IssuesReturnsContent() {
       key: "actions",
       header: "Actions",
       className: "text-end",
-      render: (row: Transaction) => (
-        <div className="btn-group">
-          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(row.id)} title="View items">
-            <i className="bi bi-eye" />
-          </button>
-          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => printTransaction(row)} title="Print voucher">
-            <i className="bi bi-printer" />
-          </button>
-          {row.status === "draft" && (
-            <>
-              <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => openEditDialog(row)} title="Edit draft">
-                <i className="bi bi-pencil-square" />
-              </button>
-              <button type="button" className="btn btn-sm btn-outline-success" onClick={() => postTransaction(row.id)} title="Post">
-                <i className="bi bi-upload" />
-              </button>
-              <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => deleteTransaction(row.id)} title="Delete">
-                <i className="bi bi-trash" />
-              </button>
-            </>
-          )}
-        </div>
-      ),
+      render: (row: Transaction) => {
+        const assetItem = firstAssetItem(row);
+        const tagUrl = buildAssetTagUrl(row);
+
+        if (isLegacyTransaction(row)) {
+          return (
+            <div className="d-flex flex-wrap justify-content-end gap-1">
+              {assetItem?.asset_id ? (
+                <Link className="btn btn-sm btn-outline-secondary" href={`/assets/${assetItem.asset_id}`}>
+                  <i className="bi bi-eye me-1" />
+                  View
+                </Link>
+              ) : (
+                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(row.id)}>
+                  <i className="bi bi-eye me-1" />
+                  View
+                </button>
+              )}
+              {tagUrl ? (
+                <Link className="btn btn-sm btn-outline-primary" href={tagUrl}>
+                  <i className="bi bi-qr-code me-1" />
+                  Print Tag
+                </Link>
+              ) : (
+                <button type="button" className="btn btn-sm btn-outline-primary" disabled title="No asset tag available for this legacy row">
+                  <i className="bi bi-qr-code me-1" />
+                  Print Tag
+                </button>
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <div className="btn-group">
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => toggleExpand(row.id)} title="View items">
+              <i className="bi bi-eye" />
+            </button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => printTransaction(row)} title="Print voucher">
+              <i className="bi bi-printer" />
+            </button>
+            {row.status === "draft" && (
+              <>
+                <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => openEditDialog(row)} title="Edit draft">
+                  <i className="bi bi-pencil-square" />
+                </button>
+                <button type="button" className="btn btn-sm btn-outline-success" onClick={() => postTransaction(row.id)} title="Post">
+                  <i className="bi bi-upload" />
+                </button>
+                <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => deleteTransaction(row.id)} title="Delete">
+                  <i className="bi bi-trash" />
+                </button>
+              </>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
