@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import QRCode from "qrcode";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
@@ -91,36 +91,50 @@ type FilterSelectOption = {
   label: string;
 };
 
+type TagPrintPreview = {
+  assetId: string;
+  assetCode: string;
+  printableTag: string;
+  serialNumber: string;
+  location: string;
+};
+
 const REPORT_EXPORT_ENDPOINT = "/reports/export";
 
-const buildReportTagPrintUrl = (row: RowData): string | null => {
+const textValue = (value: unknown): string => {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+};
+
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+
+const svgToDataUrl = (svgMarkup: string) => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgMarkup)}`;
+
+const buildReportTagPrintPreview = (row: RowData): TagPrintPreview | null => {
   const assetRecordId = row.asset_record_id;
-  const printableTag = String(row.printable_tag_id ?? "");
+  const printableTag = textValue(row.printable_tag_id);
 
   if (!assetRecordId || !printableTag) {
     return null;
   }
 
-  const assetCode = String(row.asset_tag ?? "");
-  const params = new URLSearchParams({
-    asset_id: String(assetRecordId),
-    asset_code: assetCode,
-    suggested_tag: printableTag,
-  });
+  const buildingRoom = [row.building_name, row.room_name].map(textValue).filter(Boolean).join(" / ");
+  const department = textValue(row.department_name) || textValue(row.department_code);
 
-  [
-    "department_code",
-    "department_name",
-    "building_name",
-    "room_name",
-  ].forEach((key) => {
-    const value = row[key];
-    if (value !== null && value !== undefined && String(value).trim()) {
-      params.set(key, String(value));
-    }
-  });
-
-  return `/tag-print-log?${params.toString()}`;
+  return {
+    assetId: String(assetRecordId),
+    assetCode: textValue(row.asset_tag),
+    printableTag,
+    serialNumber: textValue(row.serial_number) || "No serial recorded",
+    location: buildingRoom || department || "No location recorded",
+  };
 };
 
 type ReportConfig = {
@@ -918,6 +932,8 @@ export default function ReportsPage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [tagPreview, setTagPreview] = useState<TagPrintPreview | null>(null);
+  const [tagQrDataUrl, setTagQrDataUrl] = useState("");
 
   const reportConfig = reportConfigs[activeReport];
   const currentFilters = filters[activeReport];
@@ -931,6 +947,12 @@ export default function ReportsPage() {
   const addExportArtifact = useCallback((artifact: ExportArtifact) => {
     setExportArtifacts((current) => [artifact, ...current].slice(0, 12));
   }, []);
+
+  const tagQrPayload = useMemo(() => {
+    if (!tagPreview) return "";
+    if (typeof window === "undefined") return tagPreview.printableTag;
+    return new URL(`/assets/${tagPreview.assetId}`, window.location.origin).toString();
+  }, [tagPreview]);
 
   const lookupLabel = useCallback((rows: RowData[], value: unknown, fallback?: string) => {
     if (value === null || value === undefined || value === "") return fallback ?? "-";
@@ -1013,6 +1035,174 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadLookups();
   }, [loadLookups]);
+
+  useEffect(() => {
+    const qrValue = tagQrPayload.trim();
+
+    if (!qrValue) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTagQrDataUrl("");
+      return;
+    }
+
+    let isMounted = true;
+    QRCode.toDataURL(qrValue, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      scale: 8,
+      color: {
+        dark: "#20242a",
+        light: "#ffffff",
+      },
+    })
+      .then((dataUrl) => {
+        if (isMounted) setTagQrDataUrl(dataUrl);
+      })
+      .catch(async () => {
+        try {
+          const svgMarkup = await QRCode.toString(qrValue, {
+            type: "svg",
+            errorCorrectionLevel: "M",
+            margin: 2,
+            width: 192,
+            color: {
+              dark: "#20242a",
+              light: "#ffffff",
+            },
+          });
+
+          if (isMounted) setTagQrDataUrl(svgToDataUrl(svgMarkup));
+        } catch {
+          if (isMounted) setTagQrDataUrl("");
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tagQrPayload]);
+
+  const openTagPreview = useCallback((row: RowData) => {
+    const preview = buildReportTagPrintPreview(row);
+
+    if (!preview) {
+      setError("No printable tag is available for this row.");
+      return;
+    }
+
+    setTagPreview(preview);
+    setError("");
+  }, []);
+
+  const printTagPreview = useCallback(() => {
+    if (typeof window === "undefined" || !tagPreview) return;
+
+    const qrImageMarkup = tagQrDataUrl
+      ? `<img src="${escapeHtml(tagQrDataUrl)}" alt="QR code for ${escapeHtml(tagPreview.printableTag)}" />`
+      : `<span class="unavailable">QR unavailable</span>`;
+    const frame = document.createElement("iframe");
+    frame.setAttribute("title", "IMS report tag print");
+    frame.style.position = "fixed";
+    frame.style.right = "0";
+    frame.style.bottom = "0";
+    frame.style.width = "0";
+    frame.style.height = "0";
+    frame.style.border = "0";
+    document.body.appendChild(frame);
+
+    const frameWindow = frame.contentWindow;
+    const frameDocument = frameWindow?.document;
+    if (!frameWindow || !frameDocument) {
+      frame.remove();
+      setError("Unable to prepare tag print preview.");
+      return;
+    }
+
+    frameDocument.open();
+    frameDocument.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>${escapeHtml(tagPreview.printableTag)}</title>
+          <style>
+            @page { size: 80mm 50mm; margin: 0; }
+            * { box-sizing: border-box; }
+            html, body {
+              width: 80mm;
+              height: 50mm;
+              margin: 0;
+              background: #fff;
+              color: #20242a;
+              font-family: Arial, Helvetica, sans-serif;
+            }
+            .label {
+              width: 80mm;
+              height: 50mm;
+              padding: 7mm;
+              display: flex;
+              align-items: center;
+              gap: 5mm;
+              border: 1px solid #20242a;
+            }
+            .qr {
+              width: 24mm;
+              height: 24mm;
+              flex: 0 0 24mm;
+              border: 1px solid #dfe3ea;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .qr img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            .text {
+              min-width: 0;
+              flex: 1;
+              line-height: 1.25;
+            }
+            .tag {
+              font-size: 11pt;
+              font-weight: 700;
+              overflow-wrap: anywhere;
+            }
+            .meta {
+              margin-top: 2mm;
+              color: #4f5865;
+              font-size: 8.4pt;
+              overflow-wrap: anywhere;
+            }
+            .unavailable {
+              color: #9a1f2b;
+              font-size: 7pt;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="label">
+            <div class="qr">${qrImageMarkup}</div>
+            <div class="text">
+              <div class="tag">${escapeHtml(tagPreview.printableTag)}</div>
+              <div class="meta">${escapeHtml(tagPreview.assetCode || "No asset selected")}</div>
+              <div class="meta">${escapeHtml(tagPreview.serialNumber)}</div>
+              <div class="meta">${escapeHtml(tagPreview.location)}</div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    frameDocument.close();
+
+    frameWindow.onafterprint = () => frame.remove();
+    window.setTimeout(() => {
+      frameWindow.focus();
+      frameWindow.print();
+      window.setTimeout(() => frame.remove(), 1000);
+    }, 100);
+  }, [tagPreview, tagQrDataUrl]);
 
   const updateFilter = (key: FilterKey, value: string) => {
     setPage(1);
@@ -1178,17 +1368,21 @@ export default function ReportsPage() {
         render: (row: RowData) => {
           const raw = row[column.key];
           if (activeReport === "old_stock_issue_history" && column.key === "printable_tag_id") {
-            const tagPrintUrl = buildReportTagPrintUrl(row);
+            const tagPrintPreview = buildReportTagPrintPreview(row);
 
-            if (!tagPrintUrl) {
+            if (!tagPrintPreview) {
               return "-";
             }
 
             return (
-              <Link className="btn btn-sm btn-outline-primary text-nowrap" href={tagPrintUrl}>
+              <button
+                className="btn btn-sm btn-outline-primary text-nowrap"
+                type="button"
+                onClick={() => openTagPreview(row)}
+              >
                 <i className="bi bi-qr-code me-1" />
                 {String(raw)}
-              </Link>
+              </button>
             );
           }
           if (column.key === "status") {
@@ -1197,7 +1391,7 @@ export default function ReportsPage() {
           return renderCellValue(column.key, raw);
         },
       })),
-    [activeReport, reportConfig.columns, renderCellValue],
+    [activeReport, openTagPreview, reportConfig.columns, renderCellValue],
   );
 
   return (
@@ -1353,6 +1547,59 @@ export default function ReportsPage() {
             <FileAttachmentList files={exportArtifacts} />
           </div>
         </div>
+
+        {tagPreview ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="tag-print-preview-title">
+              <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h2 className="modal-title h5" id="tag-print-preview-title">Print Tag</h2>
+                    <button className="btn-close" type="button" aria-label="Close" onClick={() => setTagPreview(null)} />
+                  </div>
+                  <div className="modal-body">
+                    <div className="border rounded bg-light p-3">
+                      <div className="small text-secondary mb-2">Tag Preview</div>
+                      <div className="d-flex align-items-center gap-3">
+                        <div
+                          className="border bg-white d-flex align-items-center justify-content-center"
+                          style={{ width: 132, height: 132, flex: "0 0 132px" }}
+                        >
+                          {tagQrDataUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={tagQrDataUrl}
+                              alt={`QR code for ${tagPreview.printableTag}`}
+                              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                            />
+                          ) : (
+                            <span className="small text-secondary text-center">Generating QR...</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="fw-semibold text-break">{tagPreview.printableTag}</div>
+                          <div className="small text-secondary text-break">{tagPreview.assetCode || "No asset selected"}</div>
+                          <div className="small text-secondary text-break">{tagPreview.serialNumber}</div>
+                          <div className="small text-secondary text-break">{tagPreview.location}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button className="btn btn-outline-secondary" type="button" onClick={() => setTagPreview(null)}>
+                      Close
+                    </button>
+                    <button className="btn btn-primary" type="button" disabled={!tagQrDataUrl} onClick={printTagPreview}>
+                      <i className="bi bi-printer me-1" />
+                      Print Tag
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-backdrop fade show" />
+          </>
+        ) : null}
       </div>
     </main>
   );
