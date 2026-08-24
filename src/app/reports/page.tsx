@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -90,6 +91,19 @@ type FilterSelectOption = {
 };
 
 const REPORT_EXPORT_ENDPOINT = "/reports/export";
+
+const buildReportTagPrintUrl = (row: RowData): string | null => {
+  const assetRecordId = row.asset_record_id;
+  const printableTag = String(row.printable_tag_id ?? "");
+
+  if (!assetRecordId || !printableTag) {
+    return null;
+  }
+
+  const assetCode = String(row.asset_tag ?? "");
+
+  return `/tag-print-log?asset_id=${assetRecordId}&asset_code=${encodeURIComponent(assetCode)}&suggested_tag=${encodeURIComponent(printableTag)}`;
+};
 
 type ReportConfig = {
   title: string;
@@ -1118,13 +1132,27 @@ export default function ReportsPage() {
         header: column.label,
         render: (row: RowData) => {
           const raw = row[column.key];
+          if (activeReport === "old_stock_issue_history" && column.key === "printable_tag_id") {
+            const tagPrintUrl = buildReportTagPrintUrl(row);
+
+            if (!tagPrintUrl) {
+              return "-";
+            }
+
+            return (
+              <Link className="btn btn-sm btn-outline-primary text-nowrap" href={tagPrintUrl}>
+                <i className="bi bi-qr-code me-1" />
+                {String(raw)}
+              </Link>
+            );
+          }
           if (column.key === "status") {
             return <StatusBadge status={toReportStatus(raw)} />;
           }
           return renderCellValue(column.key, raw);
         },
       })),
-    [reportConfig.columns, renderCellValue],
+    [activeReport, reportConfig.columns, renderCellValue],
   );
 
   return (
