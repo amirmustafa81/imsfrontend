@@ -125,6 +125,9 @@ function TagPrintLogContent() {
   const [search, setSearch] = useState("");
   const [assetFilterId, setAssetFilterId] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [savingLog, setSavingLog] = useState(false);
+  const [deletingLogId, setDeletingLogId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [form, setForm] = useState<TagPrintForm>({
     asset_id: "",
@@ -217,6 +220,7 @@ function TagPrintLogContent() {
       return;
     }
 
+    setLoadingAssets(true);
     try {
       const response = await api.get<{ data: AssetOption[] }>("/assets");
       const loadedAssets = response.data.data ?? [];
@@ -224,6 +228,8 @@ function TagPrintLogContent() {
       setAssets(assetsWithPrefill);
     } catch {
       setError("Unable to load asset list for tagging.");
+    } finally {
+      setLoadingAssets(false);
     }
   }, [authLoading, isAuthenticated, loadPrefillAsset]);
 
@@ -569,6 +575,7 @@ function TagPrintLogContent() {
     }
 
     try {
+      setSavingLog(true);
       await api.post("/asset-tag-print-logs", form);
       await loadRows();
       setMessage("Tag print log saved.");
@@ -580,6 +587,8 @@ function TagPrintLogContent() {
       });
     } catch {
       setError("Unable to save tag print log. Verify required fields.");
+    } finally {
+      setSavingLog(false);
     }
   };
 
@@ -590,13 +599,19 @@ function TagPrintLogContent() {
     }
 
     try {
+      setDeletingLogId(logId);
       await api.delete(`/asset-tag-print-logs/${logId}`);
       await loadRows();
       setMessage("Tag print log removed.");
     } catch {
       setError("Unable to delete print log.");
+    } finally {
+      setDeletingLogId(null);
     }
   };
+
+  const isInitialLoading = authLoading || loadingAssets;
+  const isLogListLoading = isInitialLoading || loading;
 
   return (
     <main className="min-vh-100 bg-body-tertiary">
@@ -625,9 +640,10 @@ function TagPrintLogContent() {
                       className="form-select form-select-sm"
                       value={form.asset_id}
                       onChange={(event) => selectAsset(event.target.value)}
+                      disabled={isInitialLoading}
                       required
                     >
-                      <option value="">Choose asset</option>
+                      <option value="">{isInitialLoading ? "Loading assets..." : "Choose asset"}</option>
                       {assets.map((asset) => (
                         <option key={asset.id} value={asset.id}>
                           {asset.asset_id} — {asset.serial_number || "No serial"}
@@ -727,11 +743,15 @@ function TagPrintLogContent() {
                     </div>
                   </div>
                   <div className="col-12">
-                    <button className="btn btn-sm btn-primary me-2" type="submit" disabled={!form.asset_id || !form.printable_tag_id}>
-                      <i className="bi bi-printer me-1" />
-                      Save Print Log
+                    <button className="btn btn-sm btn-primary me-2" type="submit" disabled={savingLog || !form.asset_id || !form.printable_tag_id}>
+                      {savingLog ? (
+                        <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
+                      ) : (
+                        <i className="bi bi-printer me-1" />
+                      )}
+                      {savingLog ? "Saving..." : "Save Print Log"}
                     </button>
-                    <button className="btn btn-sm btn-outline-primary" type="button" disabled={!form.asset_id || !form.printable_tag_id} onClick={printCurrentTag}>
+                    <button className="btn btn-sm btn-outline-primary" type="button" disabled={savingLog || !form.asset_id || !form.printable_tag_id} onClick={printCurrentTag}>
                       <i className="bi bi-printer-fill me-1" />
                       Print Tag
                     </button>
@@ -758,47 +778,65 @@ function TagPrintLogContent() {
             </FilterBar>
             {assetFilterId ? <div className="text-secondary small mb-2">Showing logs for selected asset ID: {assetFilterId}</div> : null}
 
-            <DataTable
-              columns={[
-                { key: "asset", header: "Asset", render: (row: TagPrintLog) => row.asset?.asset_id ?? "-" },
-                { key: "printable_tag_id", header: "Tag ID" },
-                { key: "print_format", header: "Format" },
-                { key: "printed_at", header: "Printed At" },
-                { key: "printed_by", header: "Printed By", render: (row: TagPrintLog) => row.printed_by?.name ?? "System" },
-                {
-                  key: "created_at",
-                  header: "Status",
-                  render: () => <StatusBadge status="Posted" />,
-                },
-                {
-                  key: "actions",
-                  header: "Actions",
-                  render: (row: TagPrintLog) => (
-                    <button
-                      className="btn btn-sm btn-outline-danger"
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void deleteLog(row.id);
-                      }}
-                    >
-                      <i className="bi bi-trash me-1" />
-                      Delete
-                    </button>
-                  ),
-                },
-              ]}
-              rows={rows}
-              empty="No print logs found."
-              rowClassName={() => "cursor-pointer"}
-              onRowClick={(row) => selectLogForPrinting(row)}
-            />
+            {isLogListLoading ? (
+              <div className="card border-0 shadow-sm">
+                <div className="card-body py-5 text-center text-secondary">
+                  <div className="spinner-border text-primary mb-3" role="status" aria-hidden="true" />
+                  <div className="fw-semibold">Loading tag print logs...</div>
+                  <div className="small">Fetching asset tag history and selected asset details.</div>
+                </div>
+              </div>
+            ) : (
+              <DataTable
+                columns={[
+                  { key: "asset", header: "Asset", render: (row: TagPrintLog) => row.asset?.asset_id ?? "-" },
+                  { key: "printable_tag_id", header: "Tag ID" },
+                  { key: "print_format", header: "Format" },
+                  { key: "printed_at", header: "Printed At" },
+                  { key: "printed_by", header: "Printed By", render: (row: TagPrintLog) => row.printed_by?.name ?? "System" },
+                  {
+                    key: "created_at",
+                    header: "Status",
+                    render: () => <StatusBadge status="Posted" />,
+                  },
+                  {
+                    key: "actions",
+                    header: "Actions",
+                    render: (row: TagPrintLog) => {
+                      const isDeleting = deletingLogId === row.id;
+
+                      return (
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void deleteLog(row.id);
+                          }}
+                        >
+                          {isDeleting ? (
+                            <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
+                          ) : (
+                            <i className="bi bi-trash me-1" />
+                          )}
+                          {isDeleting ? "Deleting..." : "Delete"}
+                        </button>
+                      );
+                    },
+                  },
+                ]}
+                rows={rows}
+                empty="No print logs found."
+                rowClassName={() => "cursor-pointer"}
+                onRowClick={(row) => selectLogForPrinting(row)}
+              />
+            )}
           </div>
         </div>
 
         {message ? <div className="alert alert-success mt-2">{message}</div> : null}
         {error ? <div className="alert alert-danger mt-2">{error}</div> : null}
-        {loading ? <span className="small text-secondary">Loading…</span> : null}
       </div>
     </main>
   );
