@@ -21,6 +21,7 @@ type ReportType =
   | "controlled_stationery_serials"
   | "controlled_stationery_movements"
   | "old_stock_issue_history"
+  | "old_stock_cleanup"
   | "fixed_assets"
   | "stock_balance"
   | "low_stock"
@@ -69,7 +70,7 @@ type LookupKey =
 
 type RowData = {
   id: number;
-  [key: string]: string | number | null | undefined | Date;
+  [key: string]: string | number | string[] | null | undefined | Date;
 };
 
 type ReportFilters = Record<FilterKey, string>;
@@ -97,6 +98,20 @@ type TagPrintPreview = {
   printableTag: string;
   serialNumber: string;
   location: string;
+};
+
+type OldStockCleanupForm = {
+  item_id: string;
+  department_id: string;
+  building_id: string;
+  room_id: string;
+  recipient_user_id: string;
+  issue_date: string;
+  issue_no: string;
+  requisition_no: string;
+  receipt_reference: string;
+  legacy_received_by: string;
+  remarks: string;
 };
 
 const REPORT_EXPORT_ENDPOINT = "/reports/export";
@@ -500,6 +515,36 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       { key: "printable_tag_id", label: "Printable Tag" },
       { key: "asset_status", label: "Asset Status" },
       { key: "remarks", label: "Remarks" },
+    ],
+    filters: {
+      includeSearch: true,
+      includeDates: true,
+      includeDepartment: true,
+      includeItem: true,
+      includeBuilding: true,
+      includeRoom: true,
+    },
+  },
+  old_stock_cleanup: {
+    title: "Old Stock Cleanup",
+    subtitle: "Correct missing or ambiguous values in imported old stock records.",
+    endpoint: "/reports/old-stock-cleanup",
+    columns: [
+      { key: "cleanup_status", label: "Status" },
+      { key: "cleanup_issues", label: "Issues" },
+      { key: "issue_date", label: "Issue Date" },
+      { key: "source_sheet", label: "Source Sheet" },
+      { key: "source_row_no", label: "Source Row" },
+      { key: "source_unit_no", label: "Unit" },
+      { key: "item_code", label: "Item Code" },
+      { key: "item_name", label: "Item" },
+      { key: "department_name", label: "Department" },
+      { key: "building_name", label: "Building" },
+      { key: "room_name", label: "Room" },
+      { key: "recipient_name", label: "Received By" },
+      { key: "asset_tag", label: "Asset Tag" },
+      { key: "remarks", label: "Remarks" },
+      { key: "actions", label: "Actions" },
     ],
     filters: {
       includeSearch: true,
@@ -983,6 +1028,26 @@ const toDisplayDate = (value: unknown): string => {
   return iso.includes("T") ? iso.split("T")[0] ?? "-" : iso;
 };
 
+const toInputDate = (value: unknown): string => {
+  if (!value) return "";
+  const iso = String(value);
+  return iso.includes("T") ? iso.split("T")[0] ?? "" : iso.slice(0, 10);
+};
+
+const oldStockCleanupFormFromRow = (row: RowData): OldStockCleanupForm => ({
+  item_id: textValue(row.item_id),
+  department_id: textValue(row.department_id),
+  building_id: textValue(row.building_id),
+  room_id: textValue(row.room_id),
+  recipient_user_id: textValue(row.recipient_user_id),
+  issue_date: toInputDate(row.issue_date),
+  issue_no: textValue(row.issue_no),
+  requisition_no: textValue(row.requisition_no),
+  receipt_reference: textValue(row.receipt_reference),
+  legacy_received_by: textValue(row.legacy_received_by),
+  remarks: textValue(row.remarks),
+});
+
 const boolText = (value: unknown): string => {
   if (value === true) return "Yes";
   if (value === false) return "No";
@@ -1054,6 +1119,7 @@ export default function ReportsPage() {
     consumable_issuance: { ...emptyFilters },
     disposal_writeoff: { ...emptyFilters },
     depreciation: { ...emptyFilters },
+    old_stock_cleanup: { ...emptyFilters },
   });
   const [rows, setRows] = useState<RowData[]>([]);
   const [exportArtifacts, setExportArtifacts] = useState<ExportArtifact[]>([]);
@@ -1066,6 +1132,9 @@ export default function ReportsPage() {
   const [tagQrDataUrl, setTagQrDataUrl] = useState("");
   const [selectedTagKeys, setSelectedTagKeys] = useState<string[]>([]);
   const [printingTags, setPrintingTags] = useState(false);
+  const [editingCleanupRow, setEditingCleanupRow] = useState<RowData | null>(null);
+  const [cleanupForm, setCleanupForm] = useState<OldStockCleanupForm | null>(null);
+  const [savingCleanup, setSavingCleanup] = useState(false);
 
   const reportConfig = reportConfigs[activeReport];
   const currentFilters = filters[activeReport];
@@ -1299,6 +1368,66 @@ export default function ReportsPage() {
     void printTagPreviews(selectedTagPreviews);
   }, [printTagPreviews, selectedTagPreviews]);
 
+  const openCleanupEdit = useCallback((row: RowData) => {
+    setEditingCleanupRow(row);
+    setCleanupForm(oldStockCleanupFormFromRow(row));
+    setError("");
+  }, []);
+
+  const setCleanupField = useCallback((field: keyof OldStockCleanupForm, value: string) => {
+    setCleanupForm((current) => current ? { ...current, [field]: value } : current);
+  }, []);
+
+  const closeCleanupEdit = useCallback(() => {
+    setEditingCleanupRow(null);
+    setCleanupForm(null);
+    setSavingCleanup(false);
+  }, []);
+
+  const saveCleanupEdit = useCallback(async () => {
+    if (!editingCleanupRow || !cleanupForm) return;
+
+    if (!cleanupForm.item_id || !cleanupForm.department_id) {
+      setError("Item and department are required before saving cleanup changes.");
+      return;
+    }
+
+    setSavingCleanup(true);
+    setError("");
+
+    try {
+      const payload = {
+        item_id: Number(cleanupForm.item_id),
+        department_id: Number(cleanupForm.department_id),
+        building_id: cleanupForm.building_id ? Number(cleanupForm.building_id) : null,
+        room_id: cleanupForm.room_id ? Number(cleanupForm.room_id) : null,
+        recipient_user_id: cleanupForm.recipient_user_id ? Number(cleanupForm.recipient_user_id) : null,
+        issue_date: cleanupForm.issue_date || null,
+        issue_no: cleanupForm.issue_no || null,
+        requisition_no: cleanupForm.requisition_no || null,
+        receipt_reference: cleanupForm.receipt_reference || null,
+        legacy_received_by: cleanupForm.legacy_received_by || null,
+        remarks: cleanupForm.remarks || null,
+      };
+      const response = await api.put(`/old-stock-issue-histories/${editingCleanupRow.id}`, payload);
+      const updatedRow = response.data?.data;
+
+      if (updatedRow) {
+        setRows((current) => current.map((row) => row.id === editingCleanupRow.id ? updatedRow : row));
+      }
+
+      setMessage("Old stock cleanup row updated.");
+      closeCleanupEdit();
+    } catch (errorResponse) {
+      const message = typeof errorResponse === "object" && errorResponse !== null && "response" in errorResponse
+        ? (errorResponse as { response?: { data?: { message?: string } } }).response?.data?.message
+        : null;
+      setError(message || "Unable to save cleanup changes.");
+    } finally {
+      setSavingCleanup(false);
+    }
+  }, [cleanupForm, closeCleanupEdit, editingCleanupRow]);
+
   const updateFilter = (key: FilterKey, value: string) => {
     setPage(1);
     setSelectedTagKeys([]);
@@ -1464,6 +1593,44 @@ export default function ReportsPage() {
         header: column.label,
         render: (row: RowData) => {
           const raw = row[column.key];
+          if (activeReport === "old_stock_cleanup") {
+            if (column.key === "cleanup_status") {
+              const status = String(raw ?? "Needs Review");
+              return (
+                <span className={`badge rounded-pill ${status === "Complete" ? "text-bg-success" : "text-bg-warning"}`}>
+                  {status}
+                </span>
+              );
+            }
+
+            if (column.key === "cleanup_issues") {
+              const issues = Array.isArray(raw) ? raw : [];
+
+              if (issues.length === 0) {
+                return <span className="badge rounded-pill text-bg-success">Complete</span>;
+              }
+
+              return (
+                <div className="d-flex flex-wrap gap-1">
+                  {issues.map((issue) => (
+                    <span className="badge rounded-pill text-bg-warning" key={issue}>
+                      {issue}
+                    </span>
+                  ))}
+                </div>
+              );
+            }
+
+            if (column.key === "actions") {
+              return (
+                <button className="btn btn-sm btn-outline-primary text-nowrap" type="button" onClick={() => openCleanupEdit(row)}>
+                  <i className="bi bi-pencil-square me-1" />
+                  Edit
+                </button>
+              );
+            }
+          }
+
           if (activeReport === "old_stock_issue_history" && column.key === "printable_tag_id") {
             const tagPrintPreview = buildReportTagPrintPreview(row);
 
@@ -1516,7 +1683,7 @@ export default function ReportsPage() {
         ...baseColumns,
       ];
     },
-    [activeReport, openTagPreview, renderCellValue, reportConfig.columns, selectedTagKeys, toggleTagSelection],
+    [activeReport, openCleanupEdit, openTagPreview, renderCellValue, reportConfig.columns, selectedTagKeys, toggleTagSelection],
   );
 
   return (
@@ -1526,7 +1693,7 @@ export default function ReportsPage() {
           title="Reports"
           subtitle={reportConfig.subtitle}
           actions={
-            <div className="d-flex gap-2 align-items-end flex-wrap">
+            activeReport === "old_stock_cleanup" ? null : <div className="d-flex gap-2 align-items-end flex-wrap">
               <ExportButtons
                 name={`report-${activeReport}`}
                 onExportPdf={() => {
@@ -1699,6 +1866,122 @@ export default function ReportsPage() {
             <FileAttachmentList files={exportArtifacts} />
           </div>
         </div>
+
+        {editingCleanupRow && cleanupForm ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="old-stock-cleanup-title">
+              <div className="modal-dialog modal-lg modal-dialog-centered">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h2 className="modal-title h5" id="old-stock-cleanup-title">Edit Old Stock Record</h2>
+                    <button className="btn-close" type="button" aria-label="Close" onClick={closeCleanupEdit} />
+                  </div>
+                  <div className="modal-body">
+                    <div className="alert alert-light border small mb-3">
+                      <div><strong>Source:</strong> {String(editingCleanupRow.source_sheet ?? "-")} row {String(editingCleanupRow.source_row_no ?? "-")}</div>
+                      <div><strong>Asset:</strong> {String(editingCleanupRow.asset_tag ?? "-")}</div>
+                    </div>
+                    <div className="row g-3">
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Item</label>
+                        <select className="form-select form-select-sm" value={cleanupForm.item_id} onChange={(event) => setCleanupField("item_id", event.target.value)}>
+                          <option value="">Select item</option>
+                          {lookups.items.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {toLookupOption(lookups.items, item).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Department</label>
+                        <select className="form-select form-select-sm" value={cleanupForm.department_id} onChange={(event) => setCleanupField("department_id", event.target.value)}>
+                          <option value="">Select department</option>
+                          {lookups.departments.map((department) => (
+                            <option key={department.id} value={department.id}>
+                              {toLookupOption(lookups.departments, department).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Building</label>
+                        <select className="form-select form-select-sm" value={cleanupForm.building_id} onChange={(event) => setCleanupField("building_id", event.target.value)}>
+                          <option value="">No building</option>
+                          {lookups.buildings.map((building) => (
+                            <option key={building.id} value={building.id}>
+                              {toLookupOption(lookups.buildings, building, false).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Room</label>
+                        <select className="form-select form-select-sm" value={cleanupForm.room_id} onChange={(event) => setCleanupField("room_id", event.target.value)}>
+                          <option value="">No room</option>
+                          {lookups.rooms.map((room) => (
+                            <option key={room.id} value={room.id}>
+                              {toLookupOption(lookups.rooms, room, false).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Recipient User</label>
+                        <select className="form-select form-select-sm" value={cleanupForm.recipient_user_id} onChange={(event) => setCleanupField("recipient_user_id", event.target.value)}>
+                          <option value="">No mapped user</option>
+                          {lookups.users.map((user) => (
+                            <option key={user.id} value={user.id}>
+                              {toLookupOption(lookups.users, user, false).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Legacy Received By</label>
+                        <input className="form-control form-control-sm" value={cleanupForm.legacy_received_by} onChange={(event) => setCleanupField("legacy_received_by", event.target.value)} />
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small">Issue Date</label>
+                        <input type="date" className="form-control form-control-sm" value={cleanupForm.issue_date} onChange={(event) => setCleanupField("issue_date", event.target.value)} />
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small">Issue No</label>
+                        <input className="form-control form-control-sm" value={cleanupForm.issue_no} onChange={(event) => setCleanupField("issue_no", event.target.value)} />
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small">Requisition No</label>
+                        <input className="form-control form-control-sm" value={cleanupForm.requisition_no} onChange={(event) => setCleanupField("requisition_no", event.target.value)} />
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Receipt Reference</label>
+                        <input className="form-control form-control-sm" value={cleanupForm.receipt_reference} onChange={(event) => setCleanupField("receipt_reference", event.target.value)} />
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label small">Remarks</label>
+                        <textarea className="form-control form-control-sm" rows={3} value={cleanupForm.remarks} onChange={(event) => setCleanupField("remarks", event.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button className="btn btn-outline-secondary" type="button" onClick={closeCleanupEdit} disabled={savingCleanup}>
+                      Close
+                    </button>
+                    <button className="btn btn-primary" type="button" onClick={() => void saveCleanupEdit()} disabled={savingCleanup}>
+                      {savingCleanup ? (
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                      ) : (
+                        <i className="bi bi-check2-circle me-1" />
+                      )}
+                      Save Cleanup
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-backdrop fade show" />
+          </>
+        ) : null}
 
         {tagPreview ? (
           <>
