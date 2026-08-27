@@ -41,7 +41,13 @@ type LookupKey = keyof LookupMap;
 
 type RowLookupKey = Exclude<LookupKey, "asset-attribute-definitions">;
 
-type QuickMasterResource = "departments" | "stores" | "suppliers" | "funding-sources" | "research-projects";
+type QuickMasterResource =
+  | "departments"
+  | "stores"
+  | "suppliers"
+  | "funding-sources"
+  | "research-projects"
+  | "units-of-measure";
 
 type SystemSetting = {
   setting_key: string;
@@ -230,12 +236,16 @@ const projectStatusOptions: SearchableSelectOption[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
-const quickMasterResourceMeta: Record<QuickMasterResource, { title: string; selectField: keyof ReceiptForm }> = {
+const quickMasterResourceMeta: Record<
+  QuickMasterResource,
+  { title: string; selectField?: keyof ReceiptForm; quickItemField?: keyof QuickItemForm }
+> = {
   departments: { title: "Department", selectField: "department_id" },
   stores: { title: "Store", selectField: "store_id" },
   suppliers: { title: "Supplier", selectField: "supplier_id" },
   "funding-sources": { title: "Funding Source", selectField: "funding_source_id" },
   "research-projects": { title: "Project", selectField: "project_id" },
+  "units-of-measure": { title: "Unit of Measure", quickItemField: "unit_id" },
 };
 
 const statusOptions: ReceiptStatus[] = [
@@ -449,6 +459,14 @@ const createQuickMasterForm = (resource: QuickMasterResource, receiptForm: Recei
       code: "",
       name: "",
       sponsor_type: "university",
+      status: "active",
+    };
+  }
+
+  if (resource === "units-of-measure") {
+    return {
+      code: "",
+      name: "",
       status: "active",
     };
   }
@@ -1173,6 +1191,14 @@ export default function InventoryReceiptsPage() {
       };
     }
 
+    if (quickMasterResource === "units-of-measure") {
+      return {
+        code: quickMasterForm.code?.trim(),
+        name: quickMasterForm.name?.trim(),
+        status: quickMasterForm.status,
+      };
+    }
+
     return {
       project_code: quickMasterForm.project_code?.trim(),
       title: quickMasterForm.title?.trim(),
@@ -1208,6 +1234,10 @@ export default function InventoryReceiptsPage() {
     }
 
     if (quickMasterResource === "funding-sources") {
+      return Boolean(quickMasterForm.code?.trim() && quickMasterForm.name?.trim());
+    }
+
+    if (quickMasterResource === "units-of-measure") {
       return Boolean(quickMasterForm.code?.trim() && quickMasterForm.name?.trim());
     }
 
@@ -1250,10 +1280,18 @@ export default function InventoryReceiptsPage() {
             });
 
       if (createdRow?.id) {
-        setFormValue(quickMasterResourceMeta[quickMasterResource].selectField, String(createdRow.id));
+        const meta = quickMasterResourceMeta[quickMasterResource];
+
+        if (meta.selectField) {
+          setFormValue(meta.selectField, String(createdRow.id));
+        }
+
+        if (meta.quickItemField) {
+          setQuickItemField(meta.quickItemField, String(createdRow.id) as never);
+        }
       }
 
-      setMessage(`${quickMasterResourceMeta[quickMasterResource].title} created and selected for this receipt.`);
+      setMessage(`${quickMasterResourceMeta[quickMasterResource].title} created and selected.`);
       setError("");
       setQuickMasterOpen(false);
     } catch (masterError) {
@@ -1903,6 +1941,43 @@ export default function InventoryReceiptsPage() {
             <label className="form-label small">Status</label>
             <SearchableSelect
               id="receipt-quick-funding-source-status"
+              value={quickMasterForm.status ?? "active"}
+              options={quickItemStatusOptions}
+              placeholder="Search status"
+              onChange={(value) => setQuickMasterField("status", value)}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (quickMasterResource === "units-of-measure") {
+      return (
+        <>
+          <div className="col-12 col-md-4">
+            <FieldLabel required>Code</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.code ?? ""}
+              onChange={(event) => setQuickMasterField("code", event.target.value)}
+              placeholder="e.g. PCS"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-8">
+            <FieldLabel required>Name</FieldLabel>
+            <input
+              className="form-control form-control-sm"
+              value={quickMasterForm.name ?? ""}
+              onChange={(event) => setQuickMasterField("name", event.target.value)}
+              placeholder="e.g. Pieces"
+              required
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small">Status</label>
+            <SearchableSelect
+              id="receipt-quick-unit-status"
               value={quickMasterForm.status ?? "active"}
               options={quickItemStatusOptions}
               placeholder="Search status"
@@ -2608,7 +2683,17 @@ export default function InventoryReceiptsPage() {
                           </div>
 
                           <div className="col-12 col-md-4">
-                            <FieldLabel required>Unit of Measure</FieldLabel>
+                            <div className="d-flex align-items-center justify-content-between">
+                              <FieldLabel required>Unit of Measure</FieldLabel>
+                              <button
+                                className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
+                                type="button"
+                                onClick={() => openQuickMasterDialog("units-of-measure")}
+                              >
+                                <i className="bi bi-plus-circle me-1" />
+                                New Unit
+                              </button>
+                            </div>
                             <SearchableSelect
                               id="receipt-quick-item-unit"
                               value={quickItemForm.unit_id}
