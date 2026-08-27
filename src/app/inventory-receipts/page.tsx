@@ -2863,7 +2863,7 @@ export default function InventoryReceiptsPage() {
                               className="form-control form-control-sm"
                               value={quickItemForm.model}
                               onChange={(event) => setQuickItemField("model", event.target.value)}
-                              placeholder="e.g. Latitude 5440 or 500g pack"
+                              placeholder="e.g. 500g, analytical grade, model/version"
                             />
                           </div>
 

@@ -921,7 +921,7 @@ export default function ItemsPage() {
                           className="form-control form-control-sm"
                           value={form.model}
                           onChange={(event) => setFormField("model", event.target.value)}
-                          placeholder="e.g. Latitude 5440 or 500g pack"
+                          placeholder="e.g. 500g, analytical grade, model/version"
                         />
                       </div>
                       <div className="col-12 col-md-4">
