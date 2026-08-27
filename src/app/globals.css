@@ -341,6 +341,12 @@ body {
   width: 96px;
 }
 
+.grn-items-grid th.grn-qty-per-col,
+.grn-items-grid td.grn-qty-per-col {
+  min-width: 132px;
+  width: 132px;
+}
+
 .grn-items-grid .grn-uom-col {
   min-width: 120px;
   width: 120px;
@@ -360,6 +366,18 @@ body {
 .grn-items-grid .form-control,
 .grn-items-grid .ims-search-select input {
   min-height: 34px;
+}
+
+.grn-items-grid .grn-unit-addon {
+  background: #eef6ff;
+  color: #245185;
+  font-size: 0.72rem;
+  font-weight: 700;
+  max-width: 58px;
+  overflow: hidden;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+  text-overflow: ellipsis;
 }
 
 .grn-item-detail-row td {

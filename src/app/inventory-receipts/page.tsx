@@ -871,6 +871,21 @@ export default function InventoryReceiptsPage() {
     return "Qty Per Receipt Unit";
   };
 
+  const qtyPerUnitShortLabel = (row: ReceiptItemInput): string => {
+    const receiptUnit = receiptUnitCodeForRow(row);
+    const baseUnit = baseUnitCodeForRow(row);
+
+    if (receiptUsesBaseUnit(row)) {
+      return "1:1";
+    }
+
+    if (receiptUnit && baseUnit) {
+      return `${baseUnit}/${receiptUnit}`;
+    }
+
+    return baseUnit || "unit";
+  };
+
   const stockQuantityForRow = (row: ReceiptItemInput): string => {
     const accepted = Number(row.quantity_accepted || 0);
     const qtyPer = Number(row.qty_per_receipt_unit || 1);
@@ -2643,7 +2658,7 @@ export default function InventoryReceiptsPage() {
                             <th className="grn-description-col">Description</th>
                             <th className="grn-qty-col">Received</th>
                             <th className="grn-uom-col">UOM</th>
-                            <th className="grn-qty-col">Qty/Unit</th>
+                            <th className="grn-qty-col grn-qty-per-col">Qty/Unit</th>
                             <th className="grn-stock-col">Stock Add</th>
                             <th className="grn-qty-col">Accepted</th>
                             <th className="grn-qty-col">Rejected</th>
@@ -2673,7 +2688,7 @@ export default function InventoryReceiptsPage() {
                                     onChange={(event) => setItemValue(index, "description", event.target.value)}
                                   />
                                 </td>
-                                <td className="grn-qty-col">
+                                <td className="grn-qty-col grn-qty-per-col">
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
@@ -2694,17 +2709,20 @@ export default function InventoryReceiptsPage() {
                                   />
                                 </td>
                                 <td className="grn-qty-col">
-                                  <input
-                                    className="form-control form-control-sm text-end"
-                                    type="number"
-                                    value={item.qty_per_receipt_unit}
-                                    step="0.000001"
-                                    min="0.000001"
-                                    disabled={receiptUsesBaseUnit(item)}
-                                    placeholder={receiptUsesBaseUnit(item) ? "1" : undefined}
-                                    title={qtyPerUnitLabel(item)}
-                                    onChange={(event) => setItemValue(index, "qty_per_receipt_unit", event.target.value)}
-                                  />
+                                  <div className="input-group input-group-sm" title={qtyPerUnitLabel(item)}>
+                                    <input
+                                      className="form-control text-end"
+                                      type="number"
+                                      value={item.qty_per_receipt_unit}
+                                      step="0.000001"
+                                      min="0.000001"
+                                      disabled={receiptUsesBaseUnit(item)}
+                                      placeholder={receiptUsesBaseUnit(item) ? "1" : undefined}
+                                      aria-label={qtyPerUnitLabel(item)}
+                                      onChange={(event) => setItemValue(index, "qty_per_receipt_unit", event.target.value)}
+                                    />
+                                    <span className="input-group-text grn-unit-addon">{qtyPerUnitShortLabel(item)}</span>
+                                  </div>
                                 </td>
                                 <td className="grn-stock-col">
                                   <div className="form-control form-control-sm bg-white text-secondary text-end">
