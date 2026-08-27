@@ -2278,10 +2278,10 @@ export default function InventoryReceiptsPage() {
           }
         />
 
-        {(message || error) && (
+        {(message || (error && !dialogOpen)) && (
           <div className="mb-4">
             {message && <div className="alert alert-success py-2">{message}</div>}
-            {error && <div className="alert alert-danger py-2">{error}</div>}
+            {error && !dialogOpen ? <div className="alert alert-danger py-2">{error}</div> : null}
           </div>
         )}
 
@@ -2310,6 +2310,7 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
                   <div className="modal-body px-4 py-3">
+                    {error ? <div className="alert alert-danger py-2">{error}</div> : null}
                     <div className="row g-2">
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Receipt No.</label>
