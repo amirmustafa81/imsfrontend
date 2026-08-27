@@ -2493,13 +2493,7 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <h3 className="h6 mb-0">Receipt Items</h3>
-                      <button className="btn btn-sm btn-outline-primary" type="button" onClick={addItemRow}>
-                        <i className="bi bi-plus-lg me-1" />
-                        Add Item
-                      </button>
-                    </div>
+                    <h3 className="h6 mb-0">Receipt Items</h3>
                   </div>
 
                   {items.map((item, index) => (
@@ -2693,6 +2687,13 @@ export default function InventoryReceiptsPage() {
                       </div>
                     </div>
                   ))}
+
+                  <div className="col-12 text-end">
+                    <button className="btn btn-sm btn-outline-primary" type="button" onClick={addItemRow}>
+                      <i className="bi bi-plus-lg me-1" />
+                      Add Item
+                    </button>
+                  </div>
 
                   <div className="col-12">
                     <label className="form-label small">Supporting Documents</label>
