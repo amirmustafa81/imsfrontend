@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 
 export type SearchableSelectOption = {
   value: string;
@@ -25,11 +26,13 @@ export function SearchableSelect({
   emptyLabel?: string;
   disabled?: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const selected = options.find((option) => option.value === value);
   const selectedLabel = selected?.label ?? "";
   const [query, setQuery] = useState(selectedLabel);
   const [hasTypedQuery, setHasTypedQuery] = useState(false);
   const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const displayValue = open ? query : selectedLabel;
 
   const filteredOptions = useMemo(() => {
@@ -43,9 +46,81 @@ export function SearchableSelect({
       .slice(0, 60);
   }, [hasTypedQuery, options, query]);
 
+  useEffect(() => {
+    if (!open || disabled) {
+      return;
+    }
+
+    const updateMenuPosition = () => {
+      const rect = inputRef.current?.getBoundingClientRect();
+
+      if (!rect) {
+        return;
+      }
+
+      const spaceBelow = window.innerHeight - rect.bottom - 12;
+      const spaceAbove = rect.top - 12;
+      const shouldOpenUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(140, Math.min(280, shouldOpenUp ? spaceAbove : spaceBelow));
+
+      setMenuStyle({
+        left: rect.left,
+        maxHeight,
+        overflowY: "auto",
+        position: "fixed",
+        top: shouldOpenUp ? rect.top - maxHeight - 4 : rect.bottom + 4,
+        width: rect.width,
+        zIndex: 2100,
+      });
+    };
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [disabled, open]);
+
+  const menu =
+    open && !disabled && menuStyle ? (
+      <div
+        id={`${id}-options`}
+        className="dropdown-menu show shadow-sm ims-search-select-menu"
+        role="listbox"
+        style={menuStyle}
+      >
+        {filteredOptions.length > 0 ? (
+          filteredOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`dropdown-item small ${option.value === value ? "active" : ""}`}
+              role="option"
+              aria-selected={option.value === value}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(option.value);
+                setQuery(option.label);
+                setHasTypedQuery(false);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))
+        ) : (
+          <div className="dropdown-item-text small text-secondary">{emptyLabel}</div>
+        )}
+      </div>
+    ) : null;
+
   return (
-    <div className="position-relative">
+    <div className="ims-search-select">
       <input
+        ref={inputRef}
         id={id}
         className="form-control form-control-sm"
         role="combobox"
@@ -75,37 +150,7 @@ export function SearchableSelect({
           setOpen(true);
         }}
       />
-      {open && !disabled ? (
-        <div
-          id={`${id}-options`}
-          className="dropdown-menu show w-100 shadow-sm"
-          role="listbox"
-          style={{ maxHeight: "240px", overflowY: "auto", zIndex: 1080 }}
-        >
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`dropdown-item small ${option.value === value ? "active" : ""}`}
-                role="option"
-                aria-selected={option.value === value}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  onChange(option.value);
-                  setQuery(option.label);
-                  setHasTypedQuery(false);
-                  setOpen(false);
-                }}
-              >
-                {option.label}
-              </button>
-            ))
-          ) : (
-            <div className="dropdown-item-text small text-secondary">{emptyLabel}</div>
-          )}
-        </div>
-      ) : null}
+      {typeof document !== "undefined" && menu ? createPortal(menu, document.body) : null}
     </div>
   );
 }

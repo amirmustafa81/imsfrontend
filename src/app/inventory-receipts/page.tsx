@@ -2578,18 +2578,15 @@ export default function InventoryReceiptsPage() {
                             <th className="text-center grn-row-number">#</th>
                             <th className="grn-item-col">Item</th>
                             <th className="grn-description-col">Description</th>
-                            <th>Qty Received</th>
-                            <th>Receipt UOM</th>
-                            <th>Qty Per Unit</th>
-                            <th>Stock Addition</th>
-                            <th>Qty Accepted</th>
-                            <th>Qty Rejected</th>
-                            <th>Unit Cost</th>
-                            <th>Total Cost</th>
-                            <th>Batch No</th>
-                            <th>Expiry</th>
-                            <th>Inspection</th>
-                            <th className="text-end">Actions</th>
+                            <th className="grn-qty-col">Received</th>
+                            <th className="grn-uom-col">UOM</th>
+                            <th className="grn-qty-col">Qty/Unit</th>
+                            <th className="grn-stock-col">Stock Add</th>
+                            <th className="grn-qty-col">Accepted</th>
+                            <th className="grn-qty-col">Rejected</th>
+                            <th className="grn-money-col">Unit Cost</th>
+                            <th className="grn-money-col">Total</th>
+                            <th className="text-end grn-action-col">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2598,26 +2595,13 @@ export default function InventoryReceiptsPage() {
                               <tr>
                                 <td className="text-center text-secondary grn-row-number">{index + 1}</td>
                                 <td className="grn-item-col">
-                                  <div className="d-flex gap-1">
-                                    <div className="flex-grow-1">
-                                      <SearchableSelect
-                                        id={`receipt-item-${index}`}
-                                        value={item.item_id}
-                                        options={itemOptions}
-                                        placeholder="Search item"
-                                        onChange={(value) => setItemValue(index, "item_id", value)}
-                                      />
-                                    </div>
-                                    <button
-                                      className="btn btn-sm btn-outline-primary px-2"
-                                      type="button"
-                                      title="Create new item"
-                                      aria-label={`Create item for row ${index + 1}`}
-                                      onClick={() => openQuickItemDialog(index)}
-                                    >
-                                      <i className="bi bi-plus-lg" />
-                                    </button>
-                                  </div>
+                                  <SearchableSelect
+                                    id={`receipt-item-${index}`}
+                                    value={item.item_id}
+                                    options={itemOptions}
+                                    placeholder="Search item"
+                                    onChange={(value) => setItemValue(index, "item_id", value)}
+                                  />
                                 </td>
                                 <td className="grn-description-col">
                                   <input
@@ -2626,7 +2610,7 @@ export default function InventoryReceiptsPage() {
                                     onChange={(event) => setItemValue(index, "description", event.target.value)}
                                   />
                                 </td>
-                                <td>
+                                <td className="grn-qty-col">
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
@@ -2637,7 +2621,7 @@ export default function InventoryReceiptsPage() {
                                     onChange={(event) => setItemValue(index, "quantity_received", event.target.value)}
                                   />
                                 </td>
-                                <td>
+                                <td className="grn-uom-col">
                                   <SearchableSelect
                                     id={`receipt-uom-${index}`}
                                     value={item.receipt_uom_id}
@@ -2646,7 +2630,7 @@ export default function InventoryReceiptsPage() {
                                     onChange={(value) => setItemValue(index, "receipt_uom_id", value)}
                                   />
                                 </td>
-                                <td>
+                                <td className="grn-qty-col">
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
@@ -2659,12 +2643,12 @@ export default function InventoryReceiptsPage() {
                                     onChange={(event) => setItemValue(index, "qty_per_receipt_unit", event.target.value)}
                                   />
                                 </td>
-                                <td>
+                                <td className="grn-stock-col">
                                   <div className="form-control form-control-sm bg-white text-secondary text-end">
                                     {stockQuantityForRow(item)} {baseUnitCodeForRow(item) || ""}
                                   </div>
                                 </td>
-                                <td>
+                                <td className="grn-qty-col">
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
@@ -2676,7 +2660,7 @@ export default function InventoryReceiptsPage() {
                                     onChange={(event) => setItemValue(index, "quantity_accepted", event.target.value)}
                                   />
                                 </td>
-                                <td>
+                                <td className="grn-qty-col">
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
@@ -2690,7 +2674,7 @@ export default function InventoryReceiptsPage() {
                                     onChange={(event) => setItemValue(index, "quantity_rejected", event.target.value)}
                                   />
                                 </td>
-                                <td>
+                                <td className="grn-money-col">
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
@@ -2701,7 +2685,7 @@ export default function InventoryReceiptsPage() {
                                     onChange={(event) => setItemValue(index, "unit_cost", event.target.value)}
                                   />
                                 </td>
-                                <td>
+                                <td className="grn-money-col">
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
@@ -2712,65 +2696,85 @@ export default function InventoryReceiptsPage() {
                                     onChange={(event) => setItemValue(index, "total_cost", event.target.value)}
                                   />
                                 </td>
-                                <td>
-                                  <input
-                                    className="form-control form-control-sm"
-                                    value={item.batch_no}
-                                    aria-label={`Row ${index + 1} batch number`}
-                                    onChange={(event) => setItemValue(index, "batch_no", event.target.value)}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    className="form-control form-control-sm"
-                                    type="date"
-                                    value={item.expiry_date}
-                                    aria-label={`Row ${index + 1} expiry date`}
-                                    onChange={(event) => setItemValue(index, "expiry_date", event.target.value)}
-                                  />
-                                </td>
-                                <td>
-                                  <SearchableSelect
-                                    id={`receipt-inspection-status-${index}`}
-                                    value={item.inspection_status}
-                                    options={inspectionStatusOptions}
-                                    placeholder="Inspection"
-                                    onChange={(value) => setItemValue(index, "inspection_status", value)}
-                                  />
-                                </td>
-                                <td className="text-end">
-                                  <button
-                                    className="btn btn-sm btn-outline-secondary px-2 me-1"
-                                    type="button"
-                                    title="Inspection remarks"
-                                    aria-label={`Inspection remarks for row ${index + 1}`}
-                                    onClick={() => setItemDetailsIndex((current) => (current === index ? null : index))}
-                                  >
-                                    <i className="bi bi-card-text" />
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-outline-danger px-2"
-                                    type="button"
-                                    title="Remove row"
-                                    aria-label={`Remove row ${index + 1}`}
-                                    onClick={() => removeItemRow(index)}
-                                    disabled={items.length === 1}
-                                  >
-                                    <i className="bi bi-trash3" />
-                                  </button>
+                                <td className="text-end grn-action-col">
+                                  <div className="btn-group btn-group-sm">
+                                    <button
+                                      className="btn btn-outline-primary px-2"
+                                      type="button"
+                                      title="Create new item"
+                                      aria-label={`Create item for row ${index + 1}`}
+                                      onClick={() => openQuickItemDialog(index)}
+                                    >
+                                      <i className="bi bi-plus-lg" />
+                                    </button>
+                                    <button
+                                      className="btn btn-outline-secondary px-2"
+                                      type="button"
+                                      title="Batch, expiry and inspection"
+                                      aria-label={`Batch, expiry and inspection for row ${index + 1}`}
+                                      onClick={() => setItemDetailsIndex((current) => (current === index ? null : index))}
+                                    >
+                                      <i className="bi bi-card-text" />
+                                    </button>
+                                    <button
+                                      className="btn btn-outline-danger px-2"
+                                      type="button"
+                                      title="Remove row"
+                                      aria-label={`Remove row ${index + 1}`}
+                                      onClick={() => removeItemRow(index)}
+                                      disabled={items.length === 1}
+                                    >
+                                      <i className="bi bi-trash3" />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                               {itemDetailsIndex === index ? (
                                 <tr className="grn-item-detail-row">
                                   <td />
-                                  <td colSpan={14}>
-                                    <label className="form-label small mb-1">Inspection Remarks</label>
-                                    <textarea
-                                      className="form-control form-control-sm"
-                                      rows={2}
-                                      value={item.inspection_remarks}
-                                      onChange={(event) => setItemValue(index, "inspection_remarks", event.target.value)}
-                                    />
+                                  <td colSpan={11}>
+                                    <div className="row g-2">
+                                      <div className="col-12 col-md-3">
+                                        <label className="form-label small mb-1">Batch No</label>
+                                        <input
+                                          className="form-control form-control-sm"
+                                          value={item.batch_no}
+                                          aria-label={`Row ${index + 1} batch number`}
+                                          onChange={(event) => setItemValue(index, "batch_no", event.target.value)}
+                                        />
+                                      </div>
+                                      <div className="col-12 col-md-3">
+                                        <label className="form-label small mb-1">Expiry</label>
+                                        <input
+                                          className="form-control form-control-sm"
+                                          type="date"
+                                          value={item.expiry_date}
+                                          aria-label={`Row ${index + 1} expiry date`}
+                                          onChange={(event) => setItemValue(index, "expiry_date", event.target.value)}
+                                        />
+                                      </div>
+                                      <div className="col-12 col-md-3">
+                                        <label className="form-label small mb-1">Inspection Status</label>
+                                        <SearchableSelect
+                                          id={`receipt-inspection-status-${index}`}
+                                          value={item.inspection_status}
+                                          options={inspectionStatusOptions}
+                                          placeholder="Inspection"
+                                          onChange={(value) => setItemValue(index, "inspection_status", value)}
+                                        />
+                                      </div>
+                                      <div className="col-12">
+                                        <label className="form-label small mb-1">Inspection Remarks</label>
+                                        <textarea
+                                          className="form-control form-control-sm"
+                                          rows={2}
+                                          value={item.inspection_remarks}
+                                          onChange={(event) =>
+                                            setItemValue(index, "inspection_remarks", event.target.value)
+                                          }
+                                        />
+                                      </div>
+                                    </div>
                                   </td>
                                 </tr>
                               ) : null}

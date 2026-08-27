@@ -192,8 +192,13 @@ body {
   pointer-events: none !important;
 }
 
-.ims-search-select .dropdown-menu {
-  z-index: 1080;
+.ims-search-select-menu {
+  z-index: 2100;
+}
+
+.ims-search-select-menu .dropdown-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .grn-items-grid {
@@ -202,7 +207,7 @@ body {
 }
 
 .grn-items-grid table {
-  min-width: 1680px;
+  min-width: 1380px;
 }
 
 .grn-items-grid thead th {
@@ -213,24 +218,40 @@ body {
   white-space: nowrap;
 }
 
-.grn-items-grid td,
-.grn-items-grid th {
-  min-width: 108px;
-}
-
 .grn-items-grid .grn-row-number {
   min-width: 44px;
   width: 44px;
 }
 
 .grn-items-grid .grn-item-col {
-  min-width: 310px;
-  width: 310px;
+  min-width: 300px;
+  width: 300px;
 }
 
 .grn-items-grid .grn-description-col {
   min-width: 210px;
   width: 210px;
+}
+
+.grn-items-grid .grn-qty-col {
+  min-width: 96px;
+  width: 96px;
+}
+
+.grn-items-grid .grn-uom-col {
+  min-width: 120px;
+  width: 120px;
+}
+
+.grn-items-grid .grn-stock-col,
+.grn-items-grid .grn-money-col {
+  min-width: 112px;
+  width: 112px;
+}
+
+.grn-items-grid .grn-action-col {
+  min-width: 118px;
+  width: 118px;
 }
 
 .grn-items-grid .form-control,
