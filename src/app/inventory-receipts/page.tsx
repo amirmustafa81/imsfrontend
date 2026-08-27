@@ -82,10 +82,17 @@ type ReceiptItem = {
   item_id: number;
   description: string | null;
   quantity_received: number;
+  receipt_uom_id: number | null;
+  qty_per_receipt_unit: number;
+  base_uom_id: number | null;
+  calculated_base_qty: number | null;
   quantity_accepted: number;
+  accepted_base_qty: number | null;
   quantity_rejected: number;
+  rejected_base_qty: number | null;
   unit_cost: number | null;
   total_cost: number | null;
+  base_unit_cost: number | null;
   batch_no: string | null;
   expiry_date: string | null;
   inspection_status: string;
@@ -96,6 +103,8 @@ type ReceiptItemInput = {
   item_id: string;
   description: string;
   quantity_received: string;
+  receipt_uom_id: string;
+  qty_per_receipt_unit: string;
   quantity_accepted: string;
   quantity_rejected: string;
   unit_cost: string;
@@ -332,6 +341,8 @@ const emptyItem: ReceiptItemInput = {
   item_id: "",
   description: "",
   quantity_received: "",
+  receipt_uom_id: "",
+  qty_per_receipt_unit: "1",
   quantity_accepted: "",
   quantity_rejected: "",
   unit_cost: "",
@@ -527,6 +538,8 @@ const receiptItemToInput = (item: ReceiptItem): ReceiptItemInput => ({
   item_id: String(item.item_id ?? ""),
   description: item.description ?? "",
   quantity_received: formatQuantityInput(Number(item.quantity_received ?? 0)),
+  receipt_uom_id: item.receipt_uom_id ? String(item.receipt_uom_id) : item.base_uom_id ? String(item.base_uom_id) : "",
+  qty_per_receipt_unit: formatQuantityInput(Number(item.qty_per_receipt_unit ?? 1)),
   quantity_accepted: formatQuantityInput(Number(item.quantity_accepted ?? 0)),
   quantity_rejected: formatQuantityInput(Number(item.quantity_rejected ?? 0)),
   unit_cost: item.unit_cost === null || item.unit_cost === undefined ? "" : formatMoneyInput(Number(item.unit_cost)),
@@ -748,6 +761,47 @@ export default function InventoryReceiptsPage() {
   const categoryOptions = useMemo(() => parentCategories.map(toLookupOption), [parentCategories]);
   const subcategoryOptions = useMemo(() => quickItemSubcategories.map(toLookupOption), [quickItemSubcategories]);
   const unitOptions = useMemo(() => lookups["units-of-measure"].map(toLookupOption), [lookups]);
+
+  const selectedItemForId = (itemId: string | number | null | undefined): RowData | undefined =>
+    lookups.items.find((row) => String(row.id) === String(itemId ?? ""));
+
+  const unitCodeForId = (unitId: string | number | null | undefined): string => {
+    if (!unitId) return "";
+    const unit = lookups["units-of-measure"].find((row) => String(row.id) === String(unitId));
+    return String(unit?.code ?? unit?.name ?? unitId);
+  };
+
+  const baseUnitIdForItem = (itemId: string | number | null | undefined): string => {
+    const item = selectedItemForId(itemId);
+    return item?.unit_id ? String(item.unit_id) : "";
+  };
+
+  const stockQuantityForRow = (row: ReceiptItemInput): string => {
+    const accepted = Number(row.quantity_accepted || 0);
+    const qtyPer = Number(row.qty_per_receipt_unit || 1);
+
+    if (!Number.isFinite(accepted) || !Number.isFinite(qtyPer) || accepted <= 0 || qtyPer <= 0) {
+      return "0";
+    }
+
+    return formatQuantityInput(accepted * qtyPer);
+  };
+
+  const packageDisplayForItem = (item: ReceiptItem): string => {
+    const receiptUnit = unitCodeForId(item.receipt_uom_id ?? item.base_uom_id);
+    const baseUnit = unitCodeForId(item.base_uom_id ?? baseUnitIdForItem(item.item_id));
+    const qtyPer = Number(item.qty_per_receipt_unit ?? 1);
+
+    return `${formatQuantityInput(Number(item.quantity_received ?? 0))} ${receiptUnit || "unit"} x ${formatQuantityInput(qtyPer)} ${baseUnit || "base"}`;
+  };
+
+  const stockDisplayForItem = (item: ReceiptItem): string => {
+    const baseUnit = unitCodeForId(item.base_uom_id ?? baseUnitIdForItem(item.item_id));
+    const stockQty = Number(item.accepted_base_qty ?? item.quantity_accepted ?? 0);
+
+    return `${formatQuantityInput(stockQty)}${baseUnit ? ` ${baseUnit}` : ""}`;
+  };
+
   const generatedQuickItemCode = useMemo(() => {
     if (!selectedQuickItemCategory?.code) {
       return "";
@@ -900,6 +954,17 @@ export default function InventoryReceiptsPage() {
     setItems((current) =>
       current.map((row, idx) => {
         if (idx !== index) return row;
+        if (key === "item_id") {
+          const baseUnitId = baseUnitIdForItem(value);
+
+          return {
+            ...row,
+            item_id: value,
+            receipt_uom_id: baseUnitId,
+            qty_per_receipt_unit: "1",
+          };
+        }
+
         if (key === "quantity_received") {
           const quantityReceived = normalizeQuantityInput(value);
           const received = Number(quantityReceived || 0);
@@ -964,6 +1029,15 @@ export default function InventoryReceiptsPage() {
 
         if (key === "total_cost") {
           return { ...row, total_cost: normalizeMoneyInput(value) };
+        }
+
+        if (key === "qty_per_receipt_unit") {
+          const qtyPer = normalizeQuantityInput(value);
+
+          return {
+            ...row,
+            qty_per_receipt_unit: qtyPer,
+          };
         }
 
         return { ...row, [key]: value };
@@ -1081,7 +1155,7 @@ export default function InventoryReceiptsPage() {
         !quickItemForm.category_id ||
         !quickItemForm.unit_id
       ) {
-        setQuickItemError("Item Name, Item Type, Category, and Unit of Measure are required.");
+        setQuickItemError("Item Name, Item Type, Category, and Base UOM / Stock UOM are required.");
         setQuickItemSaving(false);
         return;
       }
@@ -1115,7 +1189,18 @@ export default function InventoryReceiptsPage() {
           : nextItems.find((item) => String(item.item_code ?? item.code ?? "") === generatedQuickItemCode);
 
       if (createdItem?.id && quickItemRowIndex !== null) {
-        setItemValue(quickItemRowIndex, "item_id", String(createdItem.id));
+        setItems((current) =>
+          current.map((row, index) =>
+            index === quickItemRowIndex
+              ? {
+                  ...row,
+                  item_id: String(createdItem.id),
+                  receipt_uom_id: createdItem.unit_id ? String(createdItem.unit_id) : "",
+                  qty_per_receipt_unit: "1",
+                }
+              : row,
+          ),
+        );
       }
 
       setMessage("Item created in Item Master and selected for this receipt.");
@@ -1341,8 +1426,9 @@ export default function InventoryReceiptsPage() {
 
   const expandedItemColumns = [
     { key: "item", header: "Item", render: (receiptItem: ReceiptItem) => lookupLabel("items", receiptItem.item_id) },
-    { key: "qty", header: "Qty Rec", render: (receiptItem: ReceiptItem) => receiptItem.quantity_received },
+    { key: "package", header: "Package", render: (receiptItem: ReceiptItem) => packageDisplayForItem(receiptItem) },
     { key: "accepted", header: "Accepted", render: (receiptItem: ReceiptItem) => receiptItem.quantity_accepted },
+    { key: "stockQty", header: "Stock Qty", render: (receiptItem: ReceiptItem) => stockDisplayForItem(receiptItem) },
     { key: "rejected", header: "Rejected", render: (receiptItem: ReceiptItem) => receiptItem.quantity_rejected },
     { key: "unitCost", header: `Unit Cost (${currency})`, render: (receiptItem: ReceiptItem) => receiptItem.unit_cost ?? "-" },
     { key: "totalCost", header: `Total Cost (${currency})`, render: (receiptItem: ReceiptItem) => receiptItem.total_cost ?? "-" },
@@ -1533,6 +1619,8 @@ export default function InventoryReceiptsPage() {
           item_id: Number(row.item_id),
           description: row.description.trim() || null,
           quantity_received: Number(row.quantity_received || 0),
+          receipt_uom_id: row.receipt_uom_id ? Number(row.receipt_uom_id) : null,
+          qty_per_receipt_unit: Number(row.qty_per_receipt_unit || 1),
           quantity_accepted: Number.isFinite(quantityAccepted ?? 0) ? (quantityAccepted ?? undefined) : undefined,
           quantity_rejected: Number.isFinite(quantityRejected ?? 0) ? (quantityRejected ?? undefined) : undefined,
           unit_cost: row.unit_cost !== "" ? Number(row.unit_cost) : null,
@@ -1555,6 +1643,11 @@ export default function InventoryReceiptsPage() {
       return;
     }
 
+    if (receiptItems.some((row) => Number(row.qty_per_receipt_unit || 0) <= 0)) {
+      setError("Quantity per receipt unit must be greater than 0.");
+      return;
+    }
+
     if (receiptItems.some((row) => Number(row.quantity_accepted || 0) > Number(row.quantity_received || 0))) {
       setError("Qty Accepted cannot be greater than Qty Received.");
       return;
@@ -1566,6 +1659,26 @@ export default function InventoryReceiptsPage() {
       )
     ) {
       setError("Qty Accepted plus Qty Rejected cannot be greater than Qty Received.");
+      return;
+    }
+
+    const missingBatchItem = receiptItems.find((row) => {
+      const selectedItem = selectedItemForId(row.item_id);
+      return selectedItem?.requires_batch_tracking && !row.batch_no.trim();
+    });
+
+    if (missingBatchItem) {
+      setError(`Batch No is required for ${lookupLabel("items", missingBatchItem.item_id)}.`);
+      return;
+    }
+
+    const missingExpiryItem = receiptItems.find((row) => {
+      const selectedItem = selectedItemForId(row.item_id);
+      return selectedItem?.requires_expiry_tracking && !row.expiry_date;
+    });
+
+    if (missingExpiryItem) {
+      setError(`Expiry is required for ${lookupLabel("items", missingExpiryItem.item_id)}.`);
       return;
     }
 
@@ -1687,8 +1800,9 @@ export default function InventoryReceiptsPage() {
         columns: [
           { header: "Item", render: (item) => lookupLabel("items", item.item_id) },
           { header: "Description", render: (item) => item.description },
-          { header: "Qty Received", render: (item) => item.quantity_received },
+          { header: "Package Received", render: (item) => packageDisplayForItem(item) },
           { header: "Qty Accepted", render: (item) => item.quantity_accepted },
+          { header: "Stock Qty", render: (item) => stockDisplayForItem(item) },
           { header: "Qty Rejected", render: (item) => item.quantity_rejected },
           { header: `Unit Cost (${currency})`, render: (item) => item.unit_cost },
           { header: `Total Cost (${currency})`, render: (item) => item.total_cost },
@@ -2383,6 +2497,36 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
+                          <label className="form-label small">Receipt UOM</label>
+                          <SearchableSelect
+                            id={`receipt-uom-${index}`}
+                            value={item.receipt_uom_id}
+                            options={unitOptions}
+                            placeholder="Search UoM"
+                            onChange={(value) => setItemValue(index, "receipt_uom_id", value)}
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                          <label className="form-label small">Qty Per Receipt Unit</label>
+                          <input
+                            className="form-control form-control-sm"
+                            type="number"
+                            value={item.qty_per_receipt_unit}
+                            step="0.000001"
+                            min="0.000001"
+                            onChange={(event) => setItemValue(index, "qty_per_receipt_unit", event.target.value)}
+                          />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                          <label className="form-label small">Stock Addition</label>
+                          <div className="form-control form-control-sm bg-white text-secondary">
+                            {stockQuantityForRow(item)} {unitCodeForId(baseUnitIdForItem(item.item_id)) || "base UOM"}
+                          </div>
+                        </div>
+
+                        <div className="col-12 col-md-3">
                           <label className="form-label small">Qty Accepted</label>
                           <input
                             className="form-control form-control-sm"
@@ -2684,7 +2828,7 @@ export default function InventoryReceiptsPage() {
 
                           <div className="col-12 col-md-4">
                             <div className="d-flex align-items-center justify-content-between">
-                              <FieldLabel required>Unit of Measure</FieldLabel>
+                              <FieldLabel required>Base UOM / Stock UOM</FieldLabel>
                               <button
                                 className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
                                 type="button"
@@ -2714,12 +2858,12 @@ export default function InventoryReceiptsPage() {
                           </div>
 
                           <div className="col-12 col-md-4">
-                            <label className="form-label small">Model</label>
+                            <label className="form-label small">Specification / Variant</label>
                             <input
                               className="form-control form-control-sm"
                               value={quickItemForm.model}
                               onChange={(event) => setQuickItemField("model", event.target.value)}
-                              placeholder="e.g. Latitude 5440"
+                              placeholder="e.g. Latitude 5440 or 500g pack"
                             />
                           </div>
 

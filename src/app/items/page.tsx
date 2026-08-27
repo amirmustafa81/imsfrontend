@@ -177,7 +177,7 @@ const infoText = {
   itemType: "Controls how the item behaves, such as consumable stock, fixed asset, controlled stationery, project inventory, or license.",
   category: "Main classification used for reporting, coding, depreciation policy, and item grouping.",
   subcategory: "More specific classification under the selected category, used for consistent item and asset coding.",
-  unit: "Default measurement unit for receipt, stock balance, issue, return, and consumption quantities.",
+  unit: "Base stock unit used for stock balance, issue, return, and consumption quantities.",
   minimumStock: "Minimum quantity expected in stock. Reports use this to identify low-stock items.",
   capitalizable: "Enable when this item can become a fixed asset after purchase or registration.",
   sensitive: "Enable for controlled or sensitive items that need stronger tracking and accountability.",
@@ -613,7 +613,7 @@ export default function ItemsPage() {
     },
     {
       key: "unit_id",
-      header: "UoM",
+      header: "Base UOM",
       render: (row: ItemRow) => formatLookup(lookups["units-of-measure"], row.unit_id),
     },
     {
@@ -898,7 +898,7 @@ export default function ItemsPage() {
                       </div>
                       <div className="col-12 col-md-4">
                         <div className="d-flex align-items-start justify-content-between gap-2">
-                          <FieldLabel required info={infoText.unit}>Unit of Measure</FieldLabel>
+                          <FieldLabel required info={infoText.unit}>Base UOM / Stock UOM</FieldLabel>
                           <button className="btn btn-link btn-sm p-0 text-decoration-none" type="button" onClick={() => openQuickMasterDialog("unit")}>
                             <i className="bi bi-plus-circle me-1" />
                             New UoM
@@ -916,12 +916,12 @@ export default function ItemsPage() {
                         />
                       </div>
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Model</label>
+                        <label className="form-label small">Specification / Variant</label>
                         <input
                           className="form-control form-control-sm"
                           value={form.model}
                           onChange={(event) => setFormField("model", event.target.value)}
-                          placeholder="e.g. Latitude 5440"
+                          placeholder="e.g. Latitude 5440 or 500g pack"
                         />
                       </div>
                       <div className="col-12 col-md-4">
