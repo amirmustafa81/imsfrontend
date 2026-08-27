@@ -223,6 +223,24 @@ body {
   color: #0b4aa2;
 }
 
+.grn-header-grid .form-label {
+  font-weight: 600;
+}
+
+.grn-header-grid .form-control,
+.grn-header-grid .ims-search-select input {
+  min-height: 32px;
+}
+
+.approval-reference-compact legend {
+  font-size: 0.95rem !important;
+  margin-bottom: 0;
+}
+
+.approval-reference-compact .form-label {
+  margin-bottom: 0.25rem;
+}
+
 .grn-items-grid {
   max-height: 430px;
   overflow: auto;

@@ -2395,24 +2395,24 @@ export default function InventoryReceiptsPage() {
                         Preview
                       </button>
                     </div>
-                    <div className="row g-2" hidden={receiptDialogTab !== "header"}>
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small">Receipt No.</label>
+                    <div className="row g-2 grn-header-grid" hidden={receiptDialogTab !== "header"}>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small mb-1">Receipt No.</label>
                     <input
                       className="form-control form-control-sm bg-light text-muted"
                       value={editingReceiptId ? editingReceiptNo : previewReceiptNo(form.receipt_date)}
                       readOnly
                       aria-readonly="true"
+                      title={
+                        editingReceiptId
+                          ? "Receipt number stays unchanged while editing a draft."
+                          : "Preview only. The backend assigns the next available GRN number when saved."
+                      }
                     />
-                    <div className="form-text small">
-                      {editingReceiptId
-                        ? "Receipt number stays unchanged while editing a draft."
-                        : "Preview only. The backend assigns the next available GRN number when saved."}
-                    </div>
                   </div>
 
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small">Receipt Type</label>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small mb-1">Receipt Type</label>
                     <SearchableSelect
                       id="receipt-type"
                       value={form.receipt_type}
@@ -2422,8 +2422,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small">Receipt Date</label>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small mb-1">Receipt Date</label>
                     <input
                       className="form-control form-control-sm"
                       type="date"
@@ -2433,8 +2433,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small">Status</label>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small mb-1">Status</label>
                     {editingReceiptId ? (
                       <input className="form-control form-control-sm bg-light text-muted" value="Draft" readOnly aria-readonly="true" />
                     ) : (
@@ -2448,8 +2448,8 @@ export default function InventoryReceiptsPage() {
                     )}
                   </div>
 
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small">Store</label>
+                  <div className="col-12 col-md-4">
+                    <label className="form-label small mb-1">Store</label>
                     <SearchableSelect
                       id="receipt-store"
                       value={form.store_id}
@@ -2459,8 +2459,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small">Department</label>
+                  <div className="col-12 col-md-4">
+                    <label className="form-label small mb-1">Department</label>
                     <SearchableSelect
                       id="receipt-department"
                       value={form.department_id}
@@ -2470,9 +2470,9 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-6">
+                  <div className="col-12 col-md-4">
                     <div className="d-flex align-items-center justify-content-between">
-                      <label className="form-label small">Supplier</label>
+                      <label className="form-label small mb-1">Supplier</label>
                       <button
                         className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
                         type="button"
@@ -2491,9 +2491,9 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-6">
+                  <div className="col-12 col-md-4">
                     <div className="d-flex align-items-center justify-content-between">
-                      <label className="form-label small">Funding Source</label>
+                      <label className="form-label small mb-1">Funding Source</label>
                       <button
                         className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
                         type="button"
@@ -2512,9 +2512,9 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-6">
+                  <div className="col-12 col-md-5">
                     <div className="d-flex align-items-center justify-content-between">
-                      <label className="form-label small">Project</label>
+                      <label className="form-label small mb-1">Project</label>
                       <button
                         className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
                         type="button"
@@ -2533,8 +2533,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small">PO Reference</label>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small mb-1">PO Reference</label>
                     <input
                       className="form-control form-control-sm"
                       value={form.po_reference}
@@ -2542,8 +2542,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small">Invoice No</label>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small mb-1">Invoice No</label>
                     <input
                       className="form-control form-control-sm"
                       value={form.invoice_no}
@@ -2551,8 +2551,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small">Challan No</label>
+                  <div className="col-12 col-md-3">
+                    <label className="form-label small mb-1">Challan No</label>
                     <input
                       className="form-control form-control-sm"
                       value={form.challan_no}
@@ -2564,14 +2564,15 @@ export default function InventoryReceiptsPage() {
                     <ApprovalReferenceFields
                       value={approvalReference}
                       onChange={setApprovalReferenceValue}
+                      compact
                     />
                   </div>
 
                   <div className="col-12">
-                    <label className="form-label small">Remarks</label>
+                    <label className="form-label small mb-1">Remarks</label>
                     <textarea
                       className="form-control form-control-sm"
-                      rows={2}
+                      rows={1}
                       value={form.remarks}
                       onChange={(event) => setFormValue("remarks", event.target.value)}
                     />

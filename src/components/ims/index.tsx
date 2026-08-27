@@ -419,9 +419,11 @@ export function Timeline({ events }: { events: { at: string; actor: string; acti
 export function ApprovalReferenceFields({
   value,
   onChange,
+  compact = false,
 }: {
   value: { ref: string; authority: string; date: string; remarks: string };
   onChange: (value: { ref: string; authority: string; date: string; remarks: string }) => void;
+  compact?: boolean;
 }) {
   const setField = (field: keyof typeof value, updatedValue: string) =>
     onChange({
@@ -430,7 +432,7 @@ export function ApprovalReferenceFields({
     });
 
   return (
-    <fieldset className="border rounded p-3 mb-3">
+    <fieldset className={`border rounded ${compact ? "approval-reference-compact p-2 mb-2" : "p-3 mb-3"}`}>
       <legend className="float-none w-auto px-2 fs-6 fw-semibold text-secondary">
         <i className="bi bi-shield-check me-1" />
         Manual Approval Reference
@@ -468,7 +470,7 @@ export function ApprovalReferenceFields({
           <FieldLabel info="Optional notes explaining the approval context or special conditions.">Remarks</FieldLabel>
           <textarea
             className="form-control form-control-sm"
-            rows={2}
+            rows={compact ? 1 : 2}
             value={value.remarks}
             onChange={(event) => setField("remarks", event.target.value)}
           />
