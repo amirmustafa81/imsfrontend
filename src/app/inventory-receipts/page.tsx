@@ -502,6 +502,8 @@ const toLookupOption = (row: RowData): SearchableSelectOption => ({
   keywords: [row.code, row.name].filter(Boolean).join(" "),
 });
 
+const isActiveLookupRow = (row: RowData): boolean => String(row.status ?? "").toLowerCase() !== "inactive";
+
 const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 const DEFAULT_PAGE_SIZE = 25;
@@ -739,7 +741,7 @@ export default function InventoryReceiptsPage() {
   );
 
   const parentCategories = useMemo(
-    () => lookups["asset-categories"].filter((category) => !category.parent_category_id),
+    () => lookups["asset-categories"].filter((category) => !category.parent_category_id && isActiveLookupRow(category)),
     [lookups],
   );
 
@@ -752,7 +754,9 @@ export default function InventoryReceiptsPage() {
     () =>
       selectedQuickItemCategory
         ? lookups["asset-categories"].filter(
-            (category) => String(category.parent_category_id ?? "") === String(selectedQuickItemCategory.id),
+            (category) =>
+              String(category.parent_category_id ?? "") === String(selectedQuickItemCategory.id) &&
+              isActiveLookupRow(category),
           )
         : [],
     [lookups, selectedQuickItemCategory],

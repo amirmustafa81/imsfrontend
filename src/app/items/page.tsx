@@ -42,6 +42,7 @@ type Lookup = {
   code?: string;
   name?: string;
   parent_category_id?: number | string | null;
+  status?: string;
 };
 
 type LookupMap = {
@@ -129,6 +130,8 @@ const toLookupOption = (row: Lookup): SearchableSelectOption => ({
   label: `${row.code ?? ""}${row.code && row.name ? " - " : ""}${row.name ?? ""}`.trim() || `#${row.id}`,
   keywords: `${row.code ?? ""} ${row.name ?? ""}`,
 });
+
+const isActiveLookup = (row: Lookup): boolean => (row.status ?? "").toLowerCase() !== "inactive";
 
 const toNumericString = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined || value === "") return "0";
@@ -342,7 +345,7 @@ export default function ItemsPage() {
   };
 
   const parentCategories = useMemo(
-    () => lookups["asset-categories"].filter((category) => !category.parent_category_id),
+    () => lookups["asset-categories"].filter((category) => !category.parent_category_id && isActiveLookup(category)),
     [lookups],
   );
 
@@ -352,9 +355,13 @@ export default function ItemsPage() {
   );
 
   const subcategoryOptions = useMemo(
-    () => selectedCategory
-      ? lookups["asset-categories"].filter((category) => String(category.parent_category_id ?? "") === String(selectedCategory.id))
-      : [],
+    () =>
+      selectedCategory
+        ? lookups["asset-categories"].filter(
+            (category) =>
+              String(category.parent_category_id ?? "") === String(selectedCategory.id) && isActiveLookup(category),
+          )
+        : [],
     [lookups, selectedCategory],
   );
   const categorySelectOptions = useMemo(() => parentCategories.map(toLookupOption), [parentCategories]);
