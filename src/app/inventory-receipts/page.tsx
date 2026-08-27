@@ -629,18 +629,25 @@ export default function InventoryReceiptsPage() {
       items.reduce(
         (summary, item) => ({
           rowCount: summary.rowCount + (isReceiptItemEmpty(item) ? 0 : 1),
+          emptyRowCount: summary.emptyRowCount + (isReceiptItemEmpty(item) ? 1 : 0),
           receivedQty: summary.receivedQty + Number(item.quantity_received || 0),
           acceptedQty: summary.acceptedQty + Number(item.quantity_accepted || 0),
           totalCost: summary.totalCost + Number(item.total_cost || 0),
         }),
-        { rowCount: 0, receivedQty: 0, acceptedQty: 0, totalCost: 0 },
+        { rowCount: 0, emptyRowCount: 0, receivedQty: 0, acceptedQty: 0, totalCost: 0 },
       ),
     [items],
   );
   const receiptReady = useMemo(() => {
     const receiptItems = items.filter((item) => !isReceiptItemEmpty(item));
 
-    if (!form.receipt_type || !form.store_id || !form.department_id || receiptItems.length === 0) {
+    if (
+      !form.receipt_type ||
+      !form.store_id ||
+      !form.department_id ||
+      receiptItems.length === 0 ||
+      itemSummary.emptyRowCount > 0
+    ) {
       return false;
     }
 
@@ -662,7 +669,7 @@ export default function InventoryReceiptsPage() {
         accepted + rejected <= received
       );
     });
-  }, [form.department_id, form.receipt_type, form.store_id, items]);
+  }, [form.department_id, form.receipt_type, form.store_id, itemSummary.emptyRowCount, items]);
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return "0 KB";
@@ -3017,7 +3024,13 @@ export default function InventoryReceiptsPage() {
                       </div>
                       <div className={`grn-footer-ready ${receiptReady ? "is-ready" : "is-incomplete"}`}>
                         <strong>{receiptReady ? "Ready" : "Incomplete"}</strong>
-                        <span>{receiptReady ? "All required rows complete" : "Check required fields"}</span>
+                        <span>
+                          {receiptReady
+                            ? "All required rows complete"
+                            : itemSummary.emptyRowCount > 0
+                              ? `${itemSummary.emptyRowCount} empty row${itemSummary.emptyRowCount === 1 ? "" : "s"} to clear`
+                              : "Check required fields"}
+                        </span>
                       </div>
                     </div>
                     <div className="d-flex gap-2 ms-auto">
