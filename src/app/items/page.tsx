@@ -203,6 +203,8 @@ export default function ItemsPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Load data to begin.");
@@ -299,12 +301,14 @@ export default function ItemsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, typeFilter, statusFilter]);
+  }, [search, typeFilter, statusFilter, categoryFilter, subcategoryFilter]);
 
   const resetFilters = () => {
     setSearch("");
     setTypeFilter("");
     setStatusFilter("");
+    setCategoryFilter("");
+    setSubcategoryFilter("");
   };
 
   const openCreateDialog = () => {
@@ -354,6 +358,11 @@ export default function ItemsPage() {
     [form.category_id, parentCategories],
   );
 
+  const selectedFilterCategory = useMemo(
+    () => parentCategories.find((category) => String(category.id) === categoryFilter),
+    [categoryFilter, parentCategories],
+  );
+
   const subcategoryOptions = useMemo(
     () =>
       selectedCategory
@@ -364,8 +373,25 @@ export default function ItemsPage() {
         : [],
     [lookups, selectedCategory],
   );
+  const filterSubcategoryOptions = useMemo(
+    () =>
+      lookups["asset-categories"].filter((category) => {
+        if (!category.parent_category_id || !isActiveLookup(category)) {
+          return false;
+        }
+
+        return selectedFilterCategory
+          ? String(category.parent_category_id) === String(selectedFilterCategory.id)
+          : true;
+      }),
+    [lookups, selectedFilterCategory],
+  );
   const categorySelectOptions = useMemo(() => parentCategories.map(toLookupOption), [parentCategories]);
   const subcategorySelectOptions = useMemo(() => subcategoryOptions.map(toLookupOption), [subcategoryOptions]);
+  const filterSubcategorySelectOptions = useMemo(
+    () => filterSubcategoryOptions.map(toLookupOption),
+    [filterSubcategoryOptions],
+  );
   const unitSelectOptions = useMemo(() => lookups["units-of-measure"].map(toLookupOption), [lookups]);
   const activeItemTypeOptions = useMemo(
     () => itemTypeOptions.filter((option) => option.value) as SearchableSelectOption[],
@@ -423,6 +449,11 @@ export default function ItemsPage() {
       subcategory_id: "",
       attributes: {},
     }));
+  };
+
+  const selectCategoryFilter = (categoryId: string) => {
+    setCategoryFilter(categoryId);
+    setSubcategoryFilter("");
   };
 
   const reloadMasterLookup = async (endpoint: keyof LookupMap) => {
@@ -587,12 +618,25 @@ export default function ItemsPage() {
 
   const filteredRows = useMemo(() => {
     const normalizedType = typeFilter.trim();
-    if (!normalizedType) {
-      return rows;
-    }
+    const normalizedCategory = categoryFilter.trim();
+    const normalizedSubcategory = subcategoryFilter.trim();
 
-    return rows.filter((row) => row.item_type === normalizedType);
-  }, [rows, typeFilter]);
+    return rows.filter((row) => {
+      if (normalizedType && row.item_type !== normalizedType) {
+        return false;
+      }
+
+      if (normalizedCategory && String(row.category_id ?? "") !== normalizedCategory) {
+        return false;
+      }
+
+      if (normalizedSubcategory && String(row.subcategory_id ?? "") !== normalizedSubcategory) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [categoryFilter, rows, subcategoryFilter, typeFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -787,7 +831,7 @@ export default function ItemsPage() {
         />
 
         <FilterBar onReset={resetFilters}>
-          <div className="col-12 col-lg-4">
+          <div className="col-12 col-lg-3">
             <label className="form-label fw-semibold">Search</label>
             <input
               className="form-control"
@@ -803,6 +847,28 @@ export default function ItemsPage() {
           <div className="col-12 col-lg-3">
             <label className="form-label fw-semibold">Status</label>
             <SearchableSelect id="item-filter-status" value={statusFilter} options={statusOptions} onChange={setStatusFilter} placeholder="Search status" />
+          </div>
+          <div className="col-12 col-lg-3">
+            <label className="form-label fw-semibold">Category</label>
+            <SearchableSelect
+              id="item-filter-category"
+              value={categoryFilter}
+              options={[{ value: "", label: "All categories" }, ...categorySelectOptions]}
+              onChange={selectCategoryFilter}
+              placeholder="Search category"
+              emptyLabel="No active categories configured."
+            />
+          </div>
+          <div className="col-12 col-lg-3">
+            <label className="form-label fw-semibold">Subcategory</label>
+            <SearchableSelect
+              id="item-filter-subcategory"
+              value={subcategoryFilter}
+              options={[{ value: "", label: "All subcategories" }, ...filterSubcategorySelectOptions]}
+              onChange={setSubcategoryFilter}
+              placeholder={categoryFilter ? "Search subcategory" : "All subcategories"}
+              emptyLabel="No active subcategories configured."
+            />
           </div>
         </FilterBar>
 
