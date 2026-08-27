@@ -776,6 +776,30 @@ export default function InventoryReceiptsPage() {
     return item?.unit_id ? String(item.unit_id) : "";
   };
 
+  const receiptUnitCodeForRow = (row: ReceiptItemInput): string =>
+    unitCodeForId(row.receipt_uom_id || baseUnitIdForItem(row.item_id));
+
+  const baseUnitCodeForRow = (row: ReceiptItemInput): string =>
+    unitCodeForId(baseUnitIdForItem(row.item_id));
+
+  const unitLabel = (label: string, unitCode: string): string =>
+    unitCode ? `${label} (${unitCode})` : label;
+
+  const qtyPerUnitLabel = (row: ReceiptItemInput): string => {
+    const receiptUnit = receiptUnitCodeForRow(row);
+    const baseUnit = baseUnitCodeForRow(row);
+
+    if (receiptUnit && baseUnit) {
+      return `Qty Per Receipt Unit (${baseUnit} per ${receiptUnit})`;
+    }
+
+    if (baseUnit) {
+      return `Qty Per Receipt Unit (${baseUnit})`;
+    }
+
+    return "Qty Per Receipt Unit";
+  };
+
   const stockQuantityForRow = (row: ReceiptItemInput): string => {
     const accepted = Number(row.quantity_accepted || 0);
     const qtyPer = Number(row.qty_per_receipt_unit || 1);
@@ -2485,7 +2509,9 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label small">Qty Received</label>
+                          <label className="form-label small">
+                            {unitLabel("Qty Received", receiptUnitCodeForRow(item))}
+                          </label>
                           <input
                             className="form-control form-control-sm"
                             type="number"
@@ -2508,7 +2534,7 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label small">Qty Per Receipt Unit</label>
+                          <label className="form-label small">{qtyPerUnitLabel(item)}</label>
                           <input
                             className="form-control form-control-sm"
                             type="number"
@@ -2520,14 +2546,18 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label small">Stock Addition</label>
+                          <label className="form-label small">
+                            {unitLabel("Stock Addition", baseUnitCodeForRow(item))}
+                          </label>
                           <div className="form-control form-control-sm bg-white text-secondary">
-                            {stockQuantityForRow(item)} {unitCodeForId(baseUnitIdForItem(item.item_id)) || "base UOM"}
+                            {stockQuantityForRow(item)} {baseUnitCodeForRow(item) || "base UOM"}
                           </div>
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label small">Qty Accepted</label>
+                          <label className="form-label small">
+                            {unitLabel("Qty Accepted", receiptUnitCodeForRow(item))}
+                          </label>
                           <input
                             className="form-control form-control-sm"
                             type="number"
@@ -2540,7 +2570,9 @@ export default function InventoryReceiptsPage() {
                         </div>
 
                         <div className="col-12 col-md-3">
-                          <label className="form-label small">Qty Rejected</label>
+                          <label className="form-label small">
+                            {unitLabel("Qty Rejected", receiptUnitCodeForRow(item))}
+                          </label>
                           <input
                             className="form-control form-control-sm"
                             type="number"
