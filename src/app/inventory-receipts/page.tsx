@@ -595,6 +595,7 @@ export default function InventoryReceiptsPage() {
     remarks: "",
   });
   const [items, setItems] = useState<ReceiptItemInput[]>([emptyItem]);
+  const [receiptDialogTab, setReceiptDialogTab] = useState<"header" | "items" | "documents" | "preview">("header");
   const [itemDetailsIndex, setItemDetailsIndex] = useState<number | null>(null);
   const [attachmentFiles, setAttachmentFiles] = useState<PendingAttachment[]>([]);
   const [message, setMessage] = useState("");
@@ -1162,6 +1163,7 @@ export default function InventoryReceiptsPage() {
       remarks: "",
     });
     setItems([{ ...emptyItem }]);
+    setReceiptDialogTab("header");
     setItemDetailsIndex(null);
     setAttachmentFiles([]);
     setEditingReceiptId(null);
@@ -1651,6 +1653,7 @@ export default function InventoryReceiptsPage() {
         remarks: "",
       });
       setItems(Array.isArray(receiptItems) && receiptItems.length > 0 ? receiptItems.map(receiptItemToInput) : [{ ...emptyItem }]);
+      setReceiptDialogTab("items");
       setAttachmentFiles([]);
       setEditingReceiptId(receipt.id);
       setEditingReceiptNo(receiptData.receipt_no ?? receipt.receipt_no);
@@ -1812,6 +1815,7 @@ export default function InventoryReceiptsPage() {
         remarks: "",
       });
       setItems([{ ...emptyItem }]);
+      setReceiptDialogTab("header");
       setItemDetailsIndex(null);
       setAttachmentFiles([]);
       setEditingReceiptId(null);
@@ -2361,7 +2365,37 @@ export default function InventoryReceiptsPage() {
                         <div className="alert alert-danger py-2 mb-0">{error}</div>
                       </div>
                     ) : null}
-                    <div className="row g-2">
+                    <div className="grn-dialog-tabs nav nav-tabs mb-3" role="tablist" aria-label="GRN form sections">
+                      <button
+                        className={`nav-link ${receiptDialogTab === "header" ? "active" : ""}`}
+                        type="button"
+                        onClick={() => setReceiptDialogTab("header")}
+                      >
+                        Header
+                      </button>
+                      <button
+                        className={`nav-link ${receiptDialogTab === "items" ? "active" : ""}`}
+                        type="button"
+                        onClick={() => setReceiptDialogTab("items")}
+                      >
+                        Items ({itemSummary.rowCount})
+                      </button>
+                      <button
+                        className={`nav-link ${receiptDialogTab === "documents" ? "active" : ""}`}
+                        type="button"
+                        onClick={() => setReceiptDialogTab("documents")}
+                      >
+                        Documents
+                      </button>
+                      <button
+                        className={`nav-link ${receiptDialogTab === "preview" ? "active" : ""}`}
+                        type="button"
+                        onClick={() => setReceiptDialogTab("preview")}
+                      >
+                        Preview
+                      </button>
+                    </div>
+                    <div className="row g-2" hidden={receiptDialogTab !== "header"}>
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Receipt No.</label>
                     <input
@@ -2543,6 +2577,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
+                    </div>
+                    <div className="row g-2" hidden={receiptDialogTab !== "items"}>
                   <div className="col-12">
                     <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
                       <div>
@@ -2785,6 +2821,8 @@ export default function InventoryReceiptsPage() {
                     </div>
                   </div>
 
+                    </div>
+                    <div className="row g-2" hidden={receiptDialogTab !== "documents"}>
                   <div className="col-12">
                     <label className="form-label small">Supporting Documents</label>
                     <div className="mb-2 small text-secondary">
@@ -2833,6 +2871,72 @@ export default function InventoryReceiptsPage() {
                     )}
                   </div>
 
+                    </div>
+                    <div className="row g-3" hidden={receiptDialogTab !== "preview"}>
+                      <div className="col-12 col-lg-7">
+                        <div className="border rounded bg-light p-3 h-100">
+                          <h3 className="h6 mb-3">GRN Summary</h3>
+                          <div className="row g-2 small">
+                            <div className="col-12 col-md-6">
+                              <span className="text-secondary d-block">Receipt No.</span>
+                              <strong>{editingReceiptId ? editingReceiptNo : previewReceiptNo(form.receipt_date)}</strong>
+                            </div>
+                            <div className="col-12 col-md-6">
+                              <span className="text-secondary d-block">Receipt Date</span>
+                              <strong>{form.receipt_date || "-"}</strong>
+                            </div>
+                            <div className="col-12 col-md-6">
+                              <span className="text-secondary d-block">Store</span>
+                              <strong>{lookupLabel("stores", form.store_id) || "-"}</strong>
+                            </div>
+                            <div className="col-12 col-md-6">
+                              <span className="text-secondary d-block">Department</span>
+                              <strong>{lookupLabel("departments", form.department_id) || "-"}</strong>
+                            </div>
+                            <div className="col-12">
+                              <span className="text-secondary d-block">Supplier</span>
+                              <strong>{lookupLabel("suppliers", form.supplier_id) || "-"}</strong>
+                            </div>
+                            <div className="col-12">
+                              <span className="text-secondary d-block">Project</span>
+                              <strong>{lookupLabel("research-projects", form.project_id) || "-"}</strong>
+                            </div>
+                            <div className="col-12 col-md-4">
+                              <span className="text-secondary d-block">Item Rows</span>
+                              <strong>{itemSummary.rowCount}</strong>
+                            </div>
+                            <div className="col-12 col-md-4">
+                              <span className="text-secondary d-block">Accepted Qty</span>
+                              <strong>{formatQuantityInput(itemSummary.acceptedQty)}</strong>
+                            </div>
+                            <div className="col-12 col-md-4">
+                              <span className="text-secondary d-block">Total Cost</span>
+                              <strong>
+                                {currency} {formatMoneyInput(itemSummary.totalCost)}
+                              </strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-12 col-lg-5">
+                        <div className="border rounded bg-white p-3 h-100">
+                          <h3 className="h6 mb-3">Before Saving</h3>
+                          <div className="list-group list-group-flush small">
+                            <div className="list-group-item px-0 d-flex justify-content-between">
+                              <span className="text-secondary">Documents</span>
+                              <strong>{attachmentFiles.length} attached</strong>
+                            </div>
+                            <div className="list-group-item px-0 d-flex justify-content-between">
+                              <span className="text-secondary">Attachment Size</span>
+                              <strong>{formatBytes(attachmentTotalBytes)}</strong>
+                            </div>
+                            <div className="list-group-item px-0 d-flex justify-content-between">
+                              <span className="text-secondary">Status</span>
+                              <strong>{editingReceiptId ? "Draft" : form.status}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                   {!editingReceiptId ? (
                     <div className="col-12 form-check">
                       <input
