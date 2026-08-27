@@ -499,6 +499,26 @@ const defaultForm: ReceiptForm = {
 
 const toPayloadDate = (value: string): string | null => value.trim() ? value : null;
 
+const toInputDate = (value: string | null | undefined): string => {
+  if (!value) return "";
+  const raw = String(value);
+  return raw.includes("T") ? raw.split("T")[0] ?? "" : raw.slice(0, 10);
+};
+
+const receiptItemToInput = (item: ReceiptItem): ReceiptItemInput => ({
+  item_id: String(item.item_id ?? ""),
+  description: item.description ?? "",
+  quantity_received: formatQuantityInput(Number(item.quantity_received ?? 0)),
+  quantity_accepted: formatQuantityInput(Number(item.quantity_accepted ?? 0)),
+  quantity_rejected: formatQuantityInput(Number(item.quantity_rejected ?? 0)),
+  unit_cost: item.unit_cost === null || item.unit_cost === undefined ? "" : formatMoneyInput(Number(item.unit_cost)),
+  total_cost: item.total_cost === null || item.total_cost === undefined ? "" : formatMoneyInput(Number(item.total_cost)),
+  batch_no: item.batch_no ?? "",
+  expiry_date: toInputDate(item.expiry_date),
+  inspection_status: item.inspection_status || "pending",
+  inspection_remarks: item.inspection_remarks ?? "",
+});
+
 const previewYearFromDate = (date: string): string => {
   const isoYear = date.match(/^(\d{4})-/)?.[1];
   const displayYear = date.match(/(\d{4})$/)?.[1];
@@ -534,6 +554,8 @@ export default function InventoryReceiptsPage() {
   const [expandedItems, setExpandedItems] = useState<Record<number, ReceiptItem[]>>({});
   const [expandedLoading, setExpandedLoading] = useState<Record<number, boolean>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingReceiptId, setEditingReceiptId] = useState<number | null>(null);
+  const [editingReceiptNo, setEditingReceiptNo] = useState("");
   const [quickItemOpen, setQuickItemOpen] = useState(false);
   const [quickItemRowIndex, setQuickItemRowIndex] = useState<number | null>(null);
   const [quickItemSaving, setQuickItemSaving] = useState(false);
@@ -954,6 +976,8 @@ export default function InventoryReceiptsPage() {
     });
     setItems([{ ...emptyItem }]);
     setAttachmentFiles([]);
+    setEditingReceiptId(null);
+    setEditingReceiptNo("");
     setIsPostingReceipt(false);
   };
 
@@ -965,6 +989,8 @@ export default function InventoryReceiptsPage() {
 
   const closeCreateDialog = () => {
     setDialogOpen(false);
+    setEditingReceiptId(null);
+    setEditingReceiptNo("");
     setQuickItemOpen(false);
     setQuickItemRowIndex(null);
     setQuickItemError("");
@@ -1359,6 +1385,61 @@ export default function InventoryReceiptsPage() {
     }
   };
 
+  const openEditDialog = async (receipt: Receipt) => {
+    if (!authReady) return;
+
+    if (receipt.status !== "draft") {
+      setError("Only draft receipts can be edited.");
+      return;
+    }
+
+    try {
+      setError("");
+      const response = await api.get(`/inventory-receipts/${receipt.id}`);
+      const receiptData = response.data?.data as Receipt | undefined;
+      const receiptItems = response.data?.items;
+
+      if (!receiptData) {
+        throw new Error("Receipt not found.");
+      }
+
+      const nextForm: ReceiptForm = {
+        receipt_no: receiptData.receipt_no ?? "",
+        receipt_type: receiptData.receipt_type || "purchase",
+        supplier_id: receiptData.supplier_id ? String(receiptData.supplier_id) : "",
+        po_reference: receiptData.po_reference ?? "",
+        invoice_no: receiptData.invoice_no ?? "",
+        challan_no: receiptData.challan_no ?? "",
+        receipt_date: toInputDate(receiptData.receipt_date),
+        store_id: receiptData.store_id ? String(receiptData.store_id) : "",
+        department_id: receiptData.department_id ? String(receiptData.department_id) : "",
+        funding_source_id: receiptData.funding_source_id ? String(receiptData.funding_source_id) : "",
+        project_id: receiptData.project_id ? String(receiptData.project_id) : "",
+        manual_approval_ref: receiptData.manual_approval_ref ?? "",
+        manual_approval_date: toInputDate(receiptData.manual_approval_date),
+        manual_approved_by: receiptData.manual_approved_by ?? "",
+        remarks: receiptData.remarks ?? "",
+        status: "draft",
+        post_now: false,
+      };
+
+      setForm(nextForm);
+      setApprovalReference({
+        ref: nextForm.manual_approval_ref,
+        authority: nextForm.manual_approved_by,
+        date: nextForm.manual_approval_date,
+        remarks: "",
+      });
+      setItems(Array.isArray(receiptItems) && receiptItems.length > 0 ? receiptItems.map(receiptItemToInput) : [{ ...emptyItem }]);
+      setAttachmentFiles([]);
+      setEditingReceiptId(receipt.id);
+      setEditingReceiptNo(receiptData.receipt_no ?? receipt.receipt_no);
+      setDialogOpen(true);
+    } catch (editError) {
+      setError(extractApiMessage(editError, "Could not load receipt for editing."));
+    }
+  };
+
   const saveReceipt = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -1382,7 +1463,9 @@ export default function InventoryReceiptsPage() {
       return;
     }
 
-    if (form.post_now && attachmentFiles.length === 0) {
+    const isEditingReceipt = editingReceiptId !== null;
+
+    if (!isEditingReceipt && form.post_now && attachmentFiles.length === 0) {
       setError("Please add at least one supporting document before posting this receipt.");
       return;
     }
@@ -1450,20 +1533,24 @@ export default function InventoryReceiptsPage() {
 
     try {
       setIsPostingReceipt(true);
-      const receiptResponse = await api.post("/inventory-receipts", { ...payload, post_now: false });
+      const receiptResponse = isEditingReceipt
+        ? await api.put(`/inventory-receipts/${editingReceiptId}`, { ...payload, post_now: false })
+        : await api.post("/inventory-receipts", { ...payload, post_now: false });
       const receiptId = receiptResponse.data?.data?.id;
 
       if (!receiptId) {
-        throw new Error("Could not create receipt.");
+        throw new Error(isEditingReceipt ? "Could not update receipt." : "Could not create receipt.");
       }
 
       for (const attachment of attachmentFiles) {
         await uploadReceiptAttachment(receiptId, attachment.file);
       }
 
-      if (form.post_now) {
+      if (!isEditingReceipt && form.post_now) {
         await postReceipt(receiptId);
         setMessage("Receipt created and posted successfully.");
+      } else if (isEditingReceipt) {
+        setMessage("Receipt updated successfully.");
       } else {
         setMessage("Receipt created successfully.");
       }
@@ -1479,10 +1566,12 @@ export default function InventoryReceiptsPage() {
       });
       setItems([{ ...emptyItem }]);
       setAttachmentFiles([]);
+      setEditingReceiptId(null);
+      setEditingReceiptNo("");
       setDialogOpen(false);
       await refreshRows();
     } catch (saveError) {
-      setError(extractApiMessage(saveError, "Could not create receipt. Verify required fields."));
+      setError(extractApiMessage(saveError, isEditingReceipt ? "Could not update receipt. Verify required fields." : "Could not create receipt. Verify required fields."));
       setIsPostingReceipt(false);
       return;
     }
@@ -1966,8 +2055,12 @@ export default function InventoryReceiptsPage() {
                 <form className="modal-content border-0 shadow-lg" onSubmit={saveReceipt}>
                   <div className="modal-header px-4 py-3">
                     <div>
-                      <h2 className="h5 mb-1">Create Receipt</h2>
-                      <p className="text-secondary mb-0">Record a GRN, add received items, and optionally post stock.</p>
+                      <h2 className="h5 mb-1">{editingReceiptId ? `Edit ${editingReceiptNo}` : "Create Receipt"}</h2>
+                      <p className="text-secondary mb-0">
+                        {editingReceiptId
+                          ? "Update draft GRN details before posting."
+                          : "Record a GRN, add received items, and optionally post stock."}
+                      </p>
                     </div>
                     <button
                       className="btn-close"
@@ -1982,11 +2075,15 @@ export default function InventoryReceiptsPage() {
                     <label className="form-label small">Receipt No.</label>
                     <input
                       className="form-control form-control-sm bg-light text-muted"
-                      value={previewReceiptNo(form.receipt_date)}
+                      value={editingReceiptId ? editingReceiptNo : previewReceiptNo(form.receipt_date)}
                       readOnly
                       aria-readonly="true"
                     />
-                    <div className="form-text small">Preview only. The backend assigns the next available GRN number when saved.</div>
+                    <div className="form-text small">
+                      {editingReceiptId
+                        ? "Receipt number stays unchanged while editing a draft."
+                        : "Preview only. The backend assigns the next available GRN number when saved."}
+                    </div>
                   </div>
 
                   <div className="col-12 col-md-6">
@@ -2013,13 +2110,17 @@ export default function InventoryReceiptsPage() {
 
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Status</label>
-                    <SearchableSelect
-                      id="receipt-status"
-                      value={form.status}
-                      options={receiptStatusOptions}
-                      placeholder="Search status"
-                      onChange={(value) => setFormValue("status", value as ReceiptStatus)}
-                    />
+                    {editingReceiptId ? (
+                      <input className="form-control form-control-sm bg-light text-muted" value="Draft" readOnly aria-readonly="true" />
+                    ) : (
+                      <SearchableSelect
+                        id="receipt-status"
+                        value={form.status}
+                        options={receiptStatusOptions}
+                        placeholder="Search status"
+                        onChange={(value) => setFormValue("status", value as ReceiptStatus)}
+                      />
+                    )}
                   </div>
 
                   <div className="col-12 col-md-6">
@@ -2361,18 +2462,20 @@ export default function InventoryReceiptsPage() {
                     )}
                   </div>
 
-                  <div className="col-12 form-check">
-                    <input
-                      id="post_now"
-                      type="checkbox"
-                      className="form-check-input"
-                      checked={form.post_now}
-                      onChange={(event) => setFormValue("post_now", event.target.checked)}
-                    />
-                    <label className="form-check-label" htmlFor="post_now">
-                      Post receipt after creation
-                    </label>
-                  </div>
+                  {!editingReceiptId ? (
+                    <div className="col-12 form-check">
+                      <input
+                        id="post_now"
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={form.post_now}
+                        onChange={(event) => setFormValue("post_now", event.target.checked)}
+                      />
+                      <label className="form-check-label" htmlFor="post_now">
+                        Post receipt after creation
+                      </label>
+                    </div>
+                  ) : null}
 
                     </div>
                   </div>
@@ -2382,7 +2485,7 @@ export default function InventoryReceiptsPage() {
                     </button>
                     <button className="btn btn-primary" type="submit" disabled={isPostingReceipt}>
                       <i className="bi bi-receipt me-1" />
-                      {isPostingReceipt ? "Saving..." : "Save Receipt"}
+                      {isPostingReceipt ? "Saving..." : editingReceiptId ? "Update Receipt" : "Save Receipt"}
                     </button>
                   </div>
                 </form>
@@ -2730,6 +2833,16 @@ export default function InventoryReceiptsPage() {
                                 <i className="bi bi-printer me-1" />
                                 Print
                               </button>
+                              {row.status === "draft" ? (
+                                <button
+                                  className="btn btn-outline-primary"
+                                  type="button"
+                                  onClick={() => void openEditDialog(row)}
+                                >
+                                  <i className="bi bi-pencil-square me-1" />
+                                  Edit
+                                </button>
+                              ) : null}
                               {row.status !== "posted" ? (
                                 <>
                                   <label
