@@ -637,6 +637,32 @@ export default function InventoryReceiptsPage() {
       ),
     [items],
   );
+  const receiptReady = useMemo(() => {
+    const receiptItems = items.filter((item) => !isReceiptItemEmpty(item));
+
+    if (!form.receipt_type || !form.store_id || !form.department_id || receiptItems.length === 0) {
+      return false;
+    }
+
+    return receiptItems.every((item) => {
+      const received = Number(item.quantity_received || 0);
+      const accepted = Number(item.quantity_accepted || 0);
+      const rejected = Number(item.quantity_rejected || 0);
+      const qtyPerUnit = Number(item.qty_per_receipt_unit || 0);
+
+      return (
+        Boolean(item.item_id) &&
+        Number.isFinite(received) &&
+        Number.isFinite(accepted) &&
+        Number.isFinite(rejected) &&
+        Number.isFinite(qtyPerUnit) &&
+        received > 0 &&
+        qtyPerUnit > 0 &&
+        accepted <= received &&
+        accepted + rejected <= received
+      );
+    });
+  }, [form.department_id, form.receipt_type, form.store_id, items]);
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return "0 KB";
@@ -2955,14 +2981,36 @@ export default function InventoryReceiptsPage() {
 
                     </div>
                   </div>
-                  <div className="modal-footer px-4 py-3">
-                    <button className="btn btn-outline-secondary" type="button" onClick={closeCreateDialog}>
-                      Cancel
-                    </button>
-                    <button className="btn btn-primary" type="submit" disabled={isPostingReceipt}>
-                      <i className="bi bi-receipt me-1" />
-                      {isPostingReceipt ? "Saving..." : editingReceiptId ? "Update Receipt" : "Save Receipt"}
-                    </button>
+                  <div className="modal-footer grn-receipt-footer px-4 py-3">
+                    <div className="grn-footer-summary">
+                      <div className="grn-footer-metric">
+                        <strong>{itemSummary.rowCount}</strong>
+                        <span>Items</span>
+                      </div>
+                      <div className="grn-footer-metric">
+                        <strong>{formatQuantityInput(itemSummary.acceptedQty || itemSummary.receivedQty)}</strong>
+                        <span>Total Qty</span>
+                      </div>
+                      <div className="grn-footer-metric grn-footer-amount">
+                        <strong>
+                          {currency} {formatMoneyInput(itemSummary.totalCost)}
+                        </strong>
+                        <span>Total Amount</span>
+                      </div>
+                      <div className={`grn-footer-ready ${receiptReady ? "is-ready" : "is-incomplete"}`}>
+                        <strong>{receiptReady ? "Ready" : "Incomplete"}</strong>
+                        <span>{receiptReady ? "All required rows complete" : "Check required fields"}</span>
+                      </div>
+                    </div>
+                    <div className="d-flex gap-2 ms-auto">
+                      <button className="btn btn-outline-secondary" type="button" onClick={closeCreateDialog}>
+                        Cancel
+                      </button>
+                      <button className="btn btn-primary" type="submit" disabled={isPostingReceipt}>
+                        <i className="bi bi-receipt me-1" />
+                        {isPostingReceipt ? "Saving..." : editingReceiptId ? "Update Receipt" : "Save Receipt"}
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
