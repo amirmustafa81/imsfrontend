@@ -782,12 +782,23 @@ export default function InventoryReceiptsPage() {
   const baseUnitCodeForRow = (row: ReceiptItemInput): string =>
     unitCodeForId(baseUnitIdForItem(row.item_id));
 
+  const receiptUsesBaseUnit = (row: ReceiptItemInput): boolean => {
+    const baseUnitId = baseUnitIdForItem(row.item_id);
+    const receiptUnitId = row.receipt_uom_id || baseUnitId;
+
+    return Boolean(baseUnitId && receiptUnitId && String(receiptUnitId) === String(baseUnitId));
+  };
+
   const unitLabel = (label: string, unitCode: string): string =>
     unitCode ? `${label} (${unitCode})` : label;
 
   const qtyPerUnitLabel = (row: ReceiptItemInput): string => {
     const receiptUnit = receiptUnitCodeForRow(row);
     const baseUnit = baseUnitCodeForRow(row);
+
+    if (receiptUsesBaseUnit(row)) {
+      return "Same as Base UOM";
+    }
 
     if (receiptUnit && baseUnit) {
       return `Qty Per Receipt Unit (${baseUnit} per ${receiptUnit})`;
@@ -1007,6 +1018,18 @@ export default function InventoryReceiptsPage() {
           };
         }
 
+        if (key === "receipt_uom_id") {
+          const baseUnitId = baseUnitIdForItem(row.item_id);
+
+          return {
+            ...row,
+            receipt_uom_id: value,
+            qty_per_receipt_unit: baseUnitId && value && String(value) === String(baseUnitId)
+              ? "1"
+              : row.qty_per_receipt_unit,
+          };
+        }
+
         if (key === "quantity_accepted") {
           const acceptedInput = normalizeQuantityInput(value);
           const received = Number(row.quantity_received || 0);
@@ -1060,7 +1083,7 @@ export default function InventoryReceiptsPage() {
 
           return {
             ...row,
-            qty_per_receipt_unit: qtyPer,
+            qty_per_receipt_unit: receiptUsesBaseUnit(row) ? "1" : qtyPer,
           };
         }
 
@@ -2541,6 +2564,8 @@ export default function InventoryReceiptsPage() {
                             value={item.qty_per_receipt_unit}
                             step="0.000001"
                             min="0.000001"
+                            disabled={receiptUsesBaseUnit(item)}
+                            placeholder={receiptUsesBaseUnit(item) ? "1" : undefined}
                             onChange={(event) => setItemValue(index, "qty_per_receipt_unit", event.target.value)}
                           />
                         </div>
