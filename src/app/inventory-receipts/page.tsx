@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, Fragment, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { printTransactionDocument } from "@/lib/transaction-print";
@@ -353,6 +353,21 @@ const emptyItem: ReceiptItemInput = {
   inspection_remarks: "",
 };
 
+const isReceiptItemEmpty = (item: ReceiptItemInput) =>
+  !item.item_id &&
+  !item.description.trim() &&
+  !item.quantity_received &&
+  !item.receipt_uom_id &&
+  (!item.qty_per_receipt_unit || item.qty_per_receipt_unit === "1") &&
+  !item.quantity_accepted &&
+  !item.quantity_rejected &&
+  !item.unit_cost &&
+  !item.total_cost &&
+  !item.batch_no.trim() &&
+  !item.expiry_date &&
+  item.inspection_status === "pending" &&
+  !item.inspection_remarks.trim();
+
 const createEmptyLookups = (): LookupMap => ({
   departments: [],
   stores: [],
@@ -580,6 +595,7 @@ export default function InventoryReceiptsPage() {
     remarks: "",
   });
   const [items, setItems] = useState<ReceiptItemInput[]>([emptyItem]);
+  const [itemDetailsIndex, setItemDetailsIndex] = useState<number | null>(null);
   const [attachmentFiles, setAttachmentFiles] = useState<PendingAttachment[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -606,6 +622,19 @@ export default function InventoryReceiptsPage() {
   const attachmentTotalBytes = useMemo(
     () => attachmentFiles.reduce((acc, item) => acc + item.size, 0),
     [attachmentFiles],
+  );
+  const itemSummary = useMemo(
+    () =>
+      items.reduce(
+        (summary, item) => ({
+          rowCount: summary.rowCount + (isReceiptItemEmpty(item) ? 0 : 1),
+          receivedQty: summary.receivedQty + Number(item.quantity_received || 0),
+          acceptedQty: summary.acceptedQty + Number(item.quantity_accepted || 0),
+          totalCost: summary.totalCost + Number(item.total_cost || 0),
+        }),
+        { rowCount: 0, receivedQty: 0, acceptedQty: 0, totalCost: 0 },
+      ),
+    [items],
   );
 
   const formatBytes = (bytes: number): string => {
@@ -1096,12 +1125,27 @@ export default function InventoryReceiptsPage() {
     );
   };
 
-  const addItemRow = () => {
-    setItems((current) => [...current, { ...emptyItem }]);
+  const addItemRows = (count = 1) => {
+    setItems((current) => [...current, ...Array.from({ length: count }, () => ({ ...emptyItem }))]);
+  };
+
+  const addItemRow = () => addItemRows(1);
+
+  const clearEmptyItemRows = () => {
+    setItems((current) => {
+      const populatedRows = current.filter((item) => !isReceiptItemEmpty(item));
+      return populatedRows.length > 0 ? populatedRows : [{ ...emptyItem }];
+    });
+    setItemDetailsIndex(null);
   };
 
   const removeItemRow = (index: number) => {
     setItems((current) => current.filter((_, idx) => idx !== index));
+    setItemDetailsIndex((current) => {
+      if (current === null) return current;
+      if (current === index) return null;
+      return current > index ? current - 1 : current;
+    });
   };
 
   const removeAttachment = (index: number) => {
@@ -1118,6 +1162,7 @@ export default function InventoryReceiptsPage() {
       remarks: "",
     });
     setItems([{ ...emptyItem }]);
+    setItemDetailsIndex(null);
     setAttachmentFiles([]);
     setEditingReceiptId(null);
     setEditingReceiptNo("");
@@ -1767,6 +1812,7 @@ export default function InventoryReceiptsPage() {
         remarks: "",
       });
       setItems([{ ...emptyItem }]);
+      setItemDetailsIndex(null);
       setAttachmentFiles([]);
       setEditingReceiptId(null);
       setEditingReceiptNo("");
@@ -2290,7 +2336,7 @@ export default function InventoryReceiptsPage() {
             <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
               <div
                 className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
-                style={{ width: "min(62vw, 980px)", maxWidth: "min(62vw, 980px)" }}
+                style={{ width: "min(96vw, 1500px)", maxWidth: "min(96vw, 1500px)" }}
               >
                 <form className="modal-content border-0 shadow-lg" onSubmit={saveReceipt}>
                   <div className="modal-header px-4 py-3">
@@ -2498,206 +2544,241 @@ export default function InventoryReceiptsPage() {
                   </div>
 
                   <div className="col-12">
-                    <h3 className="h6 mb-0">Receipt Items</h3>
-                  </div>
-
-                  {items.map((item, index) => (
-                    <div key={index} className="col-12 border rounded p-3 bg-light">
-                      <div className="row g-2">
-                        <div className="col-12 col-md-6">
-                          <div className="d-flex align-items-center justify-content-between">
-                            <label className="form-label small">Item</label>
-                            <button
-                              className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
-                              type="button"
-                              onClick={() => openQuickItemDialog(index)}
-                            >
-                              <i className="bi bi-plus-circle me-1" />
-                              New Item
-                            </button>
-                          </div>
-                          <SearchableSelect
-                            id={`receipt-item-${index}`}
-                            value={item.item_id}
-                            options={itemOptions}
-                            placeholder="Search item code or name"
-                            onChange={(value) => setItemValue(index, "item_id", value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-6">
-                          <label className="form-label small">Description</label>
-                          <input
-                            className="form-control form-control-sm"
-                            value={item.description}
-                            onChange={(event) => setItemValue(index, "description", event.target.value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">
-                            {unitLabel("Qty Received", receiptUnitCodeForRow(item))}
-                          </label>
-                          <input
-                            className="form-control form-control-sm"
-                            type="number"
-                            value={item.quantity_received}
-                            step="0.001"
-                            min="0"
-                            onChange={(event) => setItemValue(index, "quantity_received", event.target.value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">Receipt UOM</label>
-                          <SearchableSelect
-                            id={`receipt-uom-${index}`}
-                            value={item.receipt_uom_id}
-                            options={unitOptions}
-                            placeholder="Search UoM"
-                            onChange={(value) => setItemValue(index, "receipt_uom_id", value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">{qtyPerUnitLabel(item)}</label>
-                          <input
-                            className="form-control form-control-sm"
-                            type="number"
-                            value={item.qty_per_receipt_unit}
-                            step="0.000001"
-                            min="0.000001"
-                            disabled={receiptUsesBaseUnit(item)}
-                            placeholder={receiptUsesBaseUnit(item) ? "1" : undefined}
-                            onChange={(event) => setItemValue(index, "qty_per_receipt_unit", event.target.value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">
-                            {unitLabel("Stock Addition", baseUnitCodeForRow(item))}
-                          </label>
-                          <div className="form-control form-control-sm bg-white text-secondary">
-                            {stockQuantityForRow(item)} {baseUnitCodeForRow(item) || "base UOM"}
-                          </div>
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">
-                            {unitLabel("Qty Accepted", receiptUnitCodeForRow(item))}
-                          </label>
-                          <input
-                            className="form-control form-control-sm"
-                            type="number"
-                            value={item.quantity_accepted}
-                            step="0.001"
-                            min="0"
-                            max={item.quantity_received || undefined}
-                            onChange={(event) => setItemValue(index, "quantity_accepted", event.target.value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">
-                            {unitLabel("Qty Rejected", receiptUnitCodeForRow(item))}
-                          </label>
-                          <input
-                            className="form-control form-control-sm"
-                            type="number"
-                            value={item.quantity_rejected}
-                            step="0.001"
-                            min="0"
-                            max={formatQuantityInput(
-                              Math.max(0, Number(item.quantity_received || 0) - Number(item.quantity_accepted || 0)),
-                            ) || undefined}
-                            onChange={(event) => setItemValue(index, "quantity_rejected", event.target.value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">Unit Cost ({currency})</label>
-                          <input
-                            className="form-control form-control-sm"
-                            type="number"
-                            value={item.unit_cost}
-                            step="0.01"
-                            min="0"
-                            onChange={(event) => setItemValue(index, "unit_cost", event.target.value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">Total Cost ({currency})</label>
-                          <input
-                            className="form-control form-control-sm"
-                            type="number"
-                            value={item.total_cost}
-                            step="0.01"
-                            min="0"
-                            onChange={(event) => setItemValue(index, "total_cost", event.target.value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">Batch No</label>
-                          <input
-                            className="form-control form-control-sm"
-                            value={item.batch_no}
-                            onChange={(event) => setItemValue(index, "batch_no", event.target.value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">Expiry</label>
-                          <input
-                            className="form-control form-control-sm"
-                            type="date"
-                            value={item.expiry_date}
-                            onChange={(event) => setItemValue(index, "expiry_date", event.target.value)}
-                          />
-                        </div>
-
-                        <div className="col-12 col-md-3">
-                          <label className="form-label small">Inspection Status</label>
-                          <SearchableSelect
-                            id={`receipt-inspection-status-${index}`}
-                            value={item.inspection_status}
-                            options={inspectionStatusOptions}
-                            placeholder="Search inspection status"
-                            onChange={(value) => setItemValue(index, "inspection_status", value)}
-                          />
-                        </div>
-
-                        <div className="col-12">
-                          <label className="form-label small">Inspection Remarks</label>
-                          <textarea
-                            className="form-control form-control-sm"
-                            rows={2}
-                            value={item.inspection_remarks}
-                            onChange={(event) => setItemValue(index, "inspection_remarks", event.target.value)}
-                          />
+                    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                      <div>
+                        <h3 className="h6 mb-1">Receipt Items</h3>
+                        <div className="small text-secondary">
+                          {itemSummary.rowCount} item rows, {formatQuantityInput(itemSummary.receivedQty)} received,{" "}
+                          {formatQuantityInput(itemSummary.acceptedQty)} accepted, {currency}{" "}
+                          {formatMoneyInput(itemSummary.totalCost)}
                         </div>
                       </div>
-
-                      <div className="mt-3 text-end">
-                        <button
-                          className="btn btn-sm btn-outline-danger"
-                          type="button"
-                          onClick={() => removeItemRow(index)}
-                          disabled={items.length === 1}
-                        >
-                          <i className="bi bi-trash3 me-1" />
-                          Remove
+                      <div className="d-flex flex-wrap gap-2">
+                        <button className="btn btn-sm btn-primary" type="button" onClick={addItemRow}>
+                          <i className="bi bi-plus-lg me-1" />
+                          Add Row
+                        </button>
+                        <button className="btn btn-sm btn-outline-primary" type="button" onClick={() => addItemRows(10)}>
+                          <i className="bi bi-plus-square me-1" />
+                          Add 10 Rows
+                        </button>
+                        <button className="btn btn-sm btn-outline-secondary" type="button" onClick={clearEmptyItemRows}>
+                          <i className="bi bi-eraser me-1" />
+                          Clear Empty Rows
                         </button>
                       </div>
                     </div>
-                  ))}
+                  </div>
 
-                  <div className="col-12 text-end">
-                    <button className="btn btn-sm btn-outline-primary" type="button" onClick={addItemRow}>
-                      <i className="bi bi-plus-lg me-1" />
-                      Add Item
-                    </button>
+                  <div className="col-12">
+                    <div className="table-responsive border rounded bg-white grn-items-grid">
+                      <table className="table table-sm align-middle mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th className="text-center grn-row-number">#</th>
+                            <th className="grn-item-col">Item</th>
+                            <th className="grn-description-col">Description</th>
+                            <th>Qty Received</th>
+                            <th>Receipt UOM</th>
+                            <th>Qty Per Unit</th>
+                            <th>Stock Addition</th>
+                            <th>Qty Accepted</th>
+                            <th>Qty Rejected</th>
+                            <th>Unit Cost</th>
+                            <th>Total Cost</th>
+                            <th>Batch No</th>
+                            <th>Expiry</th>
+                            <th>Inspection</th>
+                            <th className="text-end">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((item, index) => (
+                            <Fragment key={index}>
+                              <tr>
+                                <td className="text-center text-secondary grn-row-number">{index + 1}</td>
+                                <td className="grn-item-col">
+                                  <div className="d-flex gap-1">
+                                    <div className="flex-grow-1">
+                                      <SearchableSelect
+                                        id={`receipt-item-${index}`}
+                                        value={item.item_id}
+                                        options={itemOptions}
+                                        placeholder="Search item"
+                                        onChange={(value) => setItemValue(index, "item_id", value)}
+                                      />
+                                    </div>
+                                    <button
+                                      className="btn btn-sm btn-outline-primary px-2"
+                                      type="button"
+                                      title="Create new item"
+                                      aria-label={`Create item for row ${index + 1}`}
+                                      onClick={() => openQuickItemDialog(index)}
+                                    >
+                                      <i className="bi bi-plus-lg" />
+                                    </button>
+                                  </div>
+                                </td>
+                                <td className="grn-description-col">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={item.description}
+                                    onChange={(event) => setItemValue(index, "description", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control form-control-sm text-end"
+                                    type="number"
+                                    value={item.quantity_received}
+                                    step="0.001"
+                                    min="0"
+                                    aria-label={unitLabel(`Row ${index + 1} quantity received`, receiptUnitCodeForRow(item))}
+                                    onChange={(event) => setItemValue(index, "quantity_received", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <SearchableSelect
+                                    id={`receipt-uom-${index}`}
+                                    value={item.receipt_uom_id}
+                                    options={unitOptions}
+                                    placeholder="UOM"
+                                    onChange={(value) => setItemValue(index, "receipt_uom_id", value)}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control form-control-sm text-end"
+                                    type="number"
+                                    value={item.qty_per_receipt_unit}
+                                    step="0.000001"
+                                    min="0.000001"
+                                    disabled={receiptUsesBaseUnit(item)}
+                                    placeholder={receiptUsesBaseUnit(item) ? "1" : undefined}
+                                    title={qtyPerUnitLabel(item)}
+                                    onChange={(event) => setItemValue(index, "qty_per_receipt_unit", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <div className="form-control form-control-sm bg-white text-secondary text-end">
+                                    {stockQuantityForRow(item)} {baseUnitCodeForRow(item) || ""}
+                                  </div>
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control form-control-sm text-end"
+                                    type="number"
+                                    value={item.quantity_accepted}
+                                    step="0.001"
+                                    min="0"
+                                    max={item.quantity_received || undefined}
+                                    aria-label={unitLabel(`Row ${index + 1} quantity accepted`, receiptUnitCodeForRow(item))}
+                                    onChange={(event) => setItemValue(index, "quantity_accepted", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control form-control-sm text-end"
+                                    type="number"
+                                    value={item.quantity_rejected}
+                                    step="0.001"
+                                    min="0"
+                                    max={formatQuantityInput(
+                                      Math.max(0, Number(item.quantity_received || 0) - Number(item.quantity_accepted || 0)),
+                                    ) || undefined}
+                                    aria-label={unitLabel(`Row ${index + 1} quantity rejected`, receiptUnitCodeForRow(item))}
+                                    onChange={(event) => setItemValue(index, "quantity_rejected", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control form-control-sm text-end"
+                                    type="number"
+                                    value={item.unit_cost}
+                                    step="0.01"
+                                    min="0"
+                                    aria-label={`Row ${index + 1} unit cost in ${currency}`}
+                                    onChange={(event) => setItemValue(index, "unit_cost", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control form-control-sm text-end"
+                                    type="number"
+                                    value={item.total_cost}
+                                    step="0.01"
+                                    min="0"
+                                    aria-label={`Row ${index + 1} total cost in ${currency}`}
+                                    onChange={(event) => setItemValue(index, "total_cost", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={item.batch_no}
+                                    aria-label={`Row ${index + 1} batch number`}
+                                    onChange={(event) => setItemValue(index, "batch_no", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    type="date"
+                                    value={item.expiry_date}
+                                    aria-label={`Row ${index + 1} expiry date`}
+                                    onChange={(event) => setItemValue(index, "expiry_date", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <SearchableSelect
+                                    id={`receipt-inspection-status-${index}`}
+                                    value={item.inspection_status}
+                                    options={inspectionStatusOptions}
+                                    placeholder="Inspection"
+                                    onChange={(value) => setItemValue(index, "inspection_status", value)}
+                                  />
+                                </td>
+                                <td className="text-end">
+                                  <button
+                                    className="btn btn-sm btn-outline-secondary px-2 me-1"
+                                    type="button"
+                                    title="Inspection remarks"
+                                    aria-label={`Inspection remarks for row ${index + 1}`}
+                                    onClick={() => setItemDetailsIndex((current) => (current === index ? null : index))}
+                                  >
+                                    <i className="bi bi-card-text" />
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-outline-danger px-2"
+                                    type="button"
+                                    title="Remove row"
+                                    aria-label={`Remove row ${index + 1}`}
+                                    onClick={() => removeItemRow(index)}
+                                    disabled={items.length === 1}
+                                  >
+                                    <i className="bi bi-trash3" />
+                                  </button>
+                                </td>
+                              </tr>
+                              {itemDetailsIndex === index ? (
+                                <tr className="grn-item-detail-row">
+                                  <td />
+                                  <td colSpan={14}>
+                                    <label className="form-label small mb-1">Inspection Remarks</label>
+                                    <textarea
+                                      className="form-control form-control-sm"
+                                      rows={2}
+                                      value={item.inspection_remarks}
+                                      onChange={(event) => setItemValue(index, "inspection_remarks", event.target.value)}
+                                    />
+                                  </td>
+                                </tr>
+                              ) : null}
+                            </Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
 
                   <div className="col-12">
