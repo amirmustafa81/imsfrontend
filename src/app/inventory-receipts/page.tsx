@@ -2310,7 +2310,11 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
                   <div className="modal-body px-4 py-3">
-                    {error ? <div className="alert alert-danger py-2">{error}</div> : null}
+                    {error ? (
+                      <div className="position-sticky top-0 bg-white pb-2" style={{ zIndex: 5 }}>
+                        <div className="alert alert-danger py-2 mb-0">{error}</div>
+                      </div>
+                    ) : null}
                     <div className="row g-2">
                   <div className="col-12 col-md-6">
                     <label className="form-label small">Receipt No.</label>
