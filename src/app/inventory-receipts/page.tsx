@@ -319,6 +319,17 @@ const totalCostFor = (acceptedValue: string, unitCostValue: string) => {
   return formatMoneyInput(accepted * unitCost);
 };
 
+const unitCostForTotal = (acceptedValue: string, receivedValue: string, totalCostValue: string) => {
+  const totalCost = Number(totalCostValue || 0);
+  const quantity = Number(acceptedValue || receivedValue || 0);
+
+  if (!Number.isFinite(totalCost) || !Number.isFinite(quantity) || totalCost < 0 || quantity <= 0) {
+    return "";
+  }
+
+  return formatMoneyInput(totalCost / quantity);
+};
+
 const itemOptionLabel = (row: RowData) =>
   `${row.item_code ?? row.code ?? row.id} - ${row.name ?? row.title ?? ""}`.trim();
 
@@ -1157,7 +1168,13 @@ export default function InventoryReceiptsPage() {
         }
 
         if (key === "total_cost") {
-          return { ...row, total_cost: normalizeMoneyInput(value) };
+          const totalCost = normalizeMoneyInput(value);
+
+          return {
+            ...row,
+            total_cost: totalCost,
+            unit_cost: totalCost === "" ? row.unit_cost : unitCostForTotal(row.quantity_accepted, row.quantity_received, totalCost),
+          };
         }
 
         if (key === "qty_per_receipt_unit") {
