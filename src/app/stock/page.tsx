@@ -76,6 +76,15 @@ const stockQuantityLabel = (row: StockRow, key: StockQuantityKey) => {
   const baseQuantity = Number(row[key] ?? 0);
   const baseCode = stockBaseCode(row);
 
+  if (key === "minimum_stock_level" || baseQuantity === 0) {
+    return (
+      <span>
+        {formatQuantity(baseQuantity)}
+        {baseCode ? ` ${baseCode}` : ""}
+      </span>
+    );
+  }
+
   if (stockUsesPackageUnit(row)) {
     const packageCode = stockPackageCode(row);
     const packageQuantity = baseQuantity / stockPackageSize(row);
@@ -105,7 +114,7 @@ const stockPackageLabel = (row: StockRow): string => {
   const packageCode = stockPackageCode(row);
   const baseCode = stockBaseCode(row);
 
-  if (!packageCode || !baseCode) return "-";
+  if (!packageCode || !baseCode || !stockUsesPackageUnit(row)) return "-";
 
   return `1 ${packageCode} = ${formatQuantity(stockPackageSize(row))} ${baseCode}`;
 };
