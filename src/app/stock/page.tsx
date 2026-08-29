@@ -94,10 +94,7 @@ const stockQuantityLabel = (row: StockRow, key: StockQuantityKey) => {
         <span>
           {formatQuantity(packageQuantity)} {packageCode}
         </span>
-        <small>
-          {formatQuantity(baseQuantity)}
-          {baseCode ? ` ${baseCode}` : ""}
-        </small>
+        <small>{formatQuantity(baseQuantity)}</small>
       </div>
     );
   }
