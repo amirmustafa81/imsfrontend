@@ -400,7 +400,7 @@ body {
 }
 
 .voucher-items-grid table {
-  min-width: 1120px;
+  min-width: 1000px;
 }
 
 .voucher-items-grid thead th {
@@ -432,13 +432,8 @@ body {
 }
 
 .voucher-items-grid .voucher-uom-col {
-  min-width: 116px;
-  width: 116px;
-}
-
-.voucher-items-grid .voucher-qty-per-col {
-  min-width: 124px;
-  width: 124px;
+  min-width: 150px;
+  width: 150px;
 }
 
 .voucher-items-grid .voucher-stock-col {
@@ -462,10 +457,17 @@ body {
 }
 
 .voucher-items-grid .voucher-qty-col .form-control,
-.voucher-items-grid .voucher-qty-per-col .form-control,
 .voucher-items-grid .voucher-stock-col .form-control {
   padding-left: 0.35rem;
   padding-right: 0.35rem;
+}
+
+.voucher-items-grid .voucher-uom-helper {
+  color: #64748b;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  margin-top: 0.2rem;
+  white-space: nowrap;
 }
 
 button,

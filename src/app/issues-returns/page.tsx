@@ -619,11 +619,28 @@ function IssuesReturnsContent() {
     return quantity * qtyPerIssueUnitForRow(item);
   };
 
-  const qtyPerIssueUnitShortLabel = (item: TransactionItemInput): string => {
-    if (transactionUsesBaseUnit(item)) return "1:1";
-    const baseCode = baseUomCodeForItem(item.item_id);
+  const issuePackageHintForRow = (item: TransactionItemInput): string => {
+    if (!item.item_id) return "";
+
     const issueCode = issueUomCodeForRow(item);
-    return baseCode && issueCode ? `${baseCode}/${issueCode}` : "per unit";
+    const baseCode = baseUomCodeForItem(item.item_id);
+    const qtyPer = qtyPerIssueUnitForRow(item);
+
+    if (!issueCode || !baseCode) return "";
+    if (transactionUsesBaseUnit(item)) return `1 ${baseCode} = 1 ${baseCode}`;
+
+    return `1 ${issueCode} = ${formatQuantityInput(qtyPer)} ${baseCode}`;
+  };
+
+  const issueUnitOptionsForRow = (item: TransactionItemInput): SearchableSelectOption[] => {
+    const preferredUnitIds = [receivedUomIdForItem(item.item_id), baseUomIdForItem(item.item_id)]
+      .filter((value): value is string => Boolean(value))
+      .filter((value, index, values) => values.indexOf(value) === index);
+    const preferredOptions = preferredUnitIds
+      .map((unitId) => unitOptions.find((option) => option.value === unitId))
+      .filter((option): option is SearchableSelectOption => Boolean(option));
+
+    return preferredOptions.length > 0 ? preferredOptions : unitOptions;
   };
 
   const stockBalanceLabelForRow = (item: TransactionItemInput): string => {
@@ -2772,7 +2789,6 @@ function IssuesReturnsContent() {
                                 {showAssetColumn ? <th className="voucher-asset-col">Asset ID</th> : null}
                                 <th className="voucher-qty-col">Qty</th>
                                 <th className="voucher-uom-col">UOM</th>
-                                <th className="voucher-qty-per-col">Qty/Unit</th>
                                 <th className="voucher-stock-col">Stock Balance</th>
                                 <th className="voucher-remarks-col">Remarks</th>
                                 <th className="text-end voucher-action-col">Actions</th>
@@ -2822,26 +2838,14 @@ function IssuesReturnsContent() {
                                       <SearchableSelect
                                         id={`transaction-uom-${index}`}
                                         value={issueUomIdForRow(item)}
-                                        options={unitOptions}
+                                        options={issueUnitOptionsForRow(item)}
                                         onChange={(value) => setItemValue(index, "issue_uom_id", value)}
                                         placeholder="UOM"
                                         emptyLabel="No UOM found."
                                       />
-                                    </td>
-                                    <td className="voucher-qty-per-col">
-                                      <div className="input-group input-group-sm" title={qtyPerIssueUnitShortLabel(item)}>
-                                        <input
-                                          type="number"
-                                          step="0.000001"
-                                          min="0.000001"
-                                          className="form-control text-end"
-                                          value={transactionUsesBaseUnit(item) ? "1" : item.qty_per_issue_unit}
-                                          disabled={transactionUsesBaseUnit(item)}
-                                          onChange={(event) => setItemValue(index, "qty_per_issue_unit", event.target.value)}
-                                          placeholder="1"
-                                        />
-                                        <span className="input-group-text grn-unit-addon">{qtyPerIssueUnitShortLabel(item)}</span>
-                                      </div>
+                                      {issuePackageHintForRow(item) ? (
+                                        <div className="voucher-uom-helper">{issuePackageHintForRow(item)}</div>
+                                      ) : null}
                                     </td>
                                     <td className="voucher-stock-col">
                                       <div className="form-control form-control-sm bg-white text-secondary text-end">
