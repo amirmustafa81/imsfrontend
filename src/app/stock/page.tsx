@@ -45,6 +45,11 @@ type Filters = {
 
 type StockQuantityKey = "minimum_stock_level" | "quantity_on_hand" | "quantity_reserved" | "available_quantity";
 
+type StockSummaryGroup = {
+  code: string;
+  quantity: number;
+};
+
 const formatQuantity = (value: unknown): string => {
   const quantity = Number(value ?? 0);
   if (!Number.isFinite(quantity)) return "-";
@@ -118,6 +123,50 @@ const stockPackageLabel = (row: StockRow): string => {
   if (!packageCode || !baseCode || !stockUsesPackageUnit(row)) return "-";
 
   return `1 ${packageCode} = ${formatQuantity(stockPackageSize(row))} ${baseCode}`;
+};
+
+const addToStockSummaryGroup = (groups: Map<string, number>, code: string, quantity: number) => {
+  if (!quantity) return;
+
+  const nextCode = code || "units";
+  groups.set(nextCode, (groups.get(nextCode) ?? 0) + quantity);
+};
+
+const groupedStockQuantities = (rows: StockRow[], key: "quantity_on_hand" | "available_quantity"): StockSummaryGroup[] => {
+  const groups = new Map<string, number>();
+
+  rows.forEach((row) => {
+    const baseQuantity = Number(row[key] ?? 0);
+    if (!Number.isFinite(baseQuantity) || baseQuantity === 0) return;
+
+    if (stockUsesPackageUnit(row)) {
+      addToStockSummaryGroup(groups, stockPackageCode(row), baseQuantity / stockPackageSize(row));
+      return;
+    }
+
+    addToStockSummaryGroup(groups, stockBaseCode(row), baseQuantity);
+  });
+
+  return Array.from(groups.entries()).map(([code, quantity]) => ({ code, quantity }));
+};
+
+const groupedBaseQuantities = (rows: StockRow[], key: "quantity_on_hand" | "available_quantity"): StockSummaryGroup[] => {
+  const groups = new Map<string, number>();
+
+  rows.forEach((row) => {
+    const baseQuantity = Number(row[key] ?? 0);
+    if (!Number.isFinite(baseQuantity) || baseQuantity === 0) return;
+
+    addToStockSummaryGroup(groups, stockBaseCode(row), baseQuantity);
+  });
+
+  return Array.from(groups.entries()).map(([code, quantity]) => ({ code, quantity }));
+};
+
+const stockSummaryText = (groups: StockSummaryGroup[]): string => {
+  if (!groups.length) return "0";
+
+  return groups.map((group) => `${formatQuantity(group.quantity)} ${group.code}`.trim()).join(" + ");
 };
 
 const reportColumns = [
@@ -259,9 +308,13 @@ export default function StockPage() {
   }, [filter, reportType]);
 
   const totalRows = useMemo(() => {
-    const availableTotal = rows.reduce((sum, row) => sum + Number(row.available_quantity || 0), 0);
-    const onHandTotal = rows.reduce((sum, row) => sum + Number(row.quantity_on_hand || 0), 0);
-    return { availableTotal, onHandTotal, count: rows.length };
+    return {
+      availableBase: groupedBaseQuantities(rows, "available_quantity"),
+      availablePackages: groupedStockQuantities(rows, "available_quantity"),
+      count: rows.length,
+      onHandBase: groupedBaseQuantities(rows, "quantity_on_hand"),
+      onHandPackages: groupedStockQuantities(rows, "quantity_on_hand"),
+    };
   }, [rows]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -296,24 +349,25 @@ export default function StockPage() {
               <div className="card-body">
                 <div className="small text-secondary">Rows</div>
                 <div className="fs-4 fw-bold">{totalRows.count}</div>
+                <div className="small text-secondary">Filtered stock rows</div>
               </div>
             </div>
           </div>
           <div className="col-12 col-xl-4">
             <div className="card border-0 shadow-sm h-100">
               <div className="card-body">
-                <div className="small text-secondary">Total On Hand</div>
-                <div className="fs-4 fw-bold">{formatQuantity(totalRows.onHandTotal)}</div>
-                <div className="small text-secondary">Base stock units</div>
+                <div className="small text-secondary">On Hand</div>
+                <div className="stock-summary-value">{stockSummaryText(totalRows.onHandPackages)}</div>
+                <div className="small text-secondary">{stockSummaryText(totalRows.onHandBase)} base</div>
               </div>
             </div>
           </div>
           <div className="col-12 col-xl-4">
             <div className="card border-0 shadow-sm h-100">
               <div className="card-body">
-                <div className="small text-secondary">Total Available</div>
-                <div className="fs-4 fw-bold">{formatQuantity(totalRows.availableTotal)}</div>
-                <div className="small text-secondary">Base stock units</div>
+                <div className="small text-secondary">Available</div>
+                <div className="stock-summary-value">{stockSummaryText(totalRows.availablePackages)}</div>
+                <div className="small text-secondary">{stockSummaryText(totalRows.availableBase)} base</div>
               </div>
             </div>
           </div>
