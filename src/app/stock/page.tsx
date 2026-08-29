@@ -50,6 +50,8 @@ type StockSummaryGroup = {
   quantity: number;
 };
 
+const STOCK_SUMMARY_VISIBLE_GROUPS = 3;
+
 const formatQuantity = (value: unknown): string => {
   const quantity = Number(value ?? 0);
   if (!Number.isFinite(quantity)) return "-";
@@ -150,23 +152,27 @@ const groupedStockQuantities = (rows: StockRow[], key: "quantity_on_hand" | "ava
   return Array.from(groups.entries()).map(([code, quantity]) => ({ code, quantity }));
 };
 
-const groupedBaseQuantities = (rows: StockRow[], key: "quantity_on_hand" | "available_quantity"): StockSummaryGroup[] => {
-  const groups = new Map<string, number>();
-
-  rows.forEach((row) => {
-    const baseQuantity = Number(row[key] ?? 0);
-    if (!Number.isFinite(baseQuantity) || baseQuantity === 0) return;
-
-    addToStockSummaryGroup(groups, stockBaseCode(row), baseQuantity);
-  });
-
-  return Array.from(groups.entries()).map(([code, quantity]) => ({ code, quantity }));
-};
-
 const stockSummaryText = (groups: StockSummaryGroup[]): string => {
   if (!groups.length) return "0";
 
   return groups.map((group) => `${formatQuantity(group.quantity)} ${group.code}`.trim()).join(" + ");
+};
+
+const stockSummaryPrimaryText = (groups: StockSummaryGroup[]): string => {
+  if (!groups.length) return "0";
+  if (groups.length > STOCK_SUMMARY_VISIBLE_GROUPS) return `${groups.length} unit groups`;
+
+  return stockSummaryText(groups);
+};
+
+const stockSummaryPreviewText = (groups: StockSummaryGroup[]): string => {
+  if (!groups.length) return "No stock in current filter";
+
+  const visibleGroups = groups.slice(0, STOCK_SUMMARY_VISIBLE_GROUPS);
+  const hiddenCount = groups.length - visibleGroups.length;
+  const suffix = hiddenCount > 0 ? `, +${hiddenCount} more` : "";
+
+  return `${visibleGroups.map((group) => `${formatQuantity(group.quantity)} ${group.code}`.trim()).join(", ")}${suffix}`;
 };
 
 const reportColumns = [
@@ -309,10 +315,8 @@ export default function StockPage() {
 
   const totalRows = useMemo(() => {
     return {
-      availableBase: groupedBaseQuantities(rows, "available_quantity"),
       availablePackages: groupedStockQuantities(rows, "available_quantity"),
       count: rows.length,
-      onHandBase: groupedBaseQuantities(rows, "quantity_on_hand"),
       onHandPackages: groupedStockQuantities(rows, "quantity_on_hand"),
     };
   }, [rows]);
@@ -357,8 +361,8 @@ export default function StockPage() {
             <div className="card border-0 shadow-sm h-100">
               <div className="card-body">
                 <div className="small text-secondary">On Hand</div>
-                <div className="stock-summary-value">{stockSummaryText(totalRows.onHandPackages)}</div>
-                <div className="small text-secondary">{stockSummaryText(totalRows.onHandBase)} base</div>
+                <div className="stock-summary-value">{stockSummaryPrimaryText(totalRows.onHandPackages)}</div>
+                <div className="small text-secondary">{stockSummaryPreviewText(totalRows.onHandPackages)}</div>
               </div>
             </div>
           </div>
@@ -366,8 +370,8 @@ export default function StockPage() {
             <div className="card border-0 shadow-sm h-100">
               <div className="card-body">
                 <div className="small text-secondary">Available</div>
-                <div className="stock-summary-value">{stockSummaryText(totalRows.availablePackages)}</div>
-                <div className="small text-secondary">{stockSummaryText(totalRows.availableBase)} base</div>
+                <div className="stock-summary-value">{stockSummaryPrimaryText(totalRows.availablePackages)}</div>
+                <div className="small text-secondary">{stockSummaryPreviewText(totalRows.availablePackages)}</div>
               </div>
             </div>
           </div>
