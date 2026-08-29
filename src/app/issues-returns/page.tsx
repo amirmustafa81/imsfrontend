@@ -139,7 +139,6 @@ type TransactionItemInput = {
   quantity: string;
   issue_uom_id: string;
   qty_per_issue_unit: string;
-  unit_cost: string;
   remarks: string;
 };
 
@@ -275,7 +274,6 @@ const emptyItem: TransactionItemInput = {
   quantity: "",
   issue_uom_id: "",
   qty_per_issue_unit: "1",
-  unit_cost: "",
   remarks: "",
 };
 
@@ -395,18 +393,12 @@ const formatQuantityInput = (value: number) => {
   return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/\.?0+$/, "");
 };
 
-const formatMoneyInput = (value: number) => {
-  if (!Number.isFinite(value)) return "0";
-  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
-};
-
 const isTransactionItemEmpty = (item: TransactionItemInput) =>
   !item.item_id.trim() &&
   !item.asset_id.trim() &&
   !item.quantity.trim() &&
   !item.issue_uom_id.trim() &&
   (!item.qty_per_issue_unit.trim() || item.qty_per_issue_unit.trim() === "1") &&
-  !item.unit_cost.trim() &&
   !item.remarks.trim();
 
 const isTransactionItemComplete = (item: TransactionItemInput) => {
@@ -1016,7 +1008,6 @@ function IssuesReturnsContent() {
   quantity: toFormString(row.quantity),
   issue_uom_id: "",
   qty_per_issue_unit: "1",
-  unit_cost: toFormString(row.unit_cost),
   remarks: row.remarks ?? "",
 });
 
@@ -1227,7 +1218,6 @@ function IssuesReturnsContent() {
       items.reduce(
         (summary, item) => {
           const baseQuantity = baseQuantityForTransactionRow(item);
-          const unitCost = numberOrNull(item.unit_cost) ?? 0;
           const rowIsEmpty = isTransactionItemEmpty(item);
           const rowIsComplete = isTransactionItemComplete(item);
 
@@ -1236,10 +1226,9 @@ function IssuesReturnsContent() {
             emptyRowCount: summary.emptyRowCount + (rowIsEmpty ? 1 : 0),
             incompleteRowCount: summary.incompleteRowCount + (!rowIsEmpty && !rowIsComplete ? 1 : 0),
             totalQty: summary.totalQty + (rowIsComplete ? baseQuantity : 0),
-            totalAmount: summary.totalAmount + (rowIsComplete ? baseQuantity * unitCost : 0),
           };
         },
-        { rowCount: 0, emptyRowCount: 0, incompleteRowCount: 0, totalQty: 0, totalAmount: 0 },
+        { rowCount: 0, emptyRowCount: 0, incompleteRowCount: 0, totalQty: 0 },
       ),
     [items],
   );
@@ -1738,7 +1727,7 @@ function IssuesReturnsContent() {
         item_id: Number(row.item_id),
         asset_id: numberOrNull(row.asset_id),
         quantity: baseQuantityForTransactionRow(row),
-        unit_cost: numberOrNull(row.unit_cost),
+        unit_cost: null,
         remarks: row.remarks.trim() || null,
       })),
     };
@@ -1845,8 +1834,6 @@ function IssuesReturnsContent() {
           { header: "Item", render: (item) => item.item_label ?? lookupLabel("items", item.item_id) },
           { header: "Asset", render: (item) => item.asset_label ?? (item.asset_id ? `#${item.asset_id}` : "-") },
           { header: "Quantity", render: (item) => item.quantity },
-          { header: "Unit Cost", render: (item) => item.unit_cost },
-          { header: "Total", render: (item) => item.unit_cost === null ? null : Number(item.quantity) * Number(item.unit_cost) },
           { header: "Remarks", render: (item) => item.remarks },
         ],
         rows: itemRows,
@@ -2303,7 +2290,6 @@ function IssuesReturnsContent() {
     { key: "item", header: "Item", render: (item: TransactionItem) => item.item_label ?? lookupLabel("items", item.item_id) },
     { key: "asset", header: "Asset", render: (item: TransactionItem) => item.asset_label ?? item.asset_id ?? "-" },
     { key: "qty", header: "Qty", render: (item: TransactionItem) => item.quantity },
-    { key: "unitCost", header: "Unit Cost", render: (item: TransactionItem) => item.unit_cost ?? "-" },
     { key: "remarks", header: "Remarks", render: (item: TransactionItem) => item.remarks ?? "-" },
   ];
 
@@ -2690,8 +2676,7 @@ function IssuesReturnsContent() {
                           <div>
                             <h3 className="h6 mb-1">Voucher Items</h3>
                             <div className="small text-secondary">
-                              {itemSummary.rowCount} item rows, {formatQuantityInput(itemSummary.totalQty)} total qty, PKR{" "}
-                              {formatMoneyInput(itemSummary.totalAmount)}
+                              {itemSummary.rowCount} item rows, {formatQuantityInput(itemSummary.totalQty)} stock units
                             </div>
                           </div>
                           <div className="d-flex flex-wrap gap-2">
@@ -2723,16 +2708,12 @@ function IssuesReturnsContent() {
                                 <th className="voucher-uom-col">UOM</th>
                                 <th className="voucher-qty-per-col">Qty/Unit</th>
                                 <th className="voucher-stock-col">Stock Balance</th>
-                                <th className="voucher-money-col">Unit Cost</th>
-                                <th className="voucher-money-col">Total</th>
                                 <th className="voucher-remarks-col">Remarks</th>
                                 <th className="text-end voucher-action-col">Actions</th>
                               </tr>
                             </thead>
                             <tbody>
                               {items.map((item, index) => {
-                                const baseQuantity = baseQuantityForTransactionRow(item);
-                                const unitCost = numberOrNull(item.unit_cost) ?? 0;
                                 return (
                                   <tr key={`${index}-${item.item_id || "new"}`}>
                                     <td className="text-center text-secondary voucher-row-number">{index + 1}</td>
@@ -2793,22 +2774,6 @@ function IssuesReturnsContent() {
                                     <td className="voucher-stock-col">
                                       <div className="form-control form-control-sm bg-white text-secondary text-end">
                                         {stockBalanceLabelForRow(item)}
-                                      </div>
-                                    </td>
-                                    <td className="voucher-money-col">
-                                      <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        className="form-control form-control-sm text-end"
-                                        value={item.unit_cost}
-                                        onChange={(event) => setItemValue(index, "unit_cost", event.target.value)}
-                                        placeholder="0"
-                                      />
-                                    </td>
-                                    <td className="voucher-money-col">
-                                      <div className="form-control form-control-sm bg-white text-end">
-                                        {formatMoneyInput(baseQuantity * unitCost)}
                                       </div>
                                     </td>
                                     <td className="voucher-remarks-col">
@@ -2911,10 +2876,6 @@ function IssuesReturnsContent() {
                               <strong>{formatQuantityInput(itemSummary.totalQty)}</strong>
                             </div>
                             <div className="list-group-item px-0 d-flex justify-content-between">
-                              <span className="text-secondary">Total Amount</span>
-                              <strong>PKR {formatMoneyInput(itemSummary.totalAmount)}</strong>
-                            </div>
-                            <div className="list-group-item px-0 d-flex justify-content-between">
                               <span className="text-secondary">Status</span>
                               <strong>{voucherReady ? "Ready" : "Incomplete"}</strong>
                             </div>
@@ -2932,10 +2893,6 @@ function IssuesReturnsContent() {
                       <div className="grn-footer-metric">
                         <strong>{formatQuantityInput(itemSummary.totalQty)}</strong>
                         <span>Total Qty</span>
-                      </div>
-                      <div className="grn-footer-metric grn-footer-amount">
-                        <strong>PKR {formatMoneyInput(itemSummary.totalAmount)}</strong>
-                        <span>Total Amount</span>
                       </div>
                       <div className={`grn-footer-ready ${voucherReady ? "is-ready" : "is-incomplete"}`}>
                         <strong>{voucherReady ? "Ready" : "Incomplete"}</strong>
