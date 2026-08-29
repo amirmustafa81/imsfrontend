@@ -88,13 +88,17 @@ const stockQuantityLabel = (row: StockRow, key: StockQuantityKey) => {
   if (stockUsesPackageUnit(row)) {
     const packageCode = stockPackageCode(row);
     const packageQuantity = baseQuantity / stockPackageSize(row);
+    const shouldShowBaseCode = baseCode.toUpperCase() !== "EACH";
 
     return (
       <div className="stock-quantity-cell">
         <span>
           {formatQuantity(packageQuantity)} {packageCode}
         </span>
-        <small>{formatQuantity(baseQuantity)}</small>
+        <small>
+          {formatQuantity(baseQuantity)}
+          {shouldShowBaseCode && baseCode ? ` ${baseCode}` : ""}
+        </small>
       </div>
     );
   }
