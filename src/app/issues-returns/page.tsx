@@ -531,6 +531,17 @@ function IssuesReturnsContent() {
     return (lookups[source] ?? []).find((row) => String(row.id) === String(value));
   };
 
+  const isTruthyFlag = (value: unknown): boolean =>
+    value === true || value === 1 || value === "1" || String(value ?? "").toLowerCase() === "true";
+
+  const transactionItemRequiresAssetId = (itemId: string): boolean => {
+    const item = lookupRow("items", itemId);
+    const itemType = String(item?.item_type ?? item?.type ?? "").toLowerCase();
+    return itemType === "fixed_asset" || isTruthyFlag(item?.is_capitalizable) || isTruthyFlag(item?.requires_serial_tracking);
+  };
+
+  const showAssetColumn = items.some((item) => item.asset_id.trim() || transactionItemRequiresAssetId(item.item_id));
+
   const unitCodeById = (unitId: unknown): string => {
     const unit = lookupRow("units-of-measure", unitId);
     return String(unit?.code ?? unit?.name ?? "").trim();
@@ -969,6 +980,7 @@ function IssuesReturnsContent() {
             ? {
                 ...row,
                 item_id: value,
+                asset_id: transactionItemRequiresAssetId(value) ? row.asset_id : "",
                 issue_uom_id: baseUomId,
                 qty_per_issue_unit: "1",
               }
@@ -2703,7 +2715,7 @@ function IssuesReturnsContent() {
                               <tr>
                                 <th className="text-center voucher-row-number">#</th>
                                 <th className="voucher-item-col">Item</th>
-                                <th className="voucher-asset-col">Asset ID</th>
+                                {showAssetColumn ? <th className="voucher-asset-col">Asset ID</th> : null}
                                 <th className="voucher-qty-col">Qty</th>
                                 <th className="voucher-uom-col">UOM</th>
                                 <th className="voucher-qty-per-col">Qty/Unit</th>
@@ -2727,14 +2739,20 @@ function IssuesReturnsContent() {
                                         emptyLabel="No item found."
                                       />
                                     </td>
-                                    <td className="voucher-asset-col">
-                                      <input
-                                        className="form-control form-control-sm"
-                                        value={item.asset_id}
-                                        onChange={(event) => setItemValue(index, "asset_id", event.target.value)}
-                                        placeholder="Optional"
-                                      />
-                                    </td>
+                                    {showAssetColumn ? (
+                                      <td className="voucher-asset-col">
+                                        {transactionItemRequiresAssetId(item.item_id) || item.asset_id ? (
+                                          <input
+                                            className="form-control form-control-sm"
+                                            value={item.asset_id}
+                                            onChange={(event) => setItemValue(index, "asset_id", event.target.value)}
+                                            placeholder="Optional"
+                                          />
+                                        ) : (
+                                          <div className="form-control form-control-sm bg-light text-secondary">-</div>
+                                        )}
+                                      </td>
+                                    ) : null}
                                     <td className="voucher-qty-col">
                                       <input
                                         type="number"
