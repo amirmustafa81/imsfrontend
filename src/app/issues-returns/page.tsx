@@ -169,6 +169,8 @@ type TransactionForm = {
   post_now: boolean;
 };
 
+type StockMatchScope = Pick<TransactionForm, "from_department_id" | "from_store_id" | "project_id" | "funding_source_id">;
+
 const typeOptions: Array<{ value: TransactionType; label: string }> = [
   { value: "issue", label: "Issue" },
   { value: "return", label: "Return" },
@@ -551,15 +553,15 @@ function IssuesReturnsContent() {
 
   const stockRowsForItem = (itemId: string): StockSourceRow[] => stockSourcesByItemId[itemId] ?? [];
 
-  const matchingStockRowFromRows = (rows: StockSourceRow[]): StockSourceRow | undefined => {
-    const hasScopeFilter = Boolean(form.from_department_id || form.from_store_id || form.project_id || form.funding_source_id);
+  const matchingStockRowFromRows = (rows: StockSourceRow[], scope: StockMatchScope = form): StockSourceRow | undefined => {
+    const hasScopeFilter = Boolean(scope.from_department_id || scope.from_store_id || scope.project_id || scope.funding_source_id);
     const exactMatch = hasScopeFilter
       ? rows.find(
           (row) =>
-            (!form.from_department_id || String(row.department_id ?? "") === form.from_department_id) &&
-            (!form.from_store_id || String(row.store_id ?? "") === form.from_store_id) &&
-            (!form.project_id || String(row.project_id ?? "") === form.project_id) &&
-            (!form.funding_source_id || String(row.funding_source_id ?? "") === form.funding_source_id),
+            (!scope.from_department_id || String(row.department_id ?? "") === scope.from_department_id) &&
+            (!scope.from_store_id || String(row.store_id ?? "") === scope.from_store_id) &&
+            (!scope.project_id || String(row.project_id ?? "") === scope.project_id) &&
+            (!scope.funding_source_id || String(row.funding_source_id ?? "") === scope.funding_source_id),
         )
       : undefined;
 
@@ -1042,26 +1044,46 @@ function IssuesReturnsContent() {
     }
   };
 
-  const applyReceivedPackageDefaults = (rowIndex: number, itemId: string, stockRows: StockSourceRow[]) => {
-    const stockSource = matchingStockRowFromRows(stockRows);
+  const applyReceivedPackageDefaults = (
+    rowIndex: number,
+    itemId: string,
+    stockRows: StockSourceRow[],
+    options: { convertBaseQuantityToIssueQuantity?: boolean; scope?: StockMatchScope } = {},
+  ) => {
+    const stockSource = matchingStockRowFromRows(stockRows, options.scope);
     if (!stockSource) return;
 
     const receivedUomId = stockSource.last_receipt_uom_id ? String(stockSource.last_receipt_uom_id) : "";
     const baseUomId = stockSource.base_uom_id ? String(stockSource.base_uom_id) : baseUomIdForItem(itemId);
     const nextUomId = receivedUomId || baseUomId;
+    const nextQtyPerValue = Number(stockSource.last_qty_per_receipt_unit ?? 1);
     const nextQtyPer =
       nextUomId && baseUomId && nextUomId !== baseUomId
-        ? formatQuantityInput(Number(stockSource.last_qty_per_receipt_unit ?? 1))
+        ? formatQuantityInput(Number.isFinite(nextQtyPerValue) && nextQtyPerValue > 0 ? nextQtyPerValue : 1)
         : "1";
 
     setItems((current) =>
       current.map((row, idx) => {
         if (idx !== rowIndex || row.item_id !== itemId) return row;
-        return {
+        const nextRow = {
           ...row,
           issue_uom_id: nextUomId,
           qty_per_issue_unit: nextQtyPer,
         };
+
+        if (options.convertBaseQuantityToIssueQuantity && nextUomId && baseUomId && nextUomId !== baseUomId) {
+          const baseQuantity = numberOrNull(row.quantity);
+          const qtyPer = numberOrNull(nextQtyPer);
+
+          if (baseQuantity !== null && qtyPer && qtyPer > 0) {
+            return {
+              ...nextRow,
+              quantity: formatQuantityInput(baseQuantity / qtyPer),
+            };
+          }
+        }
+
+        return nextRow;
       }),
     );
   };
@@ -1165,6 +1187,13 @@ function IssuesReturnsContent() {
 
     return transaction.from_department_id || transaction.from_store_id || transaction.from_storage_bin_id ? "decrease" : "increase";
   };
+
+  const stockMatchScopeFromTransaction = (transaction: Transaction): StockMatchScope => ({
+    from_department_id: toFormString(transaction.from_department_id),
+    from_store_id: toFormString(transaction.from_store_id),
+    project_id: toFormString(transaction.project_id),
+    funding_source_id: toFormString(transaction.funding_source_id),
+  });
 
   const resolveProcurementDepartmentId = useCallback(() => {
     const procurementDepartment = lookups.departments.find((department) => {
@@ -1276,9 +1305,15 @@ function IssuesReturnsContent() {
         post_now: false,
       });
       setItems(detailItems.length ? detailItems.map(toTransactionItemInput) : [{ ...emptyItem }]);
-      detailItems.forEach((item) => {
+      const stockScope = stockMatchScopeFromTransaction(detail);
+      detailItems.forEach((item, index) => {
         if (item.item_id) {
-          void loadStockRowsForItem(String(item.item_id));
+          void loadStockRowsForItem(String(item.item_id)).then((stockRows) => {
+            applyReceivedPackageDefaults(index, String(item.item_id), stockRows, {
+              convertBaseQuantityToIssueQuantity: true,
+              scope: stockScope,
+            });
+          });
         }
       });
       setVoucherDialogTab("header");
