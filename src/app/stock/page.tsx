@@ -22,12 +22,18 @@ type StockRow = {
   store_name: string;
   project_code: string;
   funding_source_code: string;
+  base_uom_code?: string | null;
+  base_uom_name?: string | null;
+  last_receipt_uom_id?: number | null;
+  last_receipt_uom_code?: string | null;
+  last_receipt_uom_name?: string | null;
+  last_qty_per_receipt_unit?: number | null;
   minimum_stock_level: number;
   quantity_on_hand: number;
   quantity_reserved: number;
   available_quantity: number;
   status: string;
-  [key: string]: string | number | undefined;
+  [key: string]: string | number | null | undefined;
 };
 
 type Filters = {
@@ -37,16 +43,84 @@ type Filters = {
   project_id: string;
 };
 
+type StockQuantityKey = "minimum_stock_level" | "quantity_on_hand" | "quantity_reserved" | "available_quantity";
+
+const formatQuantity = (value: unknown): string => {
+  const quantity = Number(value ?? 0);
+  if (!Number.isFinite(quantity)) return "-";
+
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 3,
+  }).format(quantity);
+};
+
+const stockUnitCode = (value: unknown): string => String(value ?? "").trim();
+
+const stockPackageCode = (row: StockRow): string => stockUnitCode(row.last_receipt_uom_code || row.last_receipt_uom_name);
+
+const stockBaseCode = (row: StockRow): string => stockUnitCode(row.base_uom_code || row.base_uom_name);
+
+const stockPackageSize = (row: StockRow): number => {
+  const qtyPer = Number(row.last_qty_per_receipt_unit ?? 0);
+  return Number.isFinite(qtyPer) && qtyPer > 0 ? qtyPer : 1;
+};
+
+const stockUsesPackageUnit = (row: StockRow): boolean => {
+  const packageCode = stockPackageCode(row);
+  const baseCode = stockBaseCode(row);
+
+  return Boolean(packageCode && baseCode && packageCode !== baseCode && stockPackageSize(row) > 0);
+};
+
+const stockQuantityLabel = (row: StockRow, key: StockQuantityKey) => {
+  const baseQuantity = Number(row[key] ?? 0);
+  const baseCode = stockBaseCode(row);
+
+  if (stockUsesPackageUnit(row)) {
+    const packageCode = stockPackageCode(row);
+    const packageQuantity = baseQuantity / stockPackageSize(row);
+
+    return (
+      <div className="stock-quantity-cell">
+        <span>
+          {formatQuantity(packageQuantity)} {packageCode}
+        </span>
+        <small>
+          {formatQuantity(baseQuantity)}
+          {baseCode ? ` ${baseCode}` : ""}
+        </small>
+      </div>
+    );
+  }
+
+  return (
+    <span>
+      {formatQuantity(baseQuantity)}
+      {baseCode ? ` ${baseCode}` : ""}
+    </span>
+  );
+};
+
+const stockPackageLabel = (row: StockRow): string => {
+  const packageCode = stockPackageCode(row);
+  const baseCode = stockBaseCode(row);
+
+  if (!packageCode || !baseCode) return "-";
+
+  return `1 ${packageCode} = ${formatQuantity(stockPackageSize(row))} ${baseCode}`;
+};
+
 const reportColumns = [
   { key: "item_code", header: "Item Code" },
   { key: "item_name", header: "Item Name" },
+  { key: "package_balance", header: "Package", render: (row: StockRow) => <span className="stock-package-label">{stockPackageLabel(row)}</span> },
   { key: "category_name", header: "Category" },
   { key: "department_name", header: "Department" },
   { key: "store_name", header: "Store" },
-  { key: "minimum_stock_level", header: "Minimum", className: "text-end" },
-  { key: "quantity_on_hand", header: "On Hand", className: "text-end" },
-  { key: "quantity_reserved", header: "Reserved", className: "text-end" },
-  { key: "available_quantity", header: "Available", className: "text-end" },
+  { key: "minimum_stock_level", header: "Minimum", className: "text-end", render: (row: StockRow) => stockQuantityLabel(row, "minimum_stock_level") },
+  { key: "quantity_on_hand", header: "On Hand", className: "text-end", render: (row: StockRow) => stockQuantityLabel(row, "quantity_on_hand") },
+  { key: "quantity_reserved", header: "Reserved", className: "text-end", render: (row: StockRow) => stockQuantityLabel(row, "quantity_reserved") },
+  { key: "available_quantity", header: "Available", className: "text-end", render: (row: StockRow) => stockQuantityLabel(row, "available_quantity") },
   { key: "project_code", header: "Project" },
   { key: "funding_source_code", header: "Funding" },
 ];
@@ -219,7 +293,8 @@ export default function StockPage() {
             <div className="card border-0 shadow-sm h-100">
               <div className="card-body">
                 <div className="small text-secondary">Total On Hand</div>
-                <div className="fs-4 fw-bold">{totalRows.onHandTotal.toLocaleString()}</div>
+                <div className="fs-4 fw-bold">{formatQuantity(totalRows.onHandTotal)}</div>
+                <div className="small text-secondary">Base stock units</div>
               </div>
             </div>
           </div>
@@ -227,7 +302,8 @@ export default function StockPage() {
             <div className="card border-0 shadow-sm h-100">
               <div className="card-body">
                 <div className="small text-secondary">Total Available</div>
-                <div className="fs-4 fw-bold">{totalRows.availableTotal.toLocaleString()}</div>
+                <div className="fs-4 fw-bold">{formatQuantity(totalRows.availableTotal)}</div>
+                <div className="small text-secondary">Base stock units</div>
               </div>
             </div>
           </div>
@@ -320,8 +396,8 @@ export default function StockPage() {
                   ? reportColumns
                   : [
                   ...reportColumns.slice(0, 4),
-                  { key: "minimum_stock_level", header: "Minimum", className: "text-end" },
-                  { key: "quantity_on_hand", header: "Available", className: "text-end" },
+                  { key: "minimum_stock_level", header: "Minimum", className: "text-end", render: (row: StockRow) => stockQuantityLabel(row, "minimum_stock_level") },
+                  { key: "available_quantity", header: "Available", className: "text-end", render: (row: StockRow) => stockQuantityLabel(row, "available_quantity") },
                   { key: "status", header: "Status", render: (row: StockRow) => <StatusBadge status={row.status || "Active"} /> },
                 ]
           }
