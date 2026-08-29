@@ -394,6 +394,69 @@ body {
   background: #f8fbff;
 }
 
+.voucher-items-grid {
+  max-height: 430px;
+  overflow: auto;
+}
+
+.voucher-items-grid table {
+  min-width: 1120px;
+}
+
+.voucher-items-grid thead th {
+  font-size: 0.78rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  white-space: nowrap;
+}
+
+.voucher-items-grid .voucher-row-number {
+  min-width: 44px;
+  width: 44px;
+}
+
+.voucher-items-grid .voucher-item-col {
+  min-width: 300px;
+  width: 300px;
+}
+
+.voucher-items-grid .voucher-asset-col {
+  min-width: 130px;
+  width: 130px;
+}
+
+.voucher-items-grid .voucher-qty-col {
+  min-width: 76px;
+  width: 76px;
+}
+
+.voucher-items-grid .voucher-money-col {
+  min-width: 108px;
+  width: 108px;
+}
+
+.voucher-items-grid .voucher-remarks-col {
+  min-width: 230px;
+  width: 230px;
+}
+
+.voucher-items-grid .voucher-action-col {
+  min-width: 86px;
+  width: 86px;
+}
+
+.voucher-items-grid .form-control,
+.voucher-items-grid .ims-search-select input {
+  min-height: 34px;
+}
+
+.voucher-items-grid .voucher-qty-col .form-control,
+.voucher-items-grid .voucher-money-col .form-control {
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
 button,
 a {
   transition:

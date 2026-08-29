@@ -381,6 +381,28 @@ const numberOrNull = (value: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const formatQuantityInput = (value: number) => {
+  if (!Number.isFinite(value)) return "0";
+  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/\.?0+$/, "");
+};
+
+const formatMoneyInput = (value: number) => {
+  if (!Number.isFinite(value)) return "0";
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
+};
+
+const isTransactionItemEmpty = (item: TransactionItemInput) =>
+  !item.item_id.trim() &&
+  !item.asset_id.trim() &&
+  !item.quantity.trim() &&
+  !item.unit_cost.trim() &&
+  !item.remarks.trim();
+
+const isTransactionItemComplete = (item: TransactionItemInput) => {
+  const quantity = numberOrNull(item.quantity);
+  return Boolean(item.item_id.trim() && quantity && quantity > 0);
+};
+
 const itemCodeSegment = (value: unknown) =>
   String(value ?? "")
     .toUpperCase()
@@ -432,6 +454,7 @@ function IssuesReturnsContent() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [form, setForm] = useState<TransactionForm>(defaultForm);
   const [items, setItems] = useState<TransactionItemInput[]>([emptyItem]);
+  const [voucherDialogTab, setVoucherDialogTab] = useState<"header" | "items" | "documents" | "preview">("header");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<number, TransactionItem[]>>({});
   const [expandedLoading, setExpandedLoading] = useState<Record<number, boolean>>({});
@@ -839,10 +862,24 @@ function IssuesReturnsContent() {
     }
   };
 
-  const addItemRow = () => setItems((current) => [...current, { ...emptyItem }]);
+  const addItemRows = (count = 1) => {
+    setItems((current) => [...current, ...Array.from({ length: count }, () => ({ ...emptyItem }))]);
+  };
+
+  const addItemRow = () => addItemRows(1);
+
+  const clearEmptyItemRows = () => {
+    setItems((current) => {
+      const populatedRows = current.filter((item) => !isTransactionItemEmpty(item));
+      return populatedRows.length > 0 ? populatedRows : [{ ...emptyItem }];
+    });
+  };
 
   const removeItemRow = (index: number) => {
-    setItems((current) => current.filter((_, idx) => idx !== index));
+    setItems((current) => {
+      const next = current.filter((_, idx) => idx !== index);
+      return next.length > 0 ? next : [{ ...emptyItem }];
+    });
   };
 
   const toTransactionItemInput = (row: TransactionItem): TransactionItemInput => ({
@@ -892,6 +929,7 @@ function IssuesReturnsContent() {
       transaction_date: new Date().toISOString().slice(0, 10),
     });
     setItems([{ ...emptyItem }]);
+    setVoucherDialogTab("header");
   };
 
   const openCreateDialog = () => {
@@ -970,6 +1008,7 @@ function IssuesReturnsContent() {
         post_now: false,
       });
       setItems(detailItems.length ? detailItems.map(toTransactionItemInput) : [{ ...emptyItem }]);
+      setVoucherDialogTab("header");
       setError("");
       setDialogOpen(true);
     } catch (editError) {
@@ -1047,6 +1086,39 @@ function IssuesReturnsContent() {
         .map((user) => toSearchOption(user, "Employee")),
     [lookups.users, recipientDepartmentId],
   );
+
+  const itemSummary = useMemo(
+    () =>
+      items.reduce(
+        (summary, item) => {
+          const quantity = numberOrNull(item.quantity) ?? 0;
+          const unitCost = numberOrNull(item.unit_cost) ?? 0;
+          const rowIsEmpty = isTransactionItemEmpty(item);
+          const rowIsComplete = isTransactionItemComplete(item);
+
+          return {
+            rowCount: summary.rowCount + (rowIsEmpty ? 0 : 1),
+            emptyRowCount: summary.emptyRowCount + (rowIsEmpty ? 1 : 0),
+            incompleteRowCount: summary.incompleteRowCount + (!rowIsEmpty && !rowIsComplete ? 1 : 0),
+            totalQty: summary.totalQty + (rowIsComplete ? quantity : 0),
+            totalAmount: summary.totalAmount + (rowIsComplete ? quantity * unitCost : 0),
+          };
+        },
+        { rowCount: 0, emptyRowCount: 0, incompleteRowCount: 0, totalQty: 0, totalAmount: 0 },
+      ),
+    [items],
+  );
+
+  const voucherReady = useMemo(() => {
+    const required = canSubmitType(form.transaction_type, form.adjustment_direction);
+    return (
+      required.every((field) => String(form[field as keyof TransactionForm] ?? "").trim()) &&
+      itemSummary.rowCount > 0 &&
+      itemSummary.emptyRowCount === 0 &&
+      itemSummary.incompleteRowCount === 0
+    );
+  }, [form, itemSummary.emptyRowCount, itemSummary.incompleteRowCount, itemSummary.rowCount]);
+
   const itemOptions = useMemo(
     () =>
       [...lookups.items]
@@ -2125,10 +2197,10 @@ function IssuesReturnsContent() {
           }
         />
 
-        {(message || error) && (
+        {(message || (error && !dialogOpen)) && (
           <div className="mb-4">
             {message && <div className="alert alert-success py-2">{String(message)}</div>}
-            {error && <div className="alert alert-danger py-2">{error}</div>}
+            {error && !dialogOpen ? <div className="alert alert-danger py-2">{error}</div> : null}
           </div>
         )}
 
@@ -2137,7 +2209,7 @@ function IssuesReturnsContent() {
             <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
               <div
                 className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
-                style={{ width: "min(62vw, 980px)", maxWidth: "min(62vw, 980px)" }}
+                style={{ width: "min(96vw, 1500px)", maxWidth: "min(96vw, 1500px)" }}
               >
                 <form className="modal-content border-0 shadow-lg" onSubmit={saveTransaction}>
                   <div className="modal-header px-4 py-3">
@@ -2157,155 +2229,168 @@ function IssuesReturnsContent() {
                     />
                   </div>
                   <div className="modal-body px-4 py-3">
-                    <div className="row g-2">
-                    <div className="col-12">
-                      <label className="form-label">Voucher type</label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={form.transaction_type}
-                        onChange={(e) => setFormValue("transaction_type", e.target.value as TransactionType)}
+                    {error ? (
+                      <div className="position-sticky top-0 bg-white pb-2" style={{ zIndex: 5 }}>
+                        <div className="alert alert-danger py-2 mb-0">{error}</div>
+                      </div>
+                    ) : null}
+                    <div className="grn-dialog-tabs nav nav-tabs mb-3" role="tablist" aria-label="Voucher form sections">
+                      <button
+                        className={`nav-link ${voucherDialogTab === "header" ? "active" : ""}`}
+                        type="button"
+                        onClick={() => setVoucherDialogTab("header")}
                       >
-                        {typeOptions.map((type) => (
-                          <option key={type.value} value={type.value}>
-                            {type.label}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="form-text">{renderScopeHint()}</div>
+                        Header
+                      </button>
+                      <button
+                        className={`nav-link ${voucherDialogTab === "items" ? "active" : ""}`}
+                        type="button"
+                        onClick={() => setVoucherDialogTab("items")}
+                      >
+                        Items ({itemSummary.rowCount})
+                      </button>
+                      <button
+                        className={`nav-link ${voucherDialogTab === "documents" ? "active" : ""}`}
+                        type="button"
+                        onClick={() => setVoucherDialogTab("documents")}
+                      >
+                        Documents
+                      </button>
+                      <button
+                        className={`nav-link ${voucherDialogTab === "preview" ? "active" : ""}`}
+                        type="button"
+                        onClick={() => setVoucherDialogTab("preview")}
+                      >
+                        Preview
+                      </button>
                     </div>
 
-                    <div className="col-12 col-md-6">
-                      <label className="form-label">Transaction no</label>
-                      <input
-                        className="form-control form-control-sm bg-light text-muted"
-                        value={editingTransactionId === null ? previewTransactionNo(form.transaction_type, form.transaction_date) : form.transaction_no}
-                        readOnly
-                        aria-readonly="true"
-                      />
-                      <div className="form-text small">
-                        {editingTransactionId === null
-                          ? `Preview only. The backend assigns the next available ${transactionNoPrefixes[form.transaction_type]} number when saved.`
-                          : "Draft voucher number is retained unless the type or year changes."}
+                    <div className="row g-2 grn-header-grid" hidden={voucherDialogTab !== "header"}>
+                      <div className="col-12 col-md-3">
+                        <label className="form-label small mb-1">Voucher Type</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={form.transaction_type}
+                          onChange={(event) => setFormValue("transaction_type", event.target.value as TransactionType)}
+                        >
+                          {typeOptions.map((type) => (
+                            <option key={type.value} value={type.value}>
+                              {type.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    </div>
 
-                    <div className="col-12 col-md-6">
-                      <label className="form-label">Transaction date</label>
-                      <input
-                        type="date"
-                        className="form-control form-control-sm"
-                        value={form.transaction_date}
-                        onChange={(e) => setFormValue("transaction_date", e.target.value)}
-                      />
-                    </div>
-
-                    {form.transaction_type === "issue" && (
-                      <div className="col-12 col-md-6">
-                        <label className="form-label">To Department {requiredMarker}</label>
-                        <SearchableSelect
-                          id="transaction-to-department-issue"
-                          value={form.to_department_id}
-                          options={departmentOptions}
-                          onChange={(value) => setFormValue("to_department_id", value)}
-                          placeholder="Search department"
-                          emptyLabel="No department found."
+                      <div className="col-12 col-md-3">
+                        <label className="form-label small mb-1">Voucher No.</label>
+                        <input
+                          className="form-control form-control-sm bg-light text-muted"
+                          value={
+                            editingTransactionId === null
+                              ? previewTransactionNo(form.transaction_type, form.transaction_date)
+                              : form.transaction_no
+                          }
+                          readOnly
+                          aria-readonly="true"
                         />
                       </div>
-                    )}
 
-                    {(form.transaction_type === "issue" || form.transaction_type === "return" || form.transaction_type === "transfer") && (
-                      <div className="col-12 col-md-6">
-                        <label className="form-label">
-                          {form.transaction_type === "return"
-                            ? "By Employee"
-                            : form.transaction_type === "transfer"
-                            ? "Recipient / Custodian (optional)"
-                            : "To Employee"}
-                          {form.transaction_type === "issue" || form.transaction_type === "return" ? <> {requiredMarker}</> : ""}
-                        </label>
-                        <SearchableSelect
-                          id="transaction-recipient-user"
-                          value={form.recipient_user_id}
-                          options={employeeOptions}
-                          onChange={(value) => setFormValue("recipient_user_id", value)}
-                          placeholder="Search employee by name, code, or email"
-                          emptyLabel="No employee found."
+                      <div className="col-12 col-md-3">
+                        <label className="form-label small mb-1">Date</label>
+                        <input
+                          type="date"
+                          className="form-control form-control-sm"
+                          value={form.transaction_date}
+                          onChange={(event) => setFormValue("transaction_date", event.target.value)}
                         />
-                        <div className="form-text">
-                          {form.transaction_type === "return"
-                            ? "Select the employee returning the item to store."
-                            : "Select the employee who will be accountable for the issued item."}
-                        </div>
                       </div>
-                    )}
 
-                    {showsReceivingLocation && (
-                      <>
-                        <div className="col-12 col-md-6">
-                          <label className="form-label">To Building</label>
-                          <SearchableSelect
-                            id="transaction-to-building"
-                            value={form.to_building_id}
-                            options={buildingOptions}
-                            onChange={(value) => setFormValue("to_building_id", value)}
-                            placeholder="Optional"
-                            emptyLabel="No building found."
-                          />
-                        </div>
-                        <div className="col-12 col-md-6">
-                          <label className="form-label">To Room</label>
-                          <SearchableSelect
-                            id="transaction-to-room"
-                            value={form.to_room_id}
-                            options={roomOptions}
-                            onChange={(value) => setFormValue("to_room_id", value)}
-                            placeholder={form.to_building_id ? "Optional" : "Optional, select building to filter"}
-                            emptyLabel={form.to_building_id ? "No room found for selected building." : "No room found."}
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {form.transaction_type === "adjustment" && (
-                      <div className="col-12">
-                        <label className="form-label mb-1 small">Adjustment direction</label>
-                        <div className="btn-group w-100" role="group" aria-label="Adjustment direction">
-                          <input
-                            type="radio"
-                            className="btn-check"
-                            id="adjustment-increase"
-                            name="adjustment_direction"
-                            autoComplete="off"
-                            value="increase"
-                            checked={form.adjustment_direction === "increase"}
-                            onChange={(event) => setFormValue("adjustment_direction", event.target.value)}
-                          />
-                          <label className="btn btn-outline-success" htmlFor="adjustment-increase">
-                            Increase stock
-                          </label>
-                          <input
-                            type="radio"
-                            className="btn-check"
-                            id="adjustment-decrease"
-                            name="adjustment_direction"
-                            autoComplete="off"
-                            value="decrease"
-                            checked={form.adjustment_direction === "decrease"}
-                            onChange={(event) => setFormValue("adjustment_direction", event.target.value)}
-                          />
-                          <label className="btn btn-outline-warning" htmlFor="adjustment-decrease">
-                            Decrease stock
-                          </label>
-                        </div>
+                      <div className="col-12 col-md-3">
+                        <label className="form-label small mb-1">Status</label>
+                        <input className="form-control form-control-sm bg-light text-muted" value="Draft" readOnly />
                       </div>
-                    )}
 
-                    {showsSourceStockFields && (
-                      <>
-                        <div className="col-12 col-md-6">
-                          <label className="form-label">From Department {requiredMarker}</label>
+                      {form.transaction_type === "adjustment" ? (
+                        <div className="col-12">
+                          <label className="form-label small mb-1">Adjustment direction</label>
+                          <div className="btn-group" role="group" aria-label="Adjustment direction">
+                            <input
+                              type="radio"
+                              className="btn-check"
+                              id="adjustment-increase"
+                              name="adjustment_direction"
+                              autoComplete="off"
+                              value="increase"
+                              checked={form.adjustment_direction === "increase"}
+                              onChange={(event) => setFormValue("adjustment_direction", event.target.value)}
+                            />
+                            <label className="btn btn-sm btn-outline-success" htmlFor="adjustment-increase">
+                              Increase stock
+                            </label>
+                            <input
+                              type="radio"
+                              className="btn-check"
+                              id="adjustment-decrease"
+                              name="adjustment_direction"
+                              autoComplete="off"
+                              value="decrease"
+                              checked={form.adjustment_direction === "decrease"}
+                              onChange={(event) => setFormValue("adjustment_direction", event.target.value)}
+                            />
+                            <label className="btn btn-sm btn-outline-warning" htmlFor="adjustment-decrease">
+                              Decrease stock
+                            </label>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {showsSourceStockFields ? (
+                        <>
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small mb-1">From Department {requiredMarker}</label>
+                            <SearchableSelect
+                              id="transaction-from-department"
+                              value={form.from_department_id}
+                              options={departmentOptions}
+                              onChange={(value) => setFormValue("from_department_id", value)}
+                              placeholder="Search department"
+                              emptyLabel="No department found."
+                            />
+                          </div>
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small mb-1">From Store {requiredMarker}</label>
+                            <SearchableSelect
+                              id="transaction-from-store"
+                              value={form.from_store_id}
+                              options={storeOptions}
+                              onChange={(value) => setFormValue("from_store_id", value)}
+                              placeholder="Search store"
+                              emptyLabel="No store found."
+                            />
+                          </div>
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small mb-1">From Bin</label>
+                            <select
+                              className="form-select form-select-sm"
+                              value={form.from_storage_bin_id}
+                              onChange={(event) => setFormValue("from_storage_bin_id", event.target.value)}
+                            >
+                              <option value="">Optional</option>
+                              {binsForStore(form.from_store_id).map((bin) => (
+                                <option key={bin.id} value={bin.id}>
+                                  {bin.code} - {bin.name ?? ""}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </>
+                      ) : null}
+
+                      {showsReturnByDepartment ? (
+                        <div className="col-12 col-md-4">
+                          <label className="form-label small mb-1">By Department {requiredMarker}</label>
                           <SearchableSelect
-                            id="transaction-from-department"
+                            id="transaction-by-department"
                             value={form.from_department_id}
                             options={departmentOptions}
                             onChange={(value) => setFormValue("from_department_id", value)}
@@ -2313,55 +2398,13 @@ function IssuesReturnsContent() {
                             emptyLabel="No department found."
                           />
                         </div>
-                        <div className="col-12 col-md-6">
-                          <label className="form-label">From Store {requiredMarker}</label>
-                          <SearchableSelect
-                            id="transaction-from-store"
-                            value={form.from_store_id}
-                            options={storeOptions}
-                            onChange={(value) => setFormValue("from_store_id", value)}
-                            placeholder="Search store"
-                            emptyLabel="No store found."
-                          />
-                        </div>
-                        <div className="col-12 col-md-6">
-                          <label className="form-label">From Storage Bin (optional)</label>
-                          <select
-                            className="form-select form-select-sm"
-                            value={form.from_storage_bin_id}
-                            onChange={(e) => setFormValue("from_storage_bin_id", e.target.value)}
-                          >
-                            <option value="">Optional</option>
-                            {binsForStore(form.from_store_id).map((bin) => (
-                              <option key={bin.id} value={bin.id}>
-                                {bin.code} - {bin.name ?? ""}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </>
-                    )}
+                      ) : null}
 
-                    {showsReturnByDepartment && (
-                      <div className="col-12 col-md-6">
-                        <label className="form-label">By Department {requiredMarker}</label>
-                        <SearchableSelect
-                          id="transaction-by-department"
-                          value={form.from_department_id}
-                          options={departmentOptions}
-                          onChange={(value) => setFormValue("from_department_id", value)}
-                          placeholder="Search department"
-                          emptyLabel="No department found."
-                        />
-                      </div>
-                    )}
-
-                    {showsToDepartment && form.transaction_type !== "issue" && (
-                      <>
-                        <div className="col-12 col-md-6">
-                          <label className="form-label">To Department {requiredMarker}</label>
+                      {showsToDepartment ? (
+                        <div className="col-12 col-md-4">
+                          <label className="form-label small mb-1">To Department {requiredMarker}</label>
                           <SearchableSelect
-                            id="transaction-to-department"
+                            id={form.transaction_type === "issue" ? "transaction-to-department-issue" : "transaction-to-department"}
                             value={form.to_department_id}
                             options={departmentOptions}
                             onChange={(value) => setFormValue("to_department_id", value)}
@@ -2369,9 +2412,12 @@ function IssuesReturnsContent() {
                             emptyLabel="No department found."
                           />
                         </div>
-                        {showsToStore ? (
-                          <div className="col-12 col-md-6">
-                            <label className="form-label">To Store {requiredMarker}</label>
+                      ) : null}
+
+                      {showsToStore ? (
+                        <>
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small mb-1">To Store {requiredMarker}</label>
                             <SearchableSelect
                               id="transaction-to-store"
                               value={form.to_store_id}
@@ -2381,14 +2427,12 @@ function IssuesReturnsContent() {
                               emptyLabel="No store found."
                             />
                           </div>
-                        ) : null}
-                        {showsToStore ? (
-                          <div className="col-12 col-md-6">
-                            <label className="form-label">To Storage Bin (optional)</label>
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small mb-1">To Bin</label>
                             <select
                               className="form-select form-select-sm"
                               value={form.to_storage_bin_id}
-                              onChange={(e) => setFormValue("to_storage_bin_id", e.target.value)}
+                              onChange={(event) => setFormValue("to_storage_bin_id", event.target.value)}
                             >
                               <option value="">Optional</option>
                               {binsForStore(form.to_store_id).map((bin) => (
@@ -2398,178 +2442,366 @@ function IssuesReturnsContent() {
                               ))}
                             </select>
                           </div>
-                        ) : null}
-                      </>
-                    )}
+                        </>
+                      ) : null}
 
-                    <div className="col-12 col-md-6">
-                      <div className="d-flex align-items-center justify-content-between">
-                        <label className="form-label">Funding Source</label>
-                        {renderQuickAction("Funding Source", "funding-sources", "funding_source_id")}
-                      </div>
-                      <SearchableSelect
-                        id="transaction-funding-source"
-                        value={form.funding_source_id}
-                        options={fundingSourceOptions}
-                        onChange={(value) => setFormValue("funding_source_id", value)}
-                        placeholder="Optional"
-                        emptyLabel="No funding source found."
-                      />
-                    </div>
+                      {(form.transaction_type === "issue" || form.transaction_type === "return" || form.transaction_type === "transfer") ? (
+                        <div className="col-12 col-md-4">
+                          <label className="form-label small mb-1">
+                            {form.transaction_type === "return"
+                              ? "By Employee"
+                              : form.transaction_type === "transfer"
+                                ? "Custodian"
+                                : "To Employee"}
+                            {form.transaction_type === "issue" || form.transaction_type === "return" ? <> {requiredMarker}</> : ""}
+                          </label>
+                          <SearchableSelect
+                            id="transaction-recipient-user"
+                            value={form.recipient_user_id}
+                            options={employeeOptions}
+                            onChange={(value) => setFormValue("recipient_user_id", value)}
+                            placeholder="Search employee"
+                            emptyLabel="No employee found."
+                          />
+                        </div>
+                      ) : null}
 
-                    <div className="col-12 col-md-6">
-                      <label className="form-label">Research Project</label>
-                      <SearchableSelect
-                        id="transaction-research-project"
-                        value={form.project_id}
-                        options={projectOptions}
-                        onChange={(value) => setFormValue("project_id", value)}
-                        placeholder="Optional"
-                        emptyLabel="No project found."
-                      />
-                    </div>
+                      {showsReceivingLocation ? (
+                        <>
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small mb-1">Building</label>
+                            <SearchableSelect
+                              id="transaction-to-building"
+                              value={form.to_building_id}
+                              options={buildingOptions}
+                              onChange={(value) => setFormValue("to_building_id", value)}
+                              placeholder="Optional"
+                              emptyLabel="No building found."
+                            />
+                          </div>
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small mb-1">Room</label>
+                            <SearchableSelect
+                              id="transaction-to-room"
+                              value={form.to_room_id}
+                              options={roomOptions}
+                              onChange={(value) => setFormValue("to_room_id", value)}
+                              placeholder={form.to_building_id ? "Optional" : "Optional, select building to filter"}
+                              emptyLabel={form.to_building_id ? "No room found for selected building." : "No room found."}
+                            />
+                          </div>
+                        </>
+                      ) : null}
 
-                    <div className="col-12">
-                      <label className="form-label">Purpose</label>
-                      <textarea
-                        className="form-control form-control-sm"
-                        rows={2}
-                        value={form.purpose}
-                        onChange={(e) => setFormValue("purpose", e.target.value)}
-                        placeholder="Issue/return reason"
-                      />
-                    </div>
-
-                    <div className="col-12">
-                      <ApprovalReferenceFields
-                        value={{
-                          ref: form.manual_approval_ref,
-                          authority: form.manual_approved_by,
-                          date: form.manual_approval_date,
-                          remarks: form.remarks,
-                        }}
-                        onChange={(value) => {
-                          setFormValue("manual_approval_ref", value.ref);
-                          setFormValue("manual_approved_by", value.authority);
-                          setFormValue("manual_approval_date", value.date);
-                          setFormValue("remarks", value.remarks);
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <hr className="my-4" />
-
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h2 className="h5 mb-0">Items</h2>
-                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={addItemRow}>
-                      <i className="bi bi-plus-lg me-1" />
-                      Add item
-                    </button>
-                  </div>
-
-                  {items.map((item, index) => (
-                    <div className="row g-2 align-items-end mb-3" key={`${index}-${item.item_id || "new"}`}>
-                      <div className="col-12 col-xl-3">
+                      <div className="col-12 col-md-4">
                         <div className="d-flex align-items-center justify-content-between">
-                          <label className="form-label mb-1 small">Item</label>
-                          <button
-                            className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
-                            type="button"
-                            onClick={() => openQuickItemDialog(index)}
-                          >
-                            <i className="bi bi-plus-circle me-1" />
-                            New Item
-                          </button>
+                          <label className="form-label small mb-1">Funding Source</label>
+                          {renderQuickAction("Funding Source", "funding-sources", "funding_source_id")}
                         </div>
                         <SearchableSelect
-                          id={`transaction-item-${index}`}
-                          value={item.item_id}
-                          options={itemOptions}
-                          onChange={(value) => setTransactionItemValue(index, "item_id", value)}
-                          placeholder="Search item by code or name"
-                          emptyLabel="No item found."
+                          id="transaction-funding-source"
+                          value={form.funding_source_id}
+                          options={fundingSourceOptions}
+                          onChange={(value) => setFormValue("funding_source_id", value)}
+                          placeholder="Optional"
+                          emptyLabel="No funding source found."
                         />
                       </div>
-                      <div className="col-12 col-xl-3">
-                        <label className="form-label mb-1 small">Asset ID (optional)</label>
+
+                      <div className="col-12 col-md-5">
+                        <label className="form-label small mb-1">Research Project</label>
+                        <SearchableSelect
+                          id="transaction-research-project"
+                          value={form.project_id}
+                          options={projectOptions}
+                          onChange={(value) => setFormValue("project_id", value)}
+                          placeholder="Optional"
+                          emptyLabel="No project found."
+                        />
+                      </div>
+
+                      <div className="col-12 col-md-7">
+                        <label className="form-label small mb-1">Purpose</label>
                         <input
                           className="form-control form-control-sm"
-                          value={item.asset_id}
-                          onChange={(e) => setItemValue(index, "asset_id", e.target.value)}
-                          placeholder="Optional fixed asset ID"
+                          value={form.purpose}
+                          onChange={(event) => setFormValue("purpose", event.target.value)}
+                          placeholder="Issue/return reason"
                         />
                       </div>
-                      <div className="col-12 col-xl-2">
-                        <label className="form-label mb-1 small">Quantity</label>
-                        <input
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          className="form-control form-control-sm"
-                          value={item.quantity}
-                          onChange={(e) => setItemValue(index, "quantity", e.target.value)}
-                          placeholder="0"
-                        />
-                      </div>
-                      <div className="col-12 col-xl-2">
-                        <label className="form-label mb-1 small">Unit Cost</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          className="form-control form-control-sm"
-                          value={item.unit_cost}
-                          onChange={(e) => setItemValue(index, "unit_cost", e.target.value)}
-                          placeholder="0"
-                        />
-                      </div>
-                      <div className="col-12 col-xl-1">
-                        <button
-                          type="button"
-                          className="btn btn-outline-danger w-100"
-                          onClick={() => removeItemRow(index)}
-                          disabled={items.length === 1}
-                          aria-label="Remove row"
-                        >
-                          <i className="bi bi-trash" />
-                        </button>
-                      </div>
+
                       <div className="col-12">
-                        <label className="form-label mb-1 small">Remarks</label>
-                        <textarea
-                          className="form-control form-control-sm"
-                          rows={1}
-                          value={item.remarks}
-                          onChange={(e) => setItemValue(index, "remarks", e.target.value)}
-                          placeholder="Serial/location/condition notes"
+                        <ApprovalReferenceFields
+                          value={{
+                            ref: form.manual_approval_ref,
+                            authority: form.manual_approved_by,
+                            date: form.manual_approval_date,
+                            remarks: form.remarks,
+                          }}
+                          onChange={(value) => {
+                            setFormValue("manual_approval_ref", value.ref);
+                            setFormValue("manual_approved_by", value.authority);
+                            setFormValue("manual_approval_date", value.date);
+                            setFormValue("remarks", value.remarks);
+                          }}
+                          compact
                         />
                       </div>
                     </div>
-                  ))}
 
-                  <div className="row g-3">
-                    <div className="col-12">
-                      <label className="form-check-label d-flex align-items-center gap-2">
+                    <div className="row g-2" hidden={voucherDialogTab !== "items"}>
+                      <div className="col-12">
+                        <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                          <div>
+                            <h3 className="h6 mb-1">Voucher Items</h3>
+                            <div className="small text-secondary">
+                              {itemSummary.rowCount} item rows, {formatQuantityInput(itemSummary.totalQty)} total qty, PKR{" "}
+                              {formatMoneyInput(itemSummary.totalAmount)}
+                            </div>
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            <button className="btn btn-sm btn-primary" type="button" onClick={addItemRow}>
+                              <i className="bi bi-plus-lg me-1" />
+                              Add Row
+                            </button>
+                            <button className="btn btn-sm btn-outline-primary" type="button" onClick={() => addItemRows(10)}>
+                              <i className="bi bi-plus-square me-1" />
+                              Add 10 Rows
+                            </button>
+                            <button className="btn btn-sm btn-outline-secondary" type="button" onClick={clearEmptyItemRows}>
+                              <i className="bi bi-eraser me-1" />
+                              Clear Empty Rows
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-12">
+                        <div className="table-responsive border rounded bg-white voucher-items-grid">
+                          <table className="table table-sm align-middle mb-0">
+                            <thead className="table-light">
+                              <tr>
+                                <th className="text-center voucher-row-number">#</th>
+                                <th className="voucher-item-col">Item</th>
+                                <th className="voucher-asset-col">Asset ID</th>
+                                <th className="voucher-qty-col">Qty</th>
+                                <th className="voucher-money-col">Unit Cost</th>
+                                <th className="voucher-money-col">Total</th>
+                                <th className="voucher-remarks-col">Remarks</th>
+                                <th className="text-end voucher-action-col">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((item, index) => {
+                                const quantity = numberOrNull(item.quantity) ?? 0;
+                                const unitCost = numberOrNull(item.unit_cost) ?? 0;
+                                return (
+                                  <tr key={`${index}-${item.item_id || "new"}`}>
+                                    <td className="text-center text-secondary voucher-row-number">{index + 1}</td>
+                                    <td className="voucher-item-col">
+                                      <SearchableSelect
+                                        id={`transaction-item-${index}`}
+                                        value={item.item_id}
+                                        options={itemOptions}
+                                        onChange={(value) => setTransactionItemValue(index, "item_id", value)}
+                                        placeholder="Search item"
+                                        emptyLabel="No item found."
+                                      />
+                                    </td>
+                                    <td className="voucher-asset-col">
+                                      <input
+                                        className="form-control form-control-sm"
+                                        value={item.asset_id}
+                                        onChange={(event) => setItemValue(index, "asset_id", event.target.value)}
+                                        placeholder="Optional"
+                                      />
+                                    </td>
+                                    <td className="voucher-qty-col">
+                                      <input
+                                        type="number"
+                                        step="0.001"
+                                        min="0"
+                                        className="form-control form-control-sm text-end"
+                                        value={item.quantity}
+                                        onChange={(event) => setItemValue(index, "quantity", event.target.value)}
+                                        placeholder="0"
+                                      />
+                                    </td>
+                                    <td className="voucher-money-col">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        className="form-control form-control-sm text-end"
+                                        value={item.unit_cost}
+                                        onChange={(event) => setItemValue(index, "unit_cost", event.target.value)}
+                                        placeholder="0"
+                                      />
+                                    </td>
+                                    <td className="voucher-money-col">
+                                      <div className="form-control form-control-sm bg-white text-end">
+                                        {formatMoneyInput(quantity * unitCost)}
+                                      </div>
+                                    </td>
+                                    <td className="voucher-remarks-col">
+                                      <input
+                                        className="form-control form-control-sm"
+                                        value={item.remarks}
+                                        onChange={(event) => setItemValue(index, "remarks", event.target.value)}
+                                        placeholder="Serial/location/condition"
+                                      />
+                                    </td>
+                                    <td className="text-end voucher-action-col">
+                                      <div className="btn-group btn-group-sm">
+                                        <button
+                                          className="btn btn-outline-primary px-2"
+                                          type="button"
+                                          title="Create new item"
+                                          aria-label={`Create item for row ${index + 1}`}
+                                          onClick={() => openQuickItemDialog(index)}
+                                        >
+                                          <i className="bi bi-plus-lg" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-outline-danger px-2"
+                                          onClick={() => removeItemRow(index)}
+                                          disabled={items.length === 1}
+                                          title="Remove row"
+                                          aria-label={`Remove row ${index + 1}`}
+                                        >
+                                          <i className="bi bi-trash3" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="row g-3" hidden={voucherDialogTab !== "documents"}>
+                      <div className="col-12">
+                        <div className="border rounded bg-light p-3">
+                          <h3 className="h6 mb-2">Documents</h3>
+                          <div className="small text-secondary">No document attachment fields are configured for this voucher screen.</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="row g-3" hidden={voucherDialogTab !== "preview"}>
+                      <div className="col-12 col-lg-7">
+                        <div className="border rounded bg-light p-3 h-100">
+                          <h3 className="h6 mb-3">Voucher Summary</h3>
+                          <div className="row g-2 small">
+                            <div className="col-12 col-md-6">
+                              <span className="text-secondary d-block">Voucher No.</span>
+                              <strong>
+                                {editingTransactionId === null
+                                  ? previewTransactionNo(form.transaction_type, form.transaction_date)
+                                  : form.transaction_no}
+                              </strong>
+                            </div>
+                            <div className="col-12 col-md-6">
+                              <span className="text-secondary d-block">Type</span>
+                              <strong>{toTransactionTypeLabel(form.transaction_type)}</strong>
+                            </div>
+                            <div className="col-12 col-md-6">
+                              <span className="text-secondary d-block">From</span>
+                              <strong>
+                                {lookupLabel("departments", form.from_department_id)}
+                                {form.from_store_id ? ` / ${lookupLabel("stores", form.from_store_id)}` : ""}
+                              </strong>
+                            </div>
+                            <div className="col-12 col-md-6">
+                              <span className="text-secondary d-block">To</span>
+                              <strong>
+                                {lookupLabel("departments", form.to_department_id)}
+                                {form.to_store_id ? ` / ${lookupLabel("stores", form.to_store_id)}` : ""}
+                              </strong>
+                            </div>
+                            <div className="col-12">
+                              <span className="text-secondary d-block">Employee</span>
+                              <strong>{lookupLabel("users", form.recipient_user_id)}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-12 col-lg-5">
+                        <div className="border rounded bg-white p-3 h-100">
+                          <h3 className="h6 mb-3">Items</h3>
+                          <div className="list-group list-group-flush small">
+                            <div className="list-group-item px-0 d-flex justify-content-between">
+                              <span className="text-secondary">Rows</span>
+                              <strong>{itemSummary.rowCount}</strong>
+                            </div>
+                            <div className="list-group-item px-0 d-flex justify-content-between">
+                              <span className="text-secondary">Total Qty</span>
+                              <strong>{formatQuantityInput(itemSummary.totalQty)}</strong>
+                            </div>
+                            <div className="list-group-item px-0 d-flex justify-content-between">
+                              <span className="text-secondary">Total Amount</span>
+                              <strong>PKR {formatMoneyInput(itemSummary.totalAmount)}</strong>
+                            </div>
+                            <div className="list-group-item px-0 d-flex justify-content-between">
+                              <span className="text-secondary">Status</span>
+                              <strong>{voucherReady ? "Ready" : "Incomplete"}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer grn-receipt-footer px-4 py-3">
+                    <div className="grn-footer-summary">
+                      <div className="grn-footer-metric">
+                        <strong>{itemSummary.rowCount}</strong>
+                        <span>Items</span>
+                      </div>
+                      <div className="grn-footer-metric">
+                        <strong>{formatQuantityInput(itemSummary.totalQty)}</strong>
+                        <span>Total Qty</span>
+                      </div>
+                      <div className="grn-footer-metric grn-footer-amount">
+                        <strong>PKR {formatMoneyInput(itemSummary.totalAmount)}</strong>
+                        <span>Total Amount</span>
+                      </div>
+                      <div className={`grn-footer-ready ${voucherReady ? "is-ready" : "is-incomplete"}`}>
+                        <strong>{voucherReady ? "Ready" : "Incomplete"}</strong>
+                        <span>
+                          {voucherReady
+                            ? "All required rows complete"
+                            : itemSummary.emptyRowCount > 0
+                              ? `${itemSummary.emptyRowCount} empty row${itemSummary.emptyRowCount === 1 ? "" : "s"} to clear`
+                              : itemSummary.incompleteRowCount > 0
+                                ? `${itemSummary.incompleteRowCount} item row${itemSummary.incompleteRowCount === 1 ? "" : "s"} need details`
+                                : "Check required fields"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="d-flex flex-wrap align-items-center gap-3 ms-auto">
+                      <label className="form-check-label d-flex align-items-center gap-2 mb-0">
                         <input
                           type="checkbox"
                           className="form-check-input"
                           checked={form.post_now}
-                          onChange={(e) => setFormValue("post_now", e.target.checked)}
+                          onChange={(event) => setFormValue("post_now", event.target.checked)}
                         />
-                        Post immediately after save
+                        Post after save
                       </label>
+                      <div className="d-flex gap-2">
+                        <button type="button" className="btn btn-outline-secondary" onClick={closeCreateDialog}>
+                          Cancel
+                        </button>
+                        <button type="submit" className="btn btn-primary">
+                          <i className="bi bi-save me-2" />
+                          {editingTransactionId === null ? "Save Transaction" : "Update Transaction"}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  </div>
-                  <div className="modal-footer px-4 py-3">
-                    <button type="button" className="btn btn-outline-secondary" onClick={closeCreateDialog}>
-                      Cancel
-                    </button>
-                    <button type="submit" className="btn btn-primary">
-                      <i className="bi bi-save me-2" />
-                      {editingTransactionId === null ? "Save Transaction" : "Update Transaction"}
-                    </button>
                   </div>
                 </form>
               </div>
