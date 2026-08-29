@@ -310,7 +310,7 @@ body {
 }
 
 .grn-items-grid table {
-  min-width: 1380px;
+  min-width: 1280px;
 }
 
 .grn-items-grid thead th {
@@ -327,45 +327,55 @@ body {
 }
 
 .grn-items-grid .grn-item-col {
-  min-width: 300px;
-  width: 300px;
+  min-width: 280px;
+  width: 280px;
 }
 
 .grn-items-grid .grn-description-col {
-  min-width: 210px;
-  width: 210px;
+  min-width: 190px;
+  width: 190px;
 }
 
 .grn-items-grid .grn-qty-col {
-  min-width: 96px;
-  width: 96px;
+  min-width: 72px;
+  width: 72px;
 }
 
 .grn-items-grid th.grn-qty-per-col,
 .grn-items-grid td.grn-qty-per-col {
-  min-width: 132px;
-  width: 132px;
+  min-width: 124px;
+  width: 124px;
 }
 
 .grn-items-grid .grn-uom-col {
-  min-width: 120px;
-  width: 120px;
-}
-
-.grn-items-grid .grn-stock-col,
-.grn-items-grid .grn-money-col {
   min-width: 112px;
   width: 112px;
 }
 
+.grn-items-grid .grn-stock-col {
+  min-width: 88px;
+  width: 88px;
+}
+
+.grn-items-grid .grn-money-col {
+  min-width: 106px;
+  width: 106px;
+}
+
 .grn-items-grid .grn-action-col {
-  min-width: 118px;
-  width: 118px;
+  min-width: 110px;
+  width: 110px;
 }
 
 .grn-items-grid .form-control,
 .grn-items-grid .ims-search-select input {
   min-height: 34px;
+}
+
+.grn-items-grid .grn-qty-col .form-control,
+.grn-items-grid .grn-stock-col .form-control {
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
 }
 
 .grn-items-grid .grn-unit-addon {

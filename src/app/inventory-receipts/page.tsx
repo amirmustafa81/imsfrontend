@@ -2680,12 +2680,12 @@ export default function InventoryReceiptsPage() {
                             <th className="text-center grn-row-number">#</th>
                             <th className="grn-item-col">Item</th>
                             <th className="grn-description-col">Description</th>
-                            <th className="grn-qty-col">Received</th>
+                            <th className="grn-qty-col" title="Quantity received">Recv</th>
                             <th className="grn-uom-col">UOM</th>
                             <th className="grn-qty-col grn-qty-per-col">Qty/Unit</th>
-                            <th className="grn-stock-col">Stock Add</th>
-                            <th className="grn-qty-col">Accepted</th>
-                            <th className="grn-qty-col">Rejected</th>
+                            <th className="grn-stock-col" title="Stock addition">Stock</th>
+                            <th className="grn-qty-col" title="Quantity accepted">Acc</th>
+                            <th className="grn-qty-col" title="Quantity rejected">Rej</th>
                             <th className="grn-money-col">Unit Cost</th>
                             <th className="grn-money-col">Total</th>
                             <th className="text-end grn-action-col">Actions</th>
@@ -2712,7 +2712,7 @@ export default function InventoryReceiptsPage() {
                                     onChange={(event) => setItemValue(index, "description", event.target.value)}
                                   />
                                 </td>
-                                <td className="grn-qty-col grn-qty-per-col">
+                                <td className="grn-qty-col">
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
@@ -2732,7 +2732,7 @@ export default function InventoryReceiptsPage() {
                                     onChange={(value) => setItemValue(index, "receipt_uom_id", value)}
                                   />
                                 </td>
-                                <td className="grn-qty-col">
+                                <td className="grn-qty-col grn-qty-per-col">
                                   <div className="input-group input-group-sm" title={qtyPerUnitLabel(item)}>
                                     <input
                                       className="form-control text-end"
