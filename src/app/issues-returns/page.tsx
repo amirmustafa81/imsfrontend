@@ -51,6 +51,8 @@ type StockSourceRow = {
   base_uom_id?: number | null;
   base_uom_code?: string | null;
   base_uom_name?: string | null;
+  last_receipt_uom_id?: number | null;
+  last_qty_per_receipt_unit?: number | null;
   quantity_on_hand?: number;
   quantity_reserved?: number;
   available_quantity: number;
@@ -549,18 +551,22 @@ function IssuesReturnsContent() {
 
   const stockRowsForItem = (itemId: string): StockSourceRow[] => stockSourcesByItemId[itemId] ?? [];
 
-  const matchingStockRowForItem = (itemId: string): StockSourceRow | undefined => {
-    const rows = stockRowsForItem(itemId);
-    const exactMatch = rows.find(
-      (row) =>
-        (!form.from_department_id || String(row.department_id ?? "") === form.from_department_id) &&
-        (!form.from_store_id || String(row.store_id ?? "") === form.from_store_id) &&
-        (!form.project_id || String(row.project_id ?? "") === form.project_id) &&
-        (!form.funding_source_id || String(row.funding_source_id ?? "") === form.funding_source_id),
-    );
+  const matchingStockRowFromRows = (rows: StockSourceRow[]): StockSourceRow | undefined => {
+    const hasScopeFilter = Boolean(form.from_department_id || form.from_store_id || form.project_id || form.funding_source_id);
+    const exactMatch = hasScopeFilter
+      ? rows.find(
+          (row) =>
+            (!form.from_department_id || String(row.department_id ?? "") === form.from_department_id) &&
+            (!form.from_store_id || String(row.store_id ?? "") === form.from_store_id) &&
+            (!form.project_id || String(row.project_id ?? "") === form.project_id) &&
+            (!form.funding_source_id || String(row.funding_source_id ?? "") === form.funding_source_id),
+        )
+      : undefined;
 
     return exactMatch ?? rows.find((row) => Number(row.available_quantity ?? 0) > 0) ?? rows[0];
   };
+
+  const matchingStockRowForItem = (itemId: string): StockSourceRow | undefined => matchingStockRowFromRows(stockRowsForItem(itemId));
 
   const baseUomIdForItem = (itemId: string): string => {
     const stockRow = matchingStockRowForItem(itemId);
@@ -575,7 +581,19 @@ function IssuesReturnsContent() {
     return String(stockRow?.base_uom_code ?? unitCodeById(baseUomIdForItem(itemId)) ?? "").trim();
   };
 
-  const issueUomIdForRow = (item: TransactionItemInput): string => item.issue_uom_id || baseUomIdForItem(item.item_id);
+  const receivedUomIdForItem = (itemId: string): string => {
+    const stockRow = matchingStockRowForItem(itemId);
+    return String(stockRow?.last_receipt_uom_id ?? "");
+  };
+
+  const lastQtyPerReceiptUnitForItem = (itemId: string): number => {
+    const stockRow = matchingStockRowForItem(itemId);
+    const qtyPer = Number(stockRow?.last_qty_per_receipt_unit ?? 0);
+    return Number.isFinite(qtyPer) && qtyPer > 0 ? qtyPer : 1;
+  };
+
+  const issueUomIdForRow = (item: TransactionItemInput): string =>
+    item.issue_uom_id || receivedUomIdForItem(item.item_id) || baseUomIdForItem(item.item_id);
 
   const issueUomCodeForRow = (item: TransactionItemInput): string => unitCodeById(issueUomIdForRow(item));
 
@@ -585,8 +603,16 @@ function IssuesReturnsContent() {
     return !baseUomId || !issueUomId || String(baseUomId) === String(issueUomId);
   };
 
-  const qtyPerIssueUnitForRow = (item: TransactionItemInput): number =>
-    transactionUsesBaseUnit(item) ? 1 : Math.max(0, numberOrNull(item.qty_per_issue_unit) ?? 1);
+  const qtyPerIssueUnitForRow = (item: TransactionItemInput): number => {
+    if (transactionUsesBaseUnit(item)) return 1;
+
+    const enteredQtyPer = numberOrNull(item.qty_per_issue_unit);
+    if (enteredQtyPer && enteredQtyPer > 0 && enteredQtyPer !== 1) {
+      return enteredQtyPer;
+    }
+
+    return lastQtyPerReceiptUnitForItem(item.item_id);
+  };
 
   const baseQuantityForTransactionRow = (item: TransactionItemInput): number => {
     const quantity = numberOrNull(item.quantity) ?? 0;
@@ -935,11 +961,39 @@ function IssuesReturnsContent() {
     }
   };
 
-  const fillSourceFromStock = async (itemId: string) => {
+  const applyReceivedPackageDefaults = (rowIndex: number, itemId: string, stockRows: StockSourceRow[]) => {
+    const stockSource = matchingStockRowFromRows(stockRows);
+    if (!stockSource) return;
+
+    const receivedUomId = stockSource.last_receipt_uom_id ? String(stockSource.last_receipt_uom_id) : "";
+    const baseUomId = stockSource.base_uom_id ? String(stockSource.base_uom_id) : baseUomIdForItem(itemId);
+    const nextUomId = receivedUomId || baseUomId;
+    const nextQtyPer =
+      nextUomId && baseUomId && nextUomId !== baseUomId
+        ? formatQuantityInput(Number(stockSource.last_qty_per_receipt_unit ?? 1))
+        : "1";
+
+    setItems((current) =>
+      current.map((row, idx) => {
+        if (idx !== rowIndex || row.item_id !== itemId) return row;
+        return {
+          ...row,
+          issue_uom_id: nextUomId,
+          qty_per_issue_unit: nextQtyPer,
+        };
+      }),
+    );
+  };
+
+  const fillSourceFromStock = async (itemId: string, rowIndex?: number) => {
     if (!itemId || !showsSourceStockFields) return;
 
     try {
       const stockRows = await loadStockRowsForItem(itemId);
+      if (rowIndex !== undefined) {
+        applyReceivedPackageDefaults(rowIndex, itemId, stockRows);
+      }
+
       const availableRows = stockRows.filter((row) => Number(row.available_quantity ?? 0) > 0);
 
       if (availableRows.length !== 1) return;
@@ -987,7 +1041,7 @@ function IssuesReturnsContent() {
             : row,
         ),
       );
-      void fillSourceFromStock(value);
+      void fillSourceFromStock(value, index);
       return;
     }
 
