@@ -48,6 +48,11 @@ type StockSourceRow = {
   store_id: number | null;
   project_id: number | null;
   funding_source_id: number | null;
+  base_uom_id?: number | null;
+  base_uom_code?: string | null;
+  base_uom_name?: string | null;
+  quantity_on_hand?: number;
+  quantity_reserved?: number;
   available_quantity: number;
 };
 
@@ -132,6 +137,8 @@ type TransactionItemInput = {
   item_id: string;
   asset_id: string;
   quantity: string;
+  issue_uom_id: string;
+  qty_per_issue_unit: string;
   unit_cost: string;
   remarks: string;
 };
@@ -266,6 +273,8 @@ const emptyItem: TransactionItemInput = {
   item_id: "",
   asset_id: "",
   quantity: "",
+  issue_uom_id: "",
+  qty_per_issue_unit: "1",
   unit_cost: "",
   remarks: "",
 };
@@ -395,12 +404,15 @@ const isTransactionItemEmpty = (item: TransactionItemInput) =>
   !item.item_id.trim() &&
   !item.asset_id.trim() &&
   !item.quantity.trim() &&
+  !item.issue_uom_id.trim() &&
+  (!item.qty_per_issue_unit.trim() || item.qty_per_issue_unit.trim() === "1") &&
   !item.unit_cost.trim() &&
   !item.remarks.trim();
 
 const isTransactionItemComplete = (item: TransactionItemInput) => {
   const quantity = numberOrNull(item.quantity);
-  return Boolean(item.item_id.trim() && quantity && quantity > 0);
+  const qtyPerUnit = numberOrNull(item.qty_per_issue_unit) ?? 1;
+  return Boolean(item.item_id.trim() && quantity && quantity > 0 && qtyPerUnit > 0);
 };
 
 const itemCodeSegment = (value: unknown) =>
@@ -474,6 +486,7 @@ function IssuesReturnsContent() {
   const [quickItemSaving, setQuickItemSaving] = useState(false);
   const [quickItemForm, setQuickItemForm] = useState<QuickItemForm>(createQuickItemForm);
   const [quickItemError, setQuickItemError] = useState("");
+  const [stockSourcesByItemId, setStockSourcesByItemId] = useState<Record<string, StockSourceRow[]>>({});
   const searchParams = useSearchParams();
   const queryAssetId = useMemo(() => {
     const assetIdFromQuery = searchParams.get("asset_id");
@@ -519,6 +532,79 @@ function IssuesReturnsContent() {
     if (source === "departments") return formatDepartmentLabel(match);
 
     return `${match.code ?? match.project_code ?? match.id} - ${match.name ?? match.title ?? match.title_code ?? ""}`;
+  };
+
+  const lookupRow = (source: LookupKey, value: unknown): RowData | undefined => {
+    if (value === null || value === undefined || value === "") return undefined;
+    return (lookups[source] ?? []).find((row) => String(row.id) === String(value));
+  };
+
+  const unitCodeById = (unitId: unknown): string => {
+    const unit = lookupRow("units-of-measure", unitId);
+    return String(unit?.code ?? unit?.name ?? "").trim();
+  };
+
+  const stockRowsForItem = (itemId: string): StockSourceRow[] => stockSourcesByItemId[itemId] ?? [];
+
+  const matchingStockRowForItem = (itemId: string): StockSourceRow | undefined => {
+    const rows = stockRowsForItem(itemId);
+    const exactMatch = rows.find(
+      (row) =>
+        (!form.from_department_id || String(row.department_id ?? "") === form.from_department_id) &&
+        (!form.from_store_id || String(row.store_id ?? "") === form.from_store_id) &&
+        (!form.project_id || String(row.project_id ?? "") === form.project_id) &&
+        (!form.funding_source_id || String(row.funding_source_id ?? "") === form.funding_source_id),
+    );
+
+    return exactMatch ?? rows.find((row) => Number(row.available_quantity ?? 0) > 0) ?? rows[0];
+  };
+
+  const baseUomIdForItem = (itemId: string): string => {
+    const stockRow = matchingStockRowForItem(itemId);
+    if (stockRow?.base_uom_id) return String(stockRow.base_uom_id);
+
+    const item = lookupRow("items", itemId);
+    return String(item?.unit_id ?? item?.base_uom_id ?? "");
+  };
+
+  const baseUomCodeForItem = (itemId: string): string => {
+    const stockRow = matchingStockRowForItem(itemId);
+    return String(stockRow?.base_uom_code ?? unitCodeById(baseUomIdForItem(itemId)) ?? "").trim();
+  };
+
+  const issueUomIdForRow = (item: TransactionItemInput): string => item.issue_uom_id || baseUomIdForItem(item.item_id);
+
+  const issueUomCodeForRow = (item: TransactionItemInput): string => unitCodeById(issueUomIdForRow(item));
+
+  const transactionUsesBaseUnit = (item: TransactionItemInput): boolean => {
+    const baseUomId = baseUomIdForItem(item.item_id);
+    const issueUomId = issueUomIdForRow(item);
+    return !baseUomId || !issueUomId || String(baseUomId) === String(issueUomId);
+  };
+
+  const qtyPerIssueUnitForRow = (item: TransactionItemInput): number =>
+    transactionUsesBaseUnit(item) ? 1 : Math.max(0, numberOrNull(item.qty_per_issue_unit) ?? 1);
+
+  const baseQuantityForTransactionRow = (item: TransactionItemInput): number => {
+    const quantity = numberOrNull(item.quantity) ?? 0;
+    return quantity * qtyPerIssueUnitForRow(item);
+  };
+
+  const qtyPerIssueUnitShortLabel = (item: TransactionItemInput): string => {
+    if (transactionUsesBaseUnit(item)) return "1:1";
+    const baseCode = baseUomCodeForItem(item.item_id);
+    const issueCode = issueUomCodeForRow(item);
+    return baseCode && issueCode ? `${baseCode}/${issueCode}` : "per unit";
+  };
+
+  const stockBalanceLabelForRow = (item: TransactionItemInput): string => {
+    if (!item.item_id) return "-";
+
+    const stockRow = matchingStockRowForItem(item.item_id);
+    const availableQty = Number(stockRow?.available_quantity ?? 0);
+    const baseCode = baseUomCodeForItem(item.item_id);
+
+    return `${formatQuantityInput(availableQty)}${baseCode ? ` ${baseCode}` : ""}`;
   };
 
   const formatDepartmentLabel = (department: RowData): string => String(department.name ?? department.code ?? department.id);
@@ -812,19 +898,45 @@ function IssuesReturnsContent() {
     setItems((current) =>
       current.map((row, idx) => {
         if (idx !== index) return row;
+
+        if (key === "issue_uom_id") {
+          const nextRow = { ...row, issue_uom_id: value };
+          return transactionUsesBaseUnit(nextRow) ? { ...nextRow, qty_per_issue_unit: "1" } : nextRow;
+        }
+
+        if (key === "qty_per_issue_unit") {
+          return {
+            ...row,
+            qty_per_issue_unit: transactionUsesBaseUnit(row) ? "1" : value,
+          };
+        }
+
         return { ...row, [key]: value };
       }),
     );
   };
 
-  const fillSourceFromStock = async (itemId: string) => {
-    if (!itemId || !showsSourceStockFields) return;
+  const loadStockRowsForItem = async (itemId: string): Promise<StockSourceRow[]> => {
+    if (!itemId) return [];
 
     try {
       const response = await api.get<{ data?: StockSourceRow[] }>("/reports/stock-balance", {
         params: { item_id: itemId },
       });
       const stockRows = Array.isArray(response.data?.data) ? response.data.data : [];
+      setStockSourcesByItemId((current) => ({ ...current, [itemId]: stockRows }));
+      return stockRows;
+    } catch {
+      setStockSourcesByItemId((current) => ({ ...current, [itemId]: [] }));
+      return [];
+    }
+  };
+
+  const fillSourceFromStock = async (itemId: string) => {
+    if (!itemId || !showsSourceStockFields) return;
+
+    try {
+      const stockRows = await loadStockRowsForItem(itemId);
       const availableRows = stockRows.filter((row) => Number(row.available_quantity ?? 0) > 0);
 
       if (availableRows.length !== 1) return;
@@ -855,11 +967,27 @@ function IssuesReturnsContent() {
   };
 
   const setTransactionItemValue = (index: number, key: keyof TransactionItemInput, value: string) => {
-    setItemValue(index, key, value);
-
     if (key === "item_id") {
+      const item = lookupRow("items", value);
+      const baseUomId = item?.unit_id ? String(item.unit_id) : "";
+
+      setItems((current) =>
+        current.map((row, idx) =>
+          idx === index
+            ? {
+                ...row,
+                item_id: value,
+                issue_uom_id: baseUomId,
+                qty_per_issue_unit: "1",
+              }
+            : row,
+        ),
+      );
       void fillSourceFromStock(value);
+      return;
     }
+
+    setItemValue(index, key, value);
   };
 
   const addItemRows = (count = 1) => {
@@ -883,12 +1011,14 @@ function IssuesReturnsContent() {
   };
 
   const toTransactionItemInput = (row: TransactionItem): TransactionItemInput => ({
-    item_id: toFormString(row.item_id),
-    asset_id: toFormString(row.asset_id),
-    quantity: toFormString(row.quantity),
-    unit_cost: toFormString(row.unit_cost),
-    remarks: row.remarks ?? "",
-  });
+  item_id: toFormString(row.item_id),
+  asset_id: toFormString(row.asset_id),
+  quantity: toFormString(row.quantity),
+  issue_uom_id: "",
+  qty_per_issue_unit: "1",
+  unit_cost: toFormString(row.unit_cost),
+  remarks: row.remarks ?? "",
+});
 
   const inferAdjustmentDirection = (transaction: Transaction): TransactionForm["adjustment_direction"] => {
     if (transaction.transaction_type !== "adjustment") {
@@ -1008,6 +1138,11 @@ function IssuesReturnsContent() {
         post_now: false,
       });
       setItems(detailItems.length ? detailItems.map(toTransactionItemInput) : [{ ...emptyItem }]);
+      detailItems.forEach((item) => {
+        if (item.item_id) {
+          void loadStockRowsForItem(String(item.item_id));
+        }
+      });
       setVoucherDialogTab("header");
       setError("");
       setDialogOpen(true);
@@ -1091,7 +1226,7 @@ function IssuesReturnsContent() {
     () =>
       items.reduce(
         (summary, item) => {
-          const quantity = numberOrNull(item.quantity) ?? 0;
+          const baseQuantity = baseQuantityForTransactionRow(item);
           const unitCost = numberOrNull(item.unit_cost) ?? 0;
           const rowIsEmpty = isTransactionItemEmpty(item);
           const rowIsComplete = isTransactionItemComplete(item);
@@ -1100,8 +1235,8 @@ function IssuesReturnsContent() {
             rowCount: summary.rowCount + (rowIsEmpty ? 0 : 1),
             emptyRowCount: summary.emptyRowCount + (rowIsEmpty ? 1 : 0),
             incompleteRowCount: summary.incompleteRowCount + (!rowIsEmpty && !rowIsComplete ? 1 : 0),
-            totalQty: summary.totalQty + (rowIsComplete ? quantity : 0),
-            totalAmount: summary.totalAmount + (rowIsComplete ? quantity * unitCost : 0),
+            totalQty: summary.totalQty + (rowIsComplete ? baseQuantity : 0),
+            totalAmount: summary.totalAmount + (rowIsComplete ? baseQuantity * unitCost : 0),
           };
         },
         { rowCount: 0, emptyRowCount: 0, incompleteRowCount: 0, totalQty: 0, totalAmount: 0 },
@@ -1567,7 +1702,7 @@ function IssuesReturnsContent() {
     const rowsToPost = items
       .map((row): TransactionItemInput | null => {
         const itemId = Number(row.item_id);
-        const qty = numberOrNull(row.quantity);
+        const qty = baseQuantityForTransactionRow(row);
         if (!itemId || !qty || qty <= 0) return null;
         return row;
       })
@@ -1602,7 +1737,7 @@ function IssuesReturnsContent() {
       items: rowsToPost.map((row) => ({
         item_id: Number(row.item_id),
         asset_id: numberOrNull(row.asset_id),
-        quantity: Number(row.quantity),
+        quantity: baseQuantityForTransactionRow(row),
         unit_cost: numberOrNull(row.unit_cost),
         remarks: row.remarks.trim() || null,
       })),
@@ -2585,6 +2720,9 @@ function IssuesReturnsContent() {
                                 <th className="voucher-item-col">Item</th>
                                 <th className="voucher-asset-col">Asset ID</th>
                                 <th className="voucher-qty-col">Qty</th>
+                                <th className="voucher-uom-col">UOM</th>
+                                <th className="voucher-qty-per-col">Qty/Unit</th>
+                                <th className="voucher-stock-col">Stock Balance</th>
                                 <th className="voucher-money-col">Unit Cost</th>
                                 <th className="voucher-money-col">Total</th>
                                 <th className="voucher-remarks-col">Remarks</th>
@@ -2593,7 +2731,7 @@ function IssuesReturnsContent() {
                             </thead>
                             <tbody>
                               {items.map((item, index) => {
-                                const quantity = numberOrNull(item.quantity) ?? 0;
+                                const baseQuantity = baseQuantityForTransactionRow(item);
                                 const unitCost = numberOrNull(item.unit_cost) ?? 0;
                                 return (
                                   <tr key={`${index}-${item.item_id || "new"}`}>
@@ -2627,6 +2765,36 @@ function IssuesReturnsContent() {
                                         placeholder="0"
                                       />
                                     </td>
+                                    <td className="voucher-uom-col">
+                                      <SearchableSelect
+                                        id={`transaction-uom-${index}`}
+                                        value={issueUomIdForRow(item)}
+                                        options={unitOptions}
+                                        onChange={(value) => setItemValue(index, "issue_uom_id", value)}
+                                        placeholder="UOM"
+                                        emptyLabel="No UOM found."
+                                      />
+                                    </td>
+                                    <td className="voucher-qty-per-col">
+                                      <div className="input-group input-group-sm" title={qtyPerIssueUnitShortLabel(item)}>
+                                        <input
+                                          type="number"
+                                          step="0.000001"
+                                          min="0.000001"
+                                          className="form-control text-end"
+                                          value={transactionUsesBaseUnit(item) ? "1" : item.qty_per_issue_unit}
+                                          disabled={transactionUsesBaseUnit(item)}
+                                          onChange={(event) => setItemValue(index, "qty_per_issue_unit", event.target.value)}
+                                          placeholder="1"
+                                        />
+                                        <span className="input-group-text grn-unit-addon">{qtyPerIssueUnitShortLabel(item)}</span>
+                                      </div>
+                                    </td>
+                                    <td className="voucher-stock-col">
+                                      <div className="form-control form-control-sm bg-white text-secondary text-end">
+                                        {stockBalanceLabelForRow(item)}
+                                      </div>
+                                    </td>
                                     <td className="voucher-money-col">
                                       <input
                                         type="number"
@@ -2640,7 +2808,7 @@ function IssuesReturnsContent() {
                                     </td>
                                     <td className="voucher-money-col">
                                       <div className="form-control form-control-sm bg-white text-end">
-                                        {formatMoneyInput(quantity * unitCost)}
+                                        {formatMoneyInput(baseQuantity * unitCost)}
                                       </div>
                                     </td>
                                     <td className="voucher-remarks-col">
