@@ -437,8 +437,8 @@ body {
 }
 
 .voucher-items-grid .voucher-stock-col {
-  min-width: 124px;
-  width: 124px;
+  min-width: 148px;
+  width: 148px;
 }
 
 .voucher-items-grid .voucher-remarks-col {
@@ -468,6 +468,18 @@ body {
   line-height: 1.1;
   margin-top: 0.2rem;
   white-space: nowrap;
+}
+
+.voucher-items-grid .voucher-qty-feedback {
+  color: #dc3545;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  margin-top: 0.2rem;
+  white-space: nowrap;
+}
+
+.voucher-items-grid .voucher-stock-balance {
+  white-space: normal;
 }
 
 button,

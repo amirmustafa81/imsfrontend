@@ -619,6 +619,45 @@ function IssuesReturnsContent() {
     return quantity * qtyPerIssueUnitForRow(item);
   };
 
+  const transactionShouldRespectStock = (): boolean =>
+    form.transaction_type !== "adjustment" || form.adjustment_direction === "decrease";
+
+  const stockRowsLoadedForItem = (itemId: string): boolean =>
+    Boolean(itemId) && Object.prototype.hasOwnProperty.call(stockSourcesByItemId, itemId);
+
+  const availableBaseQuantityForRow = (item: TransactionItemInput): number => {
+    if (!item.item_id || !stockRowsLoadedForItem(item.item_id)) return Number.NaN;
+
+    return Number(matchingStockRowForItem(item.item_id)?.available_quantity ?? 0);
+  };
+
+  const maxIssueQuantityForRow = (item: TransactionItemInput): number | null => {
+    if (!transactionShouldRespectStock() || !item.item_id) return null;
+
+    const availableQty = availableBaseQuantityForRow(item);
+    if (!Number.isFinite(availableQty)) return null;
+
+    const qtyPer = qtyPerIssueUnitForRow(item);
+    return transactionUsesBaseUnit(item) || qtyPer <= 0 ? availableQty : availableQty / qtyPer;
+  };
+
+  const stockLimitLabelForRow = (item: TransactionItemInput): string => {
+    const maxQty = maxIssueQuantityForRow(item);
+    if (maxQty === null) return "";
+
+    const issueCode = issueUomCodeForRow(item);
+    return `${formatQuantityInput(maxQty)}${issueCode ? ` ${issueCode}` : ""}`;
+  };
+
+  const transactionItemExceedsStock = (item: TransactionItemInput): boolean => {
+    if (!transactionShouldRespectStock() || !item.item_id || isTransactionItemEmpty(item)) return false;
+
+    const availableQty = availableBaseQuantityForRow(item);
+    if (!Number.isFinite(availableQty)) return false;
+
+    return baseQuantityForTransactionRow(item) > availableQty + 0.000001;
+  };
+
   const issuePackageHintForRow = (item: TransactionItemInput): string => {
     if (!item.item_id) return "";
 
@@ -649,8 +688,15 @@ function IssuesReturnsContent() {
     const stockRow = matchingStockRowForItem(item.item_id);
     const availableQty = Number(stockRow?.available_quantity ?? 0);
     const baseCode = baseUomCodeForItem(item.item_id);
+    const issueCode = issueUomCodeForRow(item);
+    const qtyPer = qtyPerIssueUnitForRow(item);
+    const baseLabel = `${formatQuantityInput(availableQty)}${baseCode ? ` ${baseCode}` : ""}`;
 
-    return `${formatQuantityInput(availableQty)}${baseCode ? ` ${baseCode}` : ""}`;
+    if (!transactionUsesBaseUnit(item) && qtyPer > 0 && issueCode) {
+      return `${formatQuantityInput(availableQty / qtyPer)} ${issueCode}${baseLabel ? ` / ${baseLabel}` : ""}`;
+    }
+
+    return baseLabel;
   };
 
   const formatDepartmentLabel = (department: RowData): string => String(department.name ?? department.code ?? department.id);
@@ -946,8 +992,17 @@ function IssuesReturnsContent() {
         if (idx !== index) return row;
 
         if (key === "issue_uom_id") {
-          const nextRow = { ...row, issue_uom_id: value };
-          return transactionUsesBaseUnit(nextRow) ? { ...nextRow, qty_per_issue_unit: "1" } : nextRow;
+          const nextRow = transactionUsesBaseUnit({ ...row, issue_uom_id: value })
+            ? { ...row, issue_uom_id: value, qty_per_issue_unit: "1" }
+            : { ...row, issue_uom_id: value };
+          const typedQuantity = numberOrNull(nextRow.quantity);
+          const maxQuantity = maxIssueQuantityForRow(nextRow);
+
+          if (typedQuantity !== null && maxQuantity !== null && typedQuantity > maxQuantity) {
+            return { ...nextRow, quantity: formatQuantityInput(maxQuantity) };
+          }
+
+          return nextRow;
         }
 
         if (key === "qty_per_issue_unit") {
@@ -955,6 +1010,15 @@ function IssuesReturnsContent() {
             ...row,
             qty_per_issue_unit: transactionUsesBaseUnit(row) ? "1" : value,
           };
+        }
+
+        if (key === "quantity") {
+          const typedQuantity = numberOrNull(value);
+          const maxQuantity = maxIssueQuantityForRow(row);
+
+          if (typedQuantity !== null && maxQuantity !== null && typedQuantity > maxQuantity) {
+            return { ...row, quantity: formatQuantityInput(maxQuantity) };
+          }
         }
 
         return { ...row, [key]: value };
@@ -1296,35 +1360,34 @@ function IssuesReturnsContent() {
     [lookups.users, recipientDepartmentId],
   );
 
-  const itemSummary = useMemo(
-    () =>
-      items.reduce(
-        (summary, item) => {
-          const baseQuantity = baseQuantityForTransactionRow(item);
-          const rowIsEmpty = isTransactionItemEmpty(item);
-          const rowIsComplete = isTransactionItemComplete(item);
+  const itemSummary = items.reduce(
+    (summary, item) => {
+      const baseQuantity = baseQuantityForTransactionRow(item);
+      const rowIsEmpty = isTransactionItemEmpty(item);
+      const rowIsComplete = isTransactionItemComplete(item);
+      const exceedsStock = !rowIsEmpty && transactionItemExceedsStock(item);
 
-          return {
-            rowCount: summary.rowCount + (rowIsEmpty ? 0 : 1),
-            emptyRowCount: summary.emptyRowCount + (rowIsEmpty ? 1 : 0),
-            incompleteRowCount: summary.incompleteRowCount + (!rowIsEmpty && !rowIsComplete ? 1 : 0),
-            totalQty: summary.totalQty + (rowIsComplete ? baseQuantity : 0),
-          };
-        },
-        { rowCount: 0, emptyRowCount: 0, incompleteRowCount: 0, totalQty: 0 },
-      ),
-    [items],
+      return {
+        rowCount: summary.rowCount + (rowIsEmpty ? 0 : 1),
+        emptyRowCount: summary.emptyRowCount + (rowIsEmpty ? 1 : 0),
+        incompleteRowCount: summary.incompleteRowCount + (!rowIsEmpty && !rowIsComplete ? 1 : 0),
+        exceedsStockCount: summary.exceedsStockCount + (exceedsStock ? 1 : 0),
+        totalQty: summary.totalQty + (rowIsComplete ? baseQuantity : 0),
+      };
+    },
+    { rowCount: 0, emptyRowCount: 0, incompleteRowCount: 0, exceedsStockCount: 0, totalQty: 0 },
   );
 
-  const voucherReady = useMemo(() => {
+  const voucherReady = (() => {
     const required = canSubmitType(form.transaction_type, form.adjustment_direction);
     return (
       required.every((field) => String(form[field as keyof TransactionForm] ?? "").trim()) &&
       itemSummary.rowCount > 0 &&
       itemSummary.emptyRowCount === 0 &&
-      itemSummary.incompleteRowCount === 0
+      itemSummary.incompleteRowCount === 0 &&
+      itemSummary.exceedsStockCount === 0
     );
-  }, [form, itemSummary.emptyRowCount, itemSummary.incompleteRowCount, itemSummary.rowCount]);
+  })();
 
   const itemOptions = useMemo(
     () =>
@@ -1782,6 +1845,15 @@ function IssuesReturnsContent() {
 
     if (!rowsToPost.length) {
       setError("At least one valid item row with quantity is required.");
+      return;
+    }
+
+    const overStockRow = rowsToPost.find((row) => transactionItemExceedsStock(row));
+    if (overStockRow) {
+      setVoucherDialogTab("items");
+      setError(
+        `${lookupLabel("items", overStockRow.item_id)} exceeds available stock. Available: ${stockBalanceLabelForRow(overStockRow)}.`,
+      );
       return;
     }
 
@@ -2796,6 +2868,9 @@ function IssuesReturnsContent() {
                             </thead>
                             <tbody>
                               {items.map((item, index) => {
+                                const quantityLimit = maxIssueQuantityForRow(item);
+                                const exceedsStock = transactionItemExceedsStock(item);
+
                                 return (
                                   <tr key={`${index}-${item.item_id || "new"}`}>
                                     <td className="text-center text-secondary voucher-row-number">{index + 1}</td>
@@ -2828,11 +2903,15 @@ function IssuesReturnsContent() {
                                         type="number"
                                         step="0.001"
                                         min="0"
-                                        className="form-control form-control-sm text-end"
+                                        max={quantityLimit ?? undefined}
+                                        className={`form-control form-control-sm text-end ${exceedsStock ? "is-invalid" : ""}`}
                                         value={item.quantity}
                                         onChange={(event) => setItemValue(index, "quantity", event.target.value)}
                                         placeholder="0"
                                       />
+                                      {exceedsStock ? (
+                                        <div className="voucher-qty-feedback">Max {stockLimitLabelForRow(item)}</div>
+                                      ) : null}
                                     </td>
                                     <td className="voucher-uom-col">
                                       <SearchableSelect
@@ -2848,7 +2927,7 @@ function IssuesReturnsContent() {
                                       ) : null}
                                     </td>
                                     <td className="voucher-stock-col">
-                                      <div className="form-control form-control-sm bg-white text-secondary text-end">
+                                      <div className="form-control form-control-sm bg-white text-secondary text-end voucher-stock-balance">
                                         {stockBalanceLabelForRow(item)}
                                       </div>
                                     </td>
@@ -2948,7 +3027,7 @@ function IssuesReturnsContent() {
                               <strong>{itemSummary.rowCount}</strong>
                             </div>
                             <div className="list-group-item px-0 d-flex justify-content-between">
-                              <span className="text-secondary">Total Qty</span>
+                              <span className="text-secondary">Stock Qty</span>
                               <strong>{formatQuantityInput(itemSummary.totalQty)}</strong>
                             </div>
                             <div className="list-group-item px-0 d-flex justify-content-between">
@@ -2968,14 +3047,16 @@ function IssuesReturnsContent() {
                       </div>
                       <div className="grn-footer-metric">
                         <strong>{formatQuantityInput(itemSummary.totalQty)}</strong>
-                        <span>Total Qty</span>
+                        <span>Stock Qty</span>
                       </div>
                       <div className={`grn-footer-ready ${voucherReady ? "is-ready" : "is-incomplete"}`}>
                         <strong>{voucherReady ? "Ready" : "Incomplete"}</strong>
                         <span>
                           {voucherReady
                             ? "All required rows complete"
-                            : itemSummary.emptyRowCount > 0
+                            : itemSummary.exceedsStockCount > 0
+                              ? `${itemSummary.exceedsStockCount} item row${itemSummary.exceedsStockCount === 1 ? "" : "s"} exceed stock`
+                              : itemSummary.emptyRowCount > 0
                               ? `${itemSummary.emptyRowCount} empty row${itemSummary.emptyRowCount === 1 ? "" : "s"} to clear`
                               : itemSummary.incompleteRowCount > 0
                                 ? `${itemSummary.incompleteRowCount} item row${itemSummary.incompleteRowCount === 1 ? "" : "s"} need details`
