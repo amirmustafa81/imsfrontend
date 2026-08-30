@@ -5,7 +5,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AssetCreateDialog } from "@/components/ims/AssetCreateDialog";
-import { DataTable, FilterBar, KpiCard, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, FilterBar, KpiCard, PageHeader, PaginationControls, StatusBadge } from "@/components/ims";
 
 type LookupKey = "departments" | "asset-categories" | "buildings" | "rooms" | "users";
 
@@ -74,6 +74,8 @@ const conditionOptions = [
   { value: "obsolete", label: "Obsolete" },
 ];
 
+const DEFAULT_PAGE_SIZE = 25;
+
 const formatLookup = (row: LookupRow) => {
   const code = row.code ? `${row.code} - ` : "";
   return `${code}${row.name ?? row.id}`;
@@ -110,6 +112,8 @@ export default function LabInventoryPage() {
   const [rows, setRows] = useState<LabAssetRow[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, LookupRow[]>>(initialLookups);
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [error, setError] = useState("");
   const [assetDialogOpen, setAssetDialogOpen] = useState(false);
 
@@ -148,6 +152,13 @@ export default function LabInventoryPage() {
 
     return { total: filteredRows.length, inUse, missing, damaged, sensitive };
   }, [filteredRows]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const activePage = Math.min(currentPage, totalPages);
+  const paginatedRows = useMemo(() => {
+    const start = (activePage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [activePage, filteredRows, pageSize]);
 
   const loadLookups = useCallback(async () => {
     if (!authReady) return;
@@ -222,6 +233,14 @@ export default function LabInventoryPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadRows();
   }, [loadRows]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, departmentId, status, subcategoryCode, buildingId, roomId, custodianId, conditionStatus]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   const reset = () => {
     setSearch("");
@@ -350,6 +369,16 @@ export default function LabInventoryPage() {
 
         {error ? <div className="alert alert-danger">{error}</div> : null}
 
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <h2 className="h6 fw-semibold mb-0">Lab asset records</h2>
+          {loading ? (
+            <span className="small text-secondary">
+              <span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />
+              Loading laboratory inventory...
+            </span>
+          ) : null}
+        </div>
+
         <DataTable
           columns={[
             { key: "asset_id", header: "Asset ID", render: (row: LabAssetRow) => <Link className="link-primary text-decoration-none fw-medium" href={`/assets/${row.id}`}>{row.asset_id ?? "-"}</Link> },
@@ -377,8 +406,18 @@ export default function LabInventoryPage() {
               ),
             },
           ]}
-          rows={filteredRows}
+          rows={loading ? [] : paginatedRows}
           empty={loading ? "Loading laboratory inventory..." : "No laboratory assets found."}
+        />
+        <PaginationControls
+          page={activePage}
+          pageSize={pageSize}
+          totalItems={filteredRows.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setCurrentPage(1);
+          }}
         />
 
         <AssetCreateDialog
