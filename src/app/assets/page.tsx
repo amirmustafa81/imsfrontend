@@ -289,20 +289,12 @@ export default function AssetsPage() {
     void reloadLookups();
   }, [loadLookups]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, statusFilter, departmentFilter, itemFilter, categoryFilter, storeFilter, buildingFilter, roomFilter, projectFilter, fundingSourceFilter, custodianFilter, dateFromFilter, dateToFilter]);
-
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const activePage = Math.min(currentPage, totalPages);
   const paginatedRows = useMemo(() => {
     const start = (activePage - 1) * pageSize;
     return rows.slice(start, start + pageSize);
   }, [activePage, pageSize, rows]);
-
-  useEffect(() => {
-    setCurrentPage((page) => Math.min(page, totalPages));
-  }, [totalPages]);
 
   const clearFilters = () => {
     setSearch("");
@@ -318,6 +310,7 @@ export default function AssetsPage() {
     setCustodianFilter("");
     setDateFromFilter("");
     setDateToFilter("");
+    setCurrentPage(1);
 
     setTimeout(() => {
       void loadRows();

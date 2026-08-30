@@ -116,6 +116,7 @@ export default function LabInventoryPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [error, setError] = useState("");
   const [assetDialogOpen, setAssetDialogOpen] = useState(false);
+  const pageLoading = authLoading || loading;
 
   const labCategory = useMemo(
     () =>
@@ -234,14 +235,6 @@ export default function LabInventoryPage() {
     void loadRows();
   }, [loadRows]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, departmentId, status, subcategoryCode, buildingId, roomId, custodianId, conditionStatus]);
-
-  useEffect(() => {
-    setCurrentPage((page) => Math.min(page, totalPages));
-  }, [totalPages]);
-
   const reset = () => {
     setSearch("");
     setDepartmentId("");
@@ -251,6 +244,7 @@ export default function LabInventoryPage() {
     setRoomId("");
     setCustodianId("");
     setConditionStatus("");
+    setCurrentPage(1);
   };
 
   return (
@@ -371,7 +365,7 @@ export default function LabInventoryPage() {
 
         <div className="d-flex justify-content-between align-items-center mb-2">
           <h2 className="h6 fw-semibold mb-0">Lab asset records</h2>
-          {loading ? (
+          {pageLoading ? (
             <span className="small text-secondary">
               <span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />
               Loading laboratory inventory...
@@ -406,8 +400,8 @@ export default function LabInventoryPage() {
               ),
             },
           ]}
-          rows={loading ? [] : paginatedRows}
-          empty={loading ? "Loading laboratory inventory..." : "No laboratory assets found."}
+          rows={pageLoading ? [] : paginatedRows}
+          empty={pageLoading ? "Loading laboratory inventory..." : "No laboratory assets found."}
         />
         <PaginationControls
           page={activePage}
