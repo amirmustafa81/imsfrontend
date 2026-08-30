@@ -32,6 +32,12 @@ type Transaction = {
   to_storage_bin_id?: number | null;
   to_building_id?: number | null;
   to_room_id?: number | null;
+  requested_by?: number | null;
+  requested_by_name?: string | null;
+  requested_by_employee_code?: string | null;
+  recipient_user_id?: number | null;
+  recipient_user_name?: string | null;
+  recipient_employee_code?: string | null;
   funding_source_id: number | null;
   project_id: number | null;
   purpose: string | null;
@@ -93,6 +99,13 @@ const toTitle = (value: string) =>
   value
     .replaceAll("_", " ")
     .replace(/\b\w/g, (match) => match.toUpperCase());
+
+const personLabel = (name?: string | null, employeeCode?: string | null, id?: number | null) => {
+  if (name && employeeCode) return `${name} (${employeeCode})`;
+  if (name) return name;
+  if (employeeCode) return employeeCode;
+  return id ? `#${id}` : "-";
+};
 
 export default function TransactionDetailPage() {
   const router = useRouter();
@@ -297,6 +310,14 @@ export default function TransactionDetailPage() {
         { label: "To Bin", value: lookupLabel("storage-bins", transaction.to_storage_bin_id) },
         { label: "To Building", value: lookupLabel("buildings", transaction.to_building_id) },
         { label: "To Room", value: lookupLabel("rooms", transaction.to_room_id) },
+        {
+          label: "Requested By",
+          value: personLabel(transaction.requested_by_name, transaction.requested_by_employee_code, transaction.requested_by),
+        },
+        {
+          label: "Recipient",
+          value: personLabel(transaction.recipient_user_name, transaction.recipient_employee_code, transaction.recipient_user_id),
+        },
         { label: "Funding", value: lookupLabel("funding-sources", transaction.funding_source_id) },
         { label: "Project", value: lookupLabel("research-projects", transaction.project_id) },
         { label: "Approval Ref", value: transaction.manual_approval_ref },
@@ -443,6 +464,14 @@ export default function TransactionDetailPage() {
                       <dd className="col-7">{lookupLabel("buildings", transaction.to_building_id)}</dd>
                       <dt className="col-5 text-secondary">To Room</dt>
                       <dd className="col-7">{lookupLabel("rooms", transaction.to_room_id)}</dd>
+                      <dt className="col-5 text-secondary">Requested By</dt>
+                      <dd className="col-7">
+                        {personLabel(transaction.requested_by_name, transaction.requested_by_employee_code, transaction.requested_by)}
+                      </dd>
+                      <dt className="col-5 text-secondary">Recipient</dt>
+                      <dd className="col-7">
+                        {personLabel(transaction.recipient_user_name, transaction.recipient_employee_code, transaction.recipient_user_id)}
+                      </dd>
                     </dl>
                   </div>
                 </div>
