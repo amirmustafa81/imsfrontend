@@ -854,6 +854,12 @@ export default function InventoryReceiptsPage() {
     return item?.unit_id ? String(item.unit_id) : "";
   };
 
+  const departmentIdForStore = (storeId: string | number | null | undefined): string => {
+    if (!storeId) return "";
+    const store = lookups.stores.find((row) => String(row.id) === String(storeId));
+    return store?.department_id ? String(store.department_id) : "";
+  };
+
   const receiptUnitCodeForRow = (row: ReceiptItemInput): string =>
     unitCodeForId(row.receipt_uom_id || baseUnitIdForItem(row.item_id));
 
@@ -1065,8 +1071,35 @@ export default function InventoryReceiptsPage() {
     setForm((current) => ({
       ...current,
       [key]: value,
+      ...(key === "store_id" && typeof value === "string"
+        ? { department_id: value ? departmentIdForStore(value) || current.department_id : "" }
+        : {}),
     }));
   };
+
+  useEffect(() => {
+    if (!dialogOpen || editingReceiptId || form.store_id) {
+      return;
+    }
+
+    const activeStores = lookups.stores.filter(isActiveLookupRow);
+    if (activeStores.length !== 1) {
+      return;
+    }
+
+    const defaultStoreId = String(activeStores[0].id);
+    const defaultDepartmentId = activeStores[0].department_id ? String(activeStores[0].department_id) : "";
+
+    setForm((current) => {
+      if (current.store_id) return current;
+
+      return {
+        ...current,
+        store_id: defaultStoreId,
+        department_id: defaultDepartmentId || current.department_id,
+      };
+    });
+  }, [dialogOpen, editingReceiptId, form.store_id, lookups.stores]);
 
   const setApprovalReferenceValue = (next: ApprovalReferenceState) => {
     setApprovalReference(next);
