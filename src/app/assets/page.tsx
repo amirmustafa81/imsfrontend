@@ -161,7 +161,7 @@ const isParentCategory = (row: RowData) => !row.parent_category_id;
 const isChildOfCategory = (row: RowData, parentId: number | string | null | undefined) => String(row.parent_category_id ?? "") === String(parentId ?? "");
 
 export default function AssetsPage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [rows, setRows] = useState<AssetRow[]>([]);
   const [lookups, setLookups] = useState<Record<LookupKey, RowData[]>>(initialLookups);
   const [attributeDefinitions, setAttributeDefinitions] = useState<AttributeDefinition[]>([]);
@@ -180,7 +180,7 @@ export default function AssetsPage() {
   const [dateFromFilter, setDateFromFilter] = useState("");
   const [dateToFilter, setDateToFilter] = useState("");
 
-  const [message, setMessage] = useState("Load assets to begin.");
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -189,7 +189,8 @@ export default function AssetsPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<AssetFormState>(createInitialAssetForm);
 
-  const authReady = useMemo(() => isAuthenticated, [isAuthenticated]);
+  const authReady = useMemo(() => isAuthenticated && !authLoading, [authLoading, isAuthenticated]);
+  const pageLoading = authLoading || loading;
 
   const lookupLabel = (key: LookupKey, value: unknown, fallback = "-") => {
     if (value === null || value === undefined || value === "") return fallback;
@@ -228,7 +229,6 @@ export default function AssetsPage() {
       const payload = response.data?.data;
       setRows(Array.isArray(payload) ? payload : []);
       setError("");
-      setMessage("Fixed assets loaded.");
     } catch {
       setRows([]);
       setError("Unable to load fixed assets. Verify token and backend connectivity.");
@@ -710,7 +710,7 @@ export default function AssetsPage() {
 
         <div className="d-flex justify-content-between align-items-center mb-2">
           <h2 className="h6 fw-semibold mb-0">Asset records</h2>
-          {loading ? (
+          {pageLoading ? (
             <span className="small text-secondary">
               <span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />
               Loading fixed assets...
@@ -718,7 +718,7 @@ export default function AssetsPage() {
           ) : null}
         </div>
 
-        <DataTable columns={tableColumns} rows={loading ? [] : paginatedRows} empty={loading ? "Loading fixed assets..." : "No fixed asset records found."} />
+        <DataTable columns={tableColumns} rows={pageLoading ? [] : paginatedRows} empty={pageLoading ? "Loading fixed assets..." : "No fixed asset records found."} />
         <PaginationControls
           page={activePage}
           pageSize={pageSize}
