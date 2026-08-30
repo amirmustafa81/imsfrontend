@@ -53,6 +53,21 @@ type TransactionItem = {
   remarks: string | null;
 };
 
+type StockSourceRow = {
+  id: number;
+  item_id: number;
+  department_id: number | null;
+  store_id: number | null;
+  project_id: number | null;
+  funding_source_id: number | null;
+  base_uom_code?: string | null;
+  base_uom_name?: string | null;
+  last_receipt_uom_code?: string | null;
+  last_receipt_uom_name?: string | null;
+  last_qty_per_receipt_unit?: number | null;
+  available_quantity: number;
+};
+
 const initialLookups: Record<LookupKey, LookupRow[]> = {
   departments: [],
   stores: [],
@@ -69,9 +84,9 @@ const toDate = (value: string | null | undefined) => {
   return value.includes("T") ? value.split("T")[0] ?? "-" : value;
 };
 
-const toMoney = (value: number | null | undefined) => {
-  if (value === null || value === undefined || Number.isNaN(value)) return "-";
-  return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatQuantity = (value: number) => {
+  if (!Number.isFinite(value)) return "0";
+  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/\.?0+$/, "");
 };
 
 const toTitle = (value: string) =>
@@ -88,6 +103,7 @@ export default function TransactionDetailPage() {
 
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [items, setItems] = useState<TransactionItem[]>([]);
+  const [stockSourcesByItemId, setStockSourcesByItemId] = useState<Record<string, StockSourceRow[]>>({});
   const [lookups, setLookups] = useState<Record<LookupKey, LookupRow[]>>(initialLookups);
   const [message, setMessage] = useState("Loading voucher details...");
   const [error, setError] = useState("");
@@ -105,6 +121,94 @@ export default function TransactionDetailPage() {
       return `${code}${name ? ` - ${name}` : ""}`;
     },
     [lookups],
+  );
+
+  const loadStockRowsForItem = useCallback(async (itemId: string): Promise<StockSourceRow[]> => {
+    if (!itemId) return [];
+
+    try {
+      const response = await api.get<{ data?: StockSourceRow[] }>("/reports/stock-balance", {
+        params: { item_id: itemId },
+      });
+      const stockRows = Array.isArray(response.data?.data) ? response.data.data : [];
+      setStockSourcesByItemId((current) => ({ ...current, [itemId]: stockRows }));
+      return stockRows;
+    } catch {
+      setStockSourcesByItemId((current) => ({ ...current, [itemId]: [] }));
+      return [];
+    }
+  }, []);
+
+  const matchingStockRowForItem = useCallback(
+    (itemId: string, nextTransaction: Transaction | null = transaction): StockSourceRow | undefined => {
+      const rows = stockSourcesByItemId[itemId] ?? [];
+      if (!rows.length) return undefined;
+
+      const exactMatch = nextTransaction
+        ? rows.find(
+            (row) =>
+              (!nextTransaction.from_department_id || row.department_id === nextTransaction.from_department_id) &&
+              (!nextTransaction.from_store_id || row.store_id === nextTransaction.from_store_id) &&
+              (!nextTransaction.project_id || row.project_id === nextTransaction.project_id) &&
+              (!nextTransaction.funding_source_id || row.funding_source_id === nextTransaction.funding_source_id),
+          )
+        : undefined;
+
+      return exactMatch ?? rows.find((row) => Number(row.available_quantity ?? 0) > 0) ?? rows[0];
+    },
+    [stockSourcesByItemId, transaction],
+  );
+
+  const transactionQuantityLabel = useCallback(
+    (item: TransactionItem) => {
+      const baseQuantity = Number(item.quantity ?? 0);
+      const stockSource = matchingStockRowForItem(String(item.item_id));
+      const baseCode = String(stockSource?.base_uom_code ?? stockSource?.base_uom_name ?? "").trim();
+      const packageCode = String(stockSource?.last_receipt_uom_code ?? stockSource?.last_receipt_uom_name ?? "").trim();
+      const qtyPer = Number(stockSource?.last_qty_per_receipt_unit ?? 0);
+
+      if (packageCode && baseCode && packageCode !== baseCode && Number.isFinite(qtyPer) && qtyPer > 0 && baseQuantity > 0) {
+        const shouldShowBaseCode = baseCode.toUpperCase() !== "EACH";
+
+        return (
+          <div className="stock-quantity-cell">
+            <span>
+              {formatQuantity(baseQuantity / qtyPer)} {packageCode}
+            </span>
+            <small>
+              {formatQuantity(baseQuantity)}
+              {shouldShowBaseCode ? ` ${baseCode}` : ""}
+            </small>
+          </div>
+        );
+      }
+
+      return (
+        <span>
+          {formatQuantity(baseQuantity)}
+          {baseCode ? ` ${baseCode}` : ""}
+        </span>
+      );
+    },
+    [matchingStockRowForItem],
+  );
+
+  const transactionQuantityPrintLabel = useCallback(
+    (item: TransactionItem) => {
+      const baseQuantity = Number(item.quantity ?? 0);
+      const stockSource = matchingStockRowForItem(String(item.item_id));
+      const baseCode = String(stockSource?.base_uom_code ?? stockSource?.base_uom_name ?? "").trim();
+      const packageCode = String(stockSource?.last_receipt_uom_code ?? stockSource?.last_receipt_uom_name ?? "").trim();
+      const qtyPer = Number(stockSource?.last_qty_per_receipt_unit ?? 0);
+
+      if (packageCode && baseCode && packageCode !== baseCode && Number.isFinite(qtyPer) && qtyPer > 0 && baseQuantity > 0) {
+        const baseSuffix = baseCode.toUpperCase() === "EACH" ? "" : ` ${baseCode}`;
+        return `${formatQuantity(baseQuantity / qtyPer)} ${packageCode} (${formatQuantity(baseQuantity)}${baseSuffix})`;
+      }
+
+      return `${formatQuantity(baseQuantity)}${baseCode ? ` ${baseCode}` : ""}`;
+    },
+    [matchingStockRowForItem],
   );
 
   const loadLookups = useCallback(async () => {
@@ -135,9 +239,15 @@ export default function TransactionDetailPage() {
       const response = await api.get(`/inventory-transactions/${id}`);
       const data = response.data?.data ?? response.data?.transaction ?? null;
       const itemRows = response.data?.items ?? data?.items ?? [];
+      const normalizedItems = Array.isArray(itemRows) ? (itemRows as TransactionItem[]) : [];
 
       setTransaction(data);
-      setItems(Array.isArray(itemRows) ? itemRows : []);
+      setItems(normalizedItems);
+      await Promise.all(
+        [...new Set(normalizedItems.filter((item) => item.item_id).map((item) => String(item.item_id)))].map((itemId) =>
+          loadStockRowsForItem(itemId),
+        ),
+      );
       setError("");
       setMessage("");
     } catch {
@@ -146,7 +256,7 @@ export default function TransactionDetailPage() {
       setMessage("");
       setError("Unable to load voucher details. Check token and permission scope.");
     }
-  }, [authReady, id]);
+  }, [authReady, id, loadStockRowsForItem]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -161,28 +271,10 @@ export default function TransactionDetailPage() {
   const itemColumns = useMemo(
     () => [
       { key: "item", header: "Item", render: (row: TransactionItem) => lookupLabel("items", row.item_id) },
-      {
-        key: "asset",
-        header: "Asset",
-        render: (row: TransactionItem) =>
-          row.asset_id ? (
-            <Link href={`/assets/${row.asset_id}`} className="fw-semibold">
-              #{row.asset_id}
-            </Link>
-          ) : (
-            "-"
-          ),
-      },
-      { key: "quantity", header: "Qty", render: (row: TransactionItem) => row.quantity },
-      { key: "unit_cost", header: "Unit Cost", render: (row: TransactionItem) => toMoney(row.unit_cost) },
-      {
-        key: "total",
-        header: "Total",
-        render: (row: TransactionItem) => toMoney(row.unit_cost === null ? null : Number(row.quantity) * Number(row.unit_cost)),
-      },
+      { key: "quantity", header: "Qty", className: "text-end", render: (row: TransactionItem) => transactionQuantityLabel(row) },
       { key: "remarks", header: "Remarks", render: (row: TransactionItem) => row.remarks ?? "-" },
     ],
-    [lookupLabel],
+    [lookupLabel, transactionQuantityLabel],
   );
 
   const printVoucher = () => {
@@ -214,10 +306,7 @@ export default function TransactionDetailPage() {
       ],
       columns: [
         { header: "Item", render: (row) => lookupLabel("items", row.item_id) },
-        { header: "Asset", render: (row) => (row.asset_id ? `#${row.asset_id}` : "-") },
-        { header: "Quantity", render: (row) => row.quantity },
-        { header: "Unit Cost", render: (row) => toMoney(row.unit_cost) },
-        { header: "Total", render: (row) => toMoney(row.unit_cost === null ? null : Number(row.quantity) * Number(row.unit_cost)) },
+        { header: "Quantity", render: (row) => transactionQuantityPrintLabel(row) },
         { header: "Remarks", render: (row) => row.remarks },
       ],
       rows: items,
