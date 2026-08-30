@@ -5,7 +5,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AttributeFields, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
-import { DataTable, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
+import { DataTable, FilterBar, PageHeader, PaginationControls, StatusBadge } from "@/components/ims";
 
 type LookupKey =
   | "departments"
@@ -106,6 +106,8 @@ const fixedAssetStatusOptions: Array<{ value: FixedAssetStatus; label: string }>
   { value: "pending_disposal", label: "Pending Disposal" },
 ];
 
+const DEFAULT_PAGE_SIZE = 25;
+
 const initialLookups: Record<LookupKey, RowData[]> = {
   departments: [],
   stores: [],
@@ -180,6 +182,9 @@ export default function AssetsPage() {
 
   const [message, setMessage] = useState("Load assets to begin.");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<AssetFormState>(createInitialAssetForm);
@@ -198,6 +203,7 @@ export default function AssetsPage() {
   const loadRows = useCallback(async () => {
     if (!authReady) return;
 
+    setLoading(true);
     try {
       const params: Record<string, string> = {};
 
@@ -227,6 +233,8 @@ export default function AssetsPage() {
       setRows([]);
       setError("Unable to load fixed assets. Verify token and backend connectivity.");
       setMessage("");
+    } finally {
+      setLoading(false);
     }
   }, [authReady, search, statusFilter, departmentFilter, itemFilter, categoryFilter, storeFilter, buildingFilter, roomFilter, projectFilter, fundingSourceFilter, custodianFilter, dateFromFilter, dateToFilter]);
 
@@ -280,6 +288,21 @@ export default function AssetsPage() {
 
     void reloadLookups();
   }, [loadLookups]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, departmentFilter, itemFilter, categoryFilter, storeFilter, buildingFilter, roomFilter, projectFilter, fundingSourceFilter, custodianFilter, dateFromFilter, dateToFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const activePage = Math.min(currentPage, totalPages);
+  const paginatedRows = useMemo(() => {
+    const start = (activePage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [activePage, pageSize, rows]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   const clearFilters = () => {
     setSearch("");
@@ -685,7 +708,27 @@ export default function AssetsPage() {
           </div>
         </FilterBar>
 
-        <DataTable columns={tableColumns} rows={rows} empty="No fixed asset records found." />
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <h2 className="h6 fw-semibold mb-0">Asset records</h2>
+          {loading ? (
+            <span className="small text-secondary">
+              <span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />
+              Loading fixed assets...
+            </span>
+          ) : null}
+        </div>
+
+        <DataTable columns={tableColumns} rows={loading ? [] : paginatedRows} empty={loading ? "Loading fixed assets..." : "No fixed asset records found."} />
+        <PaginationControls
+          page={activePage}
+          pageSize={pageSize}
+          totalItems={rows.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setCurrentPage(1);
+          }}
+        />
 
         {dialogOpen ? (
           <>
