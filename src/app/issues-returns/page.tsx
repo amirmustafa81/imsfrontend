@@ -52,6 +52,8 @@ type StockSourceRow = {
   base_uom_code?: string | null;
   base_uom_name?: string | null;
   last_receipt_uom_id?: number | null;
+  last_receipt_uom_code?: string | null;
+  last_receipt_uom_name?: string | null;
   last_qty_per_receipt_unit?: number | null;
   quantity_on_hand?: number;
   quantity_reserved?: number;
@@ -1195,6 +1197,44 @@ function IssuesReturnsContent() {
     funding_source_id: toFormString(transaction.funding_source_id),
   });
 
+  const transactionQuantityLabel = (transaction: Transaction | undefined, item: TransactionItem) => {
+    const baseQuantity = Number(item.quantity ?? 0);
+    const itemId = String(item.item_id ?? "");
+    const stockSource = transaction
+      ? matchingStockRowFromRows(stockRowsForItem(itemId), stockMatchScopeFromTransaction(transaction))
+      : matchingStockRowForItem(itemId);
+    const baseCode = String(stockSource?.base_uom_code ?? stockSource?.base_uom_name ?? baseUomCodeForItem(itemId) ?? "").trim();
+    const packageCode = String(
+      stockSource?.last_receipt_uom_code ??
+        stockSource?.last_receipt_uom_name ??
+        (stockSource?.last_receipt_uom_id ? unitCodeById(stockSource.last_receipt_uom_id) : ""),
+    ).trim();
+    const qtyPer = Number(stockSource?.last_qty_per_receipt_unit ?? 0);
+
+    if (packageCode && baseCode && packageCode !== baseCode && Number.isFinite(qtyPer) && qtyPer > 0 && baseQuantity > 0) {
+      const shouldShowBaseCode = baseCode.toUpperCase() !== "EACH";
+
+      return (
+        <div className="stock-quantity-cell">
+          <span>
+            {formatQuantityInput(baseQuantity / qtyPer)} {packageCode}
+          </span>
+          <small>
+            {formatQuantityInput(baseQuantity)}
+            {shouldShowBaseCode ? ` ${baseCode}` : ""}
+          </small>
+        </div>
+      );
+    }
+
+    return (
+      <span>
+        {formatQuantityInput(baseQuantity)}
+        {baseCode ? ` ${baseCode}` : ""}
+      </span>
+    );
+  };
+
   const resolveProcurementDepartmentId = useCallback(() => {
     const procurementDepartment = lookups.departments.find((department) => {
       const code = String(department.code ?? "").trim().toLowerCase();
@@ -1965,10 +2005,16 @@ function IssuesReturnsContent() {
       const response = await api.get(`/inventory-transactions/${transactionId}`);
 
       const itemRows = response.data?.items;
+      const normalizedRows = Array.isArray(itemRows) ? (itemRows as TransactionItem[]) : [];
       setExpandedItems((prev) => ({
         ...prev,
-        [transactionId]: Array.isArray(itemRows) ? itemRows : [],
+        [transactionId]: normalizedRows,
       }));
+      await Promise.all(
+        normalizedRows
+          .filter((item) => item.item_id)
+          .map((item) => loadStockRowsForItem(String(item.item_id))),
+      );
       setError("");
     } catch {
       setExpandedItems((prev) => ({ ...prev, [transactionId]: [] }));
@@ -2479,7 +2525,12 @@ function IssuesReturnsContent() {
   const expandedItemColumns = [
     { key: "item", header: "Item", render: (item: TransactionItem) => item.item_label ?? lookupLabel("items", item.item_id) },
     { key: "asset", header: "Asset", render: (item: TransactionItem) => item.asset_label ?? item.asset_id ?? "-" },
-    { key: "qty", header: "Qty", render: (item: TransactionItem) => item.quantity },
+    {
+      key: "qty",
+      header: "Qty",
+      className: "text-end",
+      render: (item: TransactionItem) => transactionQuantityLabel(rows.find((row) => row.id === expandedId), item),
+    },
     { key: "remarks", header: "Remarks", render: (item: TransactionItem) => item.remarks ?? "-" },
   ];
 
