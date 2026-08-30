@@ -669,8 +669,6 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       { key: "item_name", label: "Item Name" },
       { key: "category_name", label: "Category" },
       { key: "quantity", label: "Quantity" },
-      { key: "base_uom_code", label: "Base UOM" },
-      { key: "unit_cost", label: "Unit Cost" },
       { key: "from_department_name", label: "From Dept" },
       { key: "to_department_name", label: "To Dept" },
       { key: "from_store_name", label: "From Store" },
@@ -1516,6 +1514,51 @@ export default function ReportsPage() {
     return value === undefined || value === null ? "-" : boolText(value);
   }, []);
 
+  const formatReportQuantity = useCallback((value: unknown): string => {
+    const quantity = Number(value ?? 0);
+    if (!Number.isFinite(quantity)) return "-";
+
+    return new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: 3,
+    }).format(quantity);
+  }, []);
+
+  const reportUnitCode = useCallback((value: unknown): string => String(value ?? "").trim(), []);
+
+  const renderReportQuantity = useCallback(
+    (row: RowData) => {
+      const baseQuantity = Number(row.quantity ?? 0);
+      const baseCode = reportUnitCode(row.base_uom_code || row.base_uom_name);
+      const packageCode = reportUnitCode(row.last_receipt_uom_code || row.last_receipt_uom_name);
+      const qtyPer = Number(row.last_qty_per_receipt_unit ?? 0);
+      const hasPackageConversion = packageCode && baseCode && packageCode !== baseCode && Number.isFinite(qtyPer) && qtyPer > 0;
+
+      if (hasPackageConversion && baseQuantity > 0) {
+        const shouldShowBaseCode = baseCode.toUpperCase() !== "EACH";
+
+        return (
+          <div className="stock-quantity-cell">
+            <span>
+              {formatReportQuantity(baseQuantity / qtyPer)} {packageCode}
+            </span>
+            <small>
+              {formatReportQuantity(baseQuantity)}
+              {shouldShowBaseCode ? ` ${baseCode}` : ""}
+            </small>
+          </div>
+        );
+      }
+
+      return (
+        <span>
+          {formatReportQuantity(baseQuantity)}
+          {baseCode ? ` ${baseCode}` : ""}
+        </span>
+      );
+    },
+    [formatReportQuantity, reportUnitCode],
+  );
+
   const renderCellValue = useCallback((columnKey: string, value: unknown): string => {
     if (value === null || value === undefined || value === "") {
       return "-";
@@ -1659,6 +1702,9 @@ export default function ReportsPage() {
               </button>
             );
           }
+          if (activeReport === "issue_return" && column.key === "quantity") {
+            return renderReportQuantity(row);
+          }
           if (column.key === "status") {
             return <StatusBadge status={toReportStatus(raw)} />;
           }
@@ -1693,7 +1739,7 @@ export default function ReportsPage() {
         ...baseColumns,
       ];
     },
-    [activeReport, openCleanupEdit, openTagPreview, renderCellValue, reportConfig.columns, selectedTagKeys, toggleTagSelection],
+    [activeReport, openCleanupEdit, openTagPreview, renderCellValue, renderReportQuantity, reportConfig.columns, selectedTagKeys, toggleTagSelection],
   );
 
   return (
