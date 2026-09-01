@@ -929,11 +929,50 @@ export default function InventoryReceiptsPage() {
     return `${formatQuantityInput(Number(item.quantity_received ?? 0))} ${receiptUnit || "unit"} x ${formatQuantityInput(qtyPer)} ${baseUnit || "base"}`;
   };
 
-  const stockDisplayForItem = (item: ReceiptItem): string => {
+  const stockDisplayTextForItem = (item: ReceiptItem): string => {
     const baseUnit = unitCodeForId(item.base_uom_id ?? baseUnitIdForItem(item.item_id));
-    const stockQty = Number(item.accepted_base_qty ?? item.quantity_accepted ?? 0);
+    const receiptUnit = unitCodeForId(item.receipt_uom_id ?? item.base_uom_id);
+    const accepted = Number(item.quantity_accepted ?? 0);
+    const qtyPer = Number(item.qty_per_receipt_unit ?? 1);
+    const stockQty = Number(item.accepted_base_qty ?? accepted * qtyPer);
+
+    if (receiptUnit && baseUnit && receiptUnit !== baseUnit && Number.isFinite(qtyPer) && qtyPer > 0 && accepted > 0) {
+      const baseSuffix = baseUnit.toUpperCase() === "EACH" ? "" : ` ${baseUnit}`;
+      return `${formatQuantityInput(accepted)} ${receiptUnit} / ${formatQuantityInput(stockQty)}${baseSuffix}`;
+    }
 
     return `${formatQuantityInput(stockQty)}${baseUnit ? ` ${baseUnit}` : ""}`;
+  };
+
+  const stockDisplayForItem = (item: ReceiptItem) => {
+    const baseUnit = unitCodeForId(item.base_uom_id ?? baseUnitIdForItem(item.item_id));
+    const receiptUnit = unitCodeForId(item.receipt_uom_id ?? item.base_uom_id);
+    const accepted = Number(item.quantity_accepted ?? 0);
+    const qtyPer = Number(item.qty_per_receipt_unit ?? 1);
+    const stockQty = Number(item.accepted_base_qty ?? accepted * qtyPer);
+
+    if (receiptUnit && baseUnit && receiptUnit !== baseUnit && Number.isFinite(qtyPer) && qtyPer > 0 && accepted > 0) {
+      const shouldShowBaseCode = baseUnit.toUpperCase() !== "EACH";
+
+      return (
+        <div className="stock-quantity-cell">
+          <span>
+            {formatQuantityInput(accepted)} {receiptUnit}
+          </span>
+          <small>
+            {formatQuantityInput(stockQty)}
+            {shouldShowBaseCode ? ` ${baseUnit}` : ""}
+          </small>
+        </div>
+      );
+    }
+
+    return (
+      <span>
+        {formatQuantityInput(stockQty)}
+        {baseUnit ? ` ${baseUnit}` : ""}
+      </span>
+    );
   };
 
   const generatedQuickItemCode = useMemo(() => {
@@ -2001,7 +2040,7 @@ export default function InventoryReceiptsPage() {
           { header: "Description", render: (item) => item.description },
           { header: "Package Received", render: (item) => packageDisplayForItem(item) },
           { header: "Qty Accepted", render: (item) => item.quantity_accepted },
-          { header: "Stock Qty", render: (item) => stockDisplayForItem(item) },
+          { header: "Stock Qty", render: (item) => stockDisplayTextForItem(item) },
           { header: "Qty Rejected", render: (item) => item.quantity_rejected },
           { header: `Unit Cost (${currency})`, render: (item) => item.unit_cost },
           { header: `Total Cost (${currency})`, render: (item) => item.total_cost },
