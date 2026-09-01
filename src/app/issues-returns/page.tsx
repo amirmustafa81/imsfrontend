@@ -1204,12 +1204,16 @@ function IssuesReturnsContent() {
     funding_source_id: toFormString(transaction.funding_source_id),
   });
 
-  const transactionQuantityLabel = (transaction: Transaction | undefined, item: TransactionItem) => {
+  const transactionQuantityParts = (
+    transaction: Transaction | undefined,
+    item: TransactionItem,
+    sourceRowsByItemId: Record<string, StockSourceRow[]> = stockSourcesByItemId,
+  ) => {
     const baseQuantity = Number(item.quantity ?? 0);
     const itemId = String(item.item_id ?? "");
     const stockSource = transaction
-      ? matchingStockRowFromRows(stockRowsForItem(itemId), stockMatchScopeFromTransaction(transaction))
-      : matchingStockRowForItem(itemId);
+      ? matchingStockRowFromRows(sourceRowsByItemId[itemId] ?? [], stockMatchScopeFromTransaction(transaction))
+      : matchingStockRowFromRows(sourceRowsByItemId[itemId] ?? []);
     const baseCode = String(item.base_uom_code ?? item.base_uom_name ?? stockSource?.base_uom_code ?? stockSource?.base_uom_name ?? baseUomCodeForItem(itemId) ?? "").trim();
     const packageCode = String(
       item.issue_uom_code ??
@@ -1221,27 +1225,45 @@ function IssuesReturnsContent() {
     const qtyPer = Number(item.qty_per_issue_unit ?? stockSource?.last_qty_per_receipt_unit ?? 0);
 
     if (packageCode && baseCode && packageCode !== baseCode && Number.isFinite(qtyPer) && qtyPer > 0 && baseQuantity > 0) {
-      const shouldShowBaseCode = baseCode.toUpperCase() !== "EACH";
+      return {
+        primary: `${formatQuantityInput(baseQuantity / qtyPer)} ${packageCode}`,
+        secondary: `${formatQuantityInput(baseQuantity)}${baseCode.toUpperCase() === "EACH" ? "" : ` ${baseCode}`}`,
+      };
+    }
+
+    return {
+      primary: `${formatQuantityInput(baseQuantity)}${baseCode ? ` ${baseCode}` : ""}`,
+      secondary: "",
+    };
+  };
+
+  const transactionQuantityLabel = (transaction: Transaction | undefined, item: TransactionItem) => {
+    const quantity = transactionQuantityParts(transaction, item);
+
+    if (quantity.secondary) {
+      const [secondaryAmount, ...secondaryUnit] = quantity.secondary.split(" ");
 
       return (
         <div className="stock-quantity-cell">
-          <span>
-            {formatQuantityInput(baseQuantity / qtyPer)} {packageCode}
-          </span>
+          <span>{quantity.primary}</span>
           <small>
-            {formatQuantityInput(baseQuantity)}
-            {shouldShowBaseCode ? ` ${baseCode}` : ""}
+            {secondaryAmount}
+            {secondaryUnit.length ? ` ${secondaryUnit.join(" ")}` : ""}
           </small>
         </div>
       );
     }
 
-    return (
-      <span>
-        {formatQuantityInput(baseQuantity)}
-        {baseCode ? ` ${baseCode}` : ""}
-      </span>
-    );
+    return <span>{quantity.primary}</span>;
+  };
+
+  const transactionQuantityPrintLabel = (
+    transaction: Transaction | undefined,
+    item: TransactionItem,
+    sourceRowsByItemId: Record<string, StockSourceRow[]> = stockSourcesByItemId,
+  ) => {
+    const quantity = transactionQuantityParts(transaction, item, sourceRowsByItemId);
+    return quantity.secondary ? `${quantity.primary} / ${quantity.secondary}` : quantity.primary;
   };
 
   const resolveProcurementDepartmentId = useCallback(() => {
@@ -2049,6 +2071,14 @@ function IssuesReturnsContent() {
     try {
       const itemRows = expandedItems[transaction.id] ?? (await fetchTransactionItems(transaction.id));
       setExpandedItems((prev) => ({ ...prev, [transaction.id]: itemRows }));
+      const sourceRowsByItemId = Object.fromEntries(
+        await Promise.all(
+          Array.from(new Set(itemRows.map((item) => String(item.item_id ?? "")).filter(Boolean))).map(async (itemId) => [
+            itemId,
+            await loadStockRowsForItem(itemId),
+          ]),
+        ),
+      ) as Record<string, StockSourceRow[]>;
 
       const printed = printTransactionDocument<TransactionItem>({
         title: `${isLegacyTransaction(transaction) ? "Legacy Issue" : toTransactionTypeLabel(transaction.transaction_type)} Voucher`,
@@ -2078,7 +2108,7 @@ function IssuesReturnsContent() {
         columns: [
           { header: "Item", render: (item) => item.item_label ?? lookupLabel("items", item.item_id) },
           { header: "Asset", render: (item) => item.asset_label ?? (item.asset_id ? `#${item.asset_id}` : "-") },
-          { header: "Quantity", render: (item) => item.quantity },
+          { header: "Quantity", render: (item) => transactionQuantityPrintLabel(transaction, item, sourceRowsByItemId) },
           { header: "Remarks", render: (item) => item.remarks },
         ],
         rows: itemRows,
