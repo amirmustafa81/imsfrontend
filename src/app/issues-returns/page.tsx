@@ -1035,7 +1035,7 @@ function IssuesReturnsContent() {
 
     try {
       const response = await api.get<{ data?: StockSourceRow[] }>("/reports/stock-balance", {
-        params: { item_id: itemId },
+        params: { item_id: itemId, include_empty: "1" },
       });
       const stockRows = Array.isArray(response.data?.data) ? response.data.data : [];
       setStockSourcesByItemId((current) => ({ ...current, [itemId]: stockRows }));
