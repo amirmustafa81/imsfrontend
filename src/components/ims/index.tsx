@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { Fragment, type ReactNode, useState } from "react";
 import { FieldLabel } from "./FieldLabel";
 import { SearchableSelect } from "./SearchableSelect";
 
@@ -333,12 +333,14 @@ export function DataTable<T extends Record<string, unknown>>({
   empty = "No records.",
   rowClassName,
   onRowClick,
+  renderExpandedRow,
 }: {
   columns: { key: string; header: string; render?: (row: T) => ReactNode; className?: string }[];
   rows: T[];
   empty?: string;
   rowClassName?: (row: T, index: number) => string;
   onRowClick?: (row: T, index: number) => void;
+  renderExpandedRow?: (row: T, index: number) => ReactNode;
 }) {
   return (
     <div className="card border-0 shadow-sm ims-table-card">
@@ -362,31 +364,41 @@ export function DataTable<T extends Record<string, unknown>>({
                 </td>
               </tr>
             ) : (
-              rows.map((row, index) => (
-                <tr
-                  className={rowClassName?.(row, index)}
-                  key={`${row.id ?? index}`}
-                  onClick={onRowClick ? () => onRowClick(row, index) : undefined}
-                  onKeyDown={
-                    onRowClick
-                      ? (event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            onRowClick(row, index);
-                          }
-                        }
-                      : undefined
-                  }
-                  role={onRowClick ? "button" : undefined}
-                  tabIndex={onRowClick ? 0 : undefined}
-                >
-                  {columns.map((column) => (
-                    <td className={column.className} key={column.key}>
-                      {column.render ? column.render(row) : (row[column.key] as ReactNode)}
-                    </td>
-                  ))}
-                </tr>
-              ))
+              rows.map((row, index) => {
+                const expandedRow = renderExpandedRow?.(row, index);
+
+                return (
+                  <Fragment key={`${row.id ?? index}`}>
+                    <tr
+                      className={rowClassName?.(row, index)}
+                      onClick={onRowClick ? () => onRowClick(row, index) : undefined}
+                      onKeyDown={
+                        onRowClick
+                          ? (event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                onRowClick(row, index);
+                              }
+                            }
+                          : undefined
+                      }
+                      role={onRowClick ? "button" : undefined}
+                      tabIndex={onRowClick ? 0 : undefined}
+                    >
+                      {columns.map((column) => (
+                        <td className={column.className} key={column.key}>
+                          {column.render ? column.render(row) : (row[column.key] as ReactNode)}
+                        </td>
+                      ))}
+                    </tr>
+                    {expandedRow ? (
+                      <tr className="table-light">
+                        <td colSpan={columns.length}>{expandedRow}</td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })
             )}
           </tbody>
         </table>

@@ -2549,6 +2549,60 @@ export default function InventoryReceiptsPage() {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
 
+  const renderExpandedReceiptItems = (receipt: Receipt) => {
+    if (expandedId !== receipt.id) {
+      return null;
+    }
+
+    if (expandedLoading[receipt.id]) {
+      return (
+        <div className="d-flex align-items-center gap-2 text-secondary py-3">
+          <span className="spinner-border spinner-border-sm" aria-hidden="true" />
+          Loading items...
+        </div>
+      );
+    }
+
+    const receiptItems = expandedItems[receipt.id] ?? [];
+
+    if (receiptItems.length === 0) {
+      return (
+        <div className="text-secondary py-3">
+          No item rows returned by backend.
+        </div>
+      );
+    }
+
+    return (
+      <div className="py-2">
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <h3 className="h6 mb-0">Items for {receipt.receipt_no}</h3>
+          <span className="small text-secondary">{receiptItems.length} row{receiptItems.length === 1 ? "" : "s"}</span>
+        </div>
+        <div className="table-responsive border rounded bg-white">
+          <table className="table table-sm mb-0 align-middle">
+            <thead>
+              <tr>
+                {expandedItemColumns.map((column) => (
+                  <th key={column.key}>{column.header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {receiptItems.map((receiptItem) => (
+                <tr key={receiptItem.id}>
+                  {expandedItemColumns.map((column) => (
+                    <td key={column.key}>{column.render(receiptItem)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
@@ -3794,6 +3848,7 @@ export default function InventoryReceiptsPage() {
                         },
                       ]}
                       rows={paginatedRows as never}
+                      renderExpandedRow={(row) => renderExpandedReceiptItems(row as Receipt)}
                     />
                     <PaginationControls
                       page={currentPage}
@@ -3809,23 +3864,6 @@ export default function InventoryReceiptsPage() {
                         setExpandedId(null);
                       }}
                     />
-
-                    {expandedId && expandedItems[expandedId] ? (
-                      <div className="mt-3">
-                        <h3 className="h6 mb-2">Items for #{expandedId}</h3>
-                        {expandedLoading[expandedId] ? (
-                          <div className="text-secondary">Loading items...</div>
-                        ) : expandedItems[expandedId].length === 0 ? (
-                          <EmptyState
-                            icon="bi-box-seam"
-                            title="No items on selected receipt"
-                            message="Receipt details are not available yet."
-                          />
-                        ) : (
-                          <DataTable columns={expandedItemColumns} rows={expandedItems[expandedId]} empty="No item rows returned by backend." />
-                        )}
-                      </div>
-                    ) : null}
                   </>
                 ) : (
                   <EmptyState
