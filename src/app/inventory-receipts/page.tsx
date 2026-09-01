@@ -3549,15 +3549,15 @@ export default function InventoryReceiptsPage() {
                 style={{ width: "min(96vw, 1400px)", maxWidth: "min(96vw, 1400px)" }}
               >
                 <div className="modal-content border-0 shadow-lg">
-                  <div className="modal-header px-4 py-3">
-                    <div>
+                  <div className="modal-header px-4 py-3 d-flex align-items-start gap-3">
+                    <div className="flex-grow-1 min-w-0">
                       <div className="d-flex align-items-center gap-2 mb-1">
                         <h2 className="h5 mb-0">{detailReceipt?.receipt_no ?? "GRN Detail"}</h2>
                         {detailReceipt ? <StatusBadge status={detailReceipt.status} /> : null}
                       </div>
                       <p className="text-secondary mb-0">Complete goods receipt detail and item lines.</p>
                     </div>
-                    <div className="d-flex align-items-center gap-2">
+                    <div className="d-flex align-items-center gap-3 ms-auto flex-shrink-0">
                       {detailReceipt ? (
                         <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => printReceipt(detailReceipt)}>
                           <i className="bi bi-printer me-1" />
