@@ -172,6 +172,14 @@ type PendingAttachment = {
   size: number;
 };
 
+type DocumentRow = {
+  id: number;
+  document_type: string;
+  original_file_name: string;
+  mime_type: string;
+  file_size: number;
+};
+
 const receiptTypes = [
   { value: "purchase", label: "Purchase" },
   { value: "donation", label: "Donation" },
@@ -311,6 +319,13 @@ const formatMoneyInput = (value: number) => {
   const fixed = value.toFixed(2);
   return fixed.replace(/\.?0+$/, "");
 };
+
+const formatDocumentType = (value: string) =>
+  value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 
 const totalCostFor = (acceptedValue: string, unitCostValue: string) => {
   const accepted = Number(acceptedValue || 0);
@@ -617,6 +632,12 @@ export default function InventoryReceiptsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingReceiptId, setEditingReceiptId] = useState<number | null>(null);
   const [editingReceiptNo, setEditingReceiptNo] = useState("");
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailReceipt, setDetailReceipt] = useState<Receipt | null>(null);
+  const [detailItems, setDetailItems] = useState<ReceiptItem[]>([]);
+  const [detailDocuments, setDetailDocuments] = useState<DocumentRow[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<number | null>(null);
   const [quickItemOpen, setQuickItemOpen] = useState(false);
   const [quickItemRowIndex, setQuickItemRowIndex] = useState<number | null>(null);
   const [quickItemSaving, setQuickItemSaving] = useState(false);
@@ -1679,6 +1700,29 @@ export default function InventoryReceiptsPage() {
     },
   ];
 
+  const detailItemColumns = [
+    { key: "item", header: "Item", render: (receiptItem: ReceiptItem) => lookupLabel("items", receiptItem.item_id) },
+    { key: "description", header: "Description", render: (receiptItem: ReceiptItem) => receiptItem.description || "-" },
+    { key: "package", header: "Package", render: (receiptItem: ReceiptItem) => packageDisplayForItem(receiptItem) },
+    { key: "accepted", header: "Accepted", render: (receiptItem: ReceiptItem) => receiptItem.quantity_accepted },
+    { key: "stockQty", header: "Stock Qty", render: (receiptItem: ReceiptItem) => stockDisplayForItem(receiptItem) },
+    { key: "rejected", header: "Rejected", render: (receiptItem: ReceiptItem) => receiptItem.quantity_rejected },
+    { key: "unitCost", header: `Unit Cost (${currency})`, render: (receiptItem: ReceiptItem) => receiptItem.unit_cost ?? "-" },
+    { key: "totalCost", header: `Total Cost (${currency})`, render: (receiptItem: ReceiptItem) => receiptItem.total_cost ?? "-" },
+    { key: "batch", header: "Batch", render: (receiptItem: ReceiptItem) => receiptItem.batch_no || "-" },
+    { key: "expiry", header: "Expiry", render: (receiptItem: ReceiptItem) => receiptItem.expiry_date || "-" },
+    {
+      key: "inspection",
+      header: "Inspection",
+      render: (receiptItem: ReceiptItem) => (
+        <span className="d-flex flex-column">
+          <StatusBadge status={inspectionStatusDisplay[receiptItem.inspection_status] ?? receiptItem.inspection_status ?? "-"} />
+          <span className="text-secondary small">{receiptItem.inspection_remarks ?? ""}</span>
+        </span>
+      ),
+    },
+  ];
+
   const refreshRows = async () => {
     if (!authReady) return;
     try {
@@ -1797,6 +1841,65 @@ export default function InventoryReceiptsPage() {
       setDialogOpen(true);
     } catch (editError) {
       setError(extractApiMessage(editError, "Could not load receipt for editing."));
+    }
+  };
+
+  const closeDetailDialog = () => {
+    setDetailOpen(false);
+    setDetailReceipt(null);
+    setDetailItems([]);
+    setDetailDocuments([]);
+    setDetailLoading(false);
+  };
+
+  const openDetailDialog = async (receipt: Receipt) => {
+    if (!authReady) return;
+
+    setDetailOpen(true);
+    setDetailLoading(true);
+    setDetailReceipt(receipt);
+    setDetailItems([]);
+    setDetailDocuments([]);
+
+    try {
+      const [receiptResponse, documentResponse] = await Promise.all([
+        api.get(`/inventory-receipts/${receipt.id}`),
+        api.get<{ data?: DocumentRow[] }>("/documents", {
+          params: { entity_type: "inventory_receipt", entity_id: receipt.id },
+        }),
+      ]);
+
+      const receiptData = receiptResponse.data?.data as Receipt | undefined;
+      const receiptItems = receiptResponse.data?.items;
+      setDetailReceipt(receiptData ?? receipt);
+      setDetailItems(Array.isArray(receiptItems) ? receiptItems : []);
+      setDetailDocuments(Array.isArray(documentResponse.data?.data) ? documentResponse.data.data : []);
+      setError("");
+    } catch (detailError) {
+      setError(extractApiMessage(detailError, "Could not load complete GRN detail."));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const downloadDetailDocument = async (documentRow: DocumentRow) => {
+    setDownloadingDocumentId(documentRow.id);
+
+    try {
+      const response = await api.get<Blob>(`/documents/${documentRow.id}/download`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = documentRow.original_file_name || `document-${documentRow.id}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setError("");
+    } catch {
+      setError("Unable to download document.");
+    } finally {
+      setDownloadingDocumentId(null);
     }
   };
 
@@ -3384,6 +3487,163 @@ export default function InventoryReceiptsPage() {
           </>
         ) : null}
 
+        {detailOpen ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+              <div
+                className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+                style={{ width: "min(96vw, 1400px)", maxWidth: "min(96vw, 1400px)" }}
+              >
+                <div className="modal-content border-0 shadow-lg">
+                  <div className="modal-header px-4 py-3">
+                    <div>
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <h2 className="h5 mb-0">{detailReceipt?.receipt_no ?? "GRN Detail"}</h2>
+                        {detailReceipt ? <StatusBadge status={detailReceipt.status} /> : null}
+                      </div>
+                      <p className="text-secondary mb-0">Complete goods receipt detail and item lines.</p>
+                    </div>
+                    <div className="d-flex align-items-center gap-2">
+                      {detailReceipt ? (
+                        <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => printReceipt(detailReceipt)}>
+                          <i className="bi bi-printer me-1" />
+                          Print
+                        </button>
+                      ) : null}
+                      <button className="btn-close" type="button" aria-label="Close" onClick={closeDetailDialog} />
+                    </div>
+                  </div>
+                  <div className="modal-body px-4 py-3">
+                    {detailLoading ? (
+                      <div className="d-flex align-items-center gap-2 text-secondary py-4">
+                        <span className="spinner-border spinner-border-sm" aria-hidden="true" />
+                        Loading GRN detail...
+                      </div>
+                    ) : detailReceipt ? (
+                      <>
+                        <div className="row g-3 mb-3">
+                          <div className="col-12 col-lg-4">
+                            <div className="border rounded-2 p-3 h-100 bg-white">
+                              <h3 className="h6 fw-semibold mb-3">Receipt</h3>
+                              <dl className="row small mb-0 gy-2">
+                                <dt className="col-5 text-secondary">Receipt No</dt>
+                                <dd className="col-7 mb-0">{detailReceipt.receipt_no}</dd>
+                                <dt className="col-5 text-secondary">Type</dt>
+                                <dd className="col-7 mb-0">{detailReceipt.receipt_type}</dd>
+                                <dt className="col-5 text-secondary">Date</dt>
+                                <dd className="col-7 mb-0">{String(detailReceipt.receipt_date).split("T")[0]}</dd>
+                                <dt className="col-5 text-secondary">Status</dt>
+                                <dd className="col-7 mb-0"><StatusBadge status={detailReceipt.status} /></dd>
+                                <dt className="col-5 text-secondary">Posted At</dt>
+                                <dd className="col-7 mb-0">{detailReceipt.posted_at || "-"}</dd>
+                                <dt className="col-5 text-secondary">Created</dt>
+                                <dd className="col-7 mb-0">{String(detailReceipt.created_at).split("T")[0]}</dd>
+                              </dl>
+                            </div>
+                          </div>
+                          <div className="col-12 col-lg-4">
+                            <div className="border rounded-2 p-3 h-100 bg-white">
+                              <h3 className="h6 fw-semibold mb-3">Source</h3>
+                              <dl className="row small mb-0 gy-2">
+                                <dt className="col-5 text-secondary">Store</dt>
+                                <dd className="col-7 mb-0">{lookupLabel("stores", detailReceipt.store_id)}</dd>
+                                <dt className="col-5 text-secondary">Department</dt>
+                                <dd className="col-7 mb-0">{lookupLabel("departments", detailReceipt.department_id)}</dd>
+                                <dt className="col-5 text-secondary">Supplier</dt>
+                                <dd className="col-7 mb-0">{lookupLabel("suppliers", detailReceipt.supplier_id)}</dd>
+                                <dt className="col-5 text-secondary">Funding</dt>
+                                <dd className="col-7 mb-0">{lookupLabel("funding-sources", detailReceipt.funding_source_id)}</dd>
+                                <dt className="col-5 text-secondary">Project</dt>
+                                <dd className="col-7 mb-0">{lookupLabel("research-projects", detailReceipt.project_id)}</dd>
+                              </dl>
+                            </div>
+                          </div>
+                          <div className="col-12 col-lg-4">
+                            <div className="border rounded-2 p-3 h-100 bg-white">
+                              <h3 className="h6 fw-semibold mb-3">References</h3>
+                              <dl className="row small mb-0 gy-2">
+                                <dt className="col-5 text-secondary">PO Reference</dt>
+                                <dd className="col-7 mb-0">{detailReceipt.po_reference || "-"}</dd>
+                                <dt className="col-5 text-secondary">Invoice No</dt>
+                                <dd className="col-7 mb-0">{detailReceipt.invoice_no || "-"}</dd>
+                                <dt className="col-5 text-secondary">Challan No</dt>
+                                <dd className="col-7 mb-0">{detailReceipt.challan_no || "-"}</dd>
+                                <dt className="col-5 text-secondary">Approval Ref</dt>
+                                <dd className="col-7 mb-0">{detailReceipt.manual_approval_ref || "-"}</dd>
+                                <dt className="col-5 text-secondary">Approved By</dt>
+                                <dd className="col-7 mb-0">{detailReceipt.manual_approved_by || "-"}</dd>
+                                <dt className="col-5 text-secondary">Approval Date</dt>
+                                <dd className="col-7 mb-0">{detailReceipt.manual_approval_date || "-"}</dd>
+                              </dl>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="border rounded-2 p-3 bg-white mb-3">
+                          <h3 className="h6 fw-semibold mb-2">Remarks</h3>
+                          <p className="mb-0 text-secondary">{detailReceipt.remarks || "No remarks recorded."}</p>
+                        </div>
+
+                        <div className="border rounded-2 p-3 bg-white mb-3">
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <h3 className="h6 fw-semibold mb-0">Documents</h3>
+                            <span className="small text-secondary">{detailDocuments.length} file{detailDocuments.length === 1 ? "" : "s"}</span>
+                          </div>
+                          {detailDocuments.length ? (
+                            <div className="table-responsive">
+                              <table className="table table-sm align-middle mb-0">
+                                <thead>
+                                  <tr>
+                                    <th>Type</th>
+                                    <th>File</th>
+                                    <th>Size</th>
+                                    <th className="text-end">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {detailDocuments.map((documentRow) => (
+                                    <tr key={documentRow.id}>
+                                      <td>{formatDocumentType(documentRow.document_type)}</td>
+                                      <td>{documentRow.original_file_name}</td>
+                                      <td>{formatBytes(Number(documentRow.file_size ?? 0))}</td>
+                                      <td className="text-end">
+                                        <button
+                                          className="btn btn-sm btn-outline-primary"
+                                          type="button"
+                                          disabled={downloadingDocumentId === documentRow.id}
+                                          onClick={() => downloadDetailDocument(documentRow)}
+                                        >
+                                          <i className="bi bi-download me-1" />
+                                          {downloadingDocumentId === documentRow.id ? "Downloading" : "Download"}
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="mb-0 text-secondary">No documents attached.</p>
+                          )}
+                        </div>
+
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <h3 className="h6 fw-semibold mb-0">Item Lines</h3>
+                          <span className="small text-secondary">{detailItems.length} row{detailItems.length === 1 ? "" : "s"}</span>
+                        </div>
+                        <DataTable columns={detailItemColumns} rows={detailItems} empty="No item rows returned by backend." />
+                      </>
+                    ) : (
+                      <EmptyState icon="bi-receipt" title="GRN detail unavailable" message="Receipt details could not be loaded." />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-backdrop fade show" />
+          </>
+        ) : null}
+
         <section className="col-12">
           <div className="card border-0 shadow-sm mb-3">
             <div className="card-body">
@@ -3465,6 +3725,9 @@ export default function InventoryReceiptsPage() {
                           className: "text-end",
                           render: (row) => (
                             <div className="btn-group btn-group-sm">
+                              <button className="btn btn-outline-secondary" type="button" onClick={() => void openDetailDialog(row)} title="View GRN detail">
+                                <i className="bi bi-eye" />
+                              </button>
                               <button
                                 className="btn btn-outline-primary"
                                 type="button"
