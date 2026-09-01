@@ -1825,11 +1825,6 @@ export default function InventoryReceiptsPage() {
 
     const isEditingReceipt = editingReceiptId !== null;
 
-    if (!isEditingReceipt && form.post_now && attachmentFiles.length === 0) {
-      setError("Please add at least one supporting document before posting this receipt.");
-      return;
-    }
-
     const payload: Record<string, unknown> = {
       receipt_type: form.receipt_type,
       supplier_id: form.supplier_id ? Number(form.supplier_id) : null,
@@ -3501,7 +3496,7 @@ export default function InventoryReceiptsPage() {
                                 <>
                                   <label
                                     className={`btn btn-outline-secondary ${uploadingAttachmentId === row.id ? "disabled" : ""}`}
-                                    title="Attach supporting document required before posting"
+                                    title="Attach supporting document"
                                   >
                                     <i className="bi bi-paperclip me-1" />
                                     {uploadingAttachmentId === row.id ? "Attaching" : "Attach"}
