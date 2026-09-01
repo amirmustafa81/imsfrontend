@@ -57,6 +57,13 @@ type TransactionItem = {
   quantity: number;
   unit_cost: number | null;
   remarks: string | null;
+  base_uom_id?: number | null;
+  base_uom_code?: string | null;
+  base_uom_name?: string | null;
+  issue_uom_id?: number | null;
+  issue_uom_code?: string | null;
+  issue_uom_name?: string | null;
+  qty_per_issue_unit?: number | null;
 };
 
 type StockSourceRow = {
@@ -176,9 +183,9 @@ export default function TransactionDetailPage() {
     (item: TransactionItem) => {
       const baseQuantity = Number(item.quantity ?? 0);
       const stockSource = matchingStockRowForItem(String(item.item_id));
-      const baseCode = String(stockSource?.base_uom_code ?? stockSource?.base_uom_name ?? "").trim();
-      const packageCode = String(stockSource?.last_receipt_uom_code ?? stockSource?.last_receipt_uom_name ?? "").trim();
-      const qtyPer = Number(stockSource?.last_qty_per_receipt_unit ?? 0);
+      const baseCode = String(item.base_uom_code ?? item.base_uom_name ?? stockSource?.base_uom_code ?? stockSource?.base_uom_name ?? "").trim();
+      const packageCode = String(item.issue_uom_code ?? item.issue_uom_name ?? stockSource?.last_receipt_uom_code ?? stockSource?.last_receipt_uom_name ?? "").trim();
+      const qtyPer = Number(item.qty_per_issue_unit ?? stockSource?.last_qty_per_receipt_unit ?? 0);
 
       if (packageCode && baseCode && packageCode !== baseCode && Number.isFinite(qtyPer) && qtyPer > 0 && baseQuantity > 0) {
         const shouldShowBaseCode = baseCode.toUpperCase() !== "EACH";
@@ -210,9 +217,9 @@ export default function TransactionDetailPage() {
     (item: TransactionItem) => {
       const baseQuantity = Number(item.quantity ?? 0);
       const stockSource = matchingStockRowForItem(String(item.item_id));
-      const baseCode = String(stockSource?.base_uom_code ?? stockSource?.base_uom_name ?? "").trim();
-      const packageCode = String(stockSource?.last_receipt_uom_code ?? stockSource?.last_receipt_uom_name ?? "").trim();
-      const qtyPer = Number(stockSource?.last_qty_per_receipt_unit ?? 0);
+      const baseCode = String(item.base_uom_code ?? item.base_uom_name ?? stockSource?.base_uom_code ?? stockSource?.base_uom_name ?? "").trim();
+      const packageCode = String(item.issue_uom_code ?? item.issue_uom_name ?? stockSource?.last_receipt_uom_code ?? stockSource?.last_receipt_uom_name ?? "").trim();
+      const qtyPer = Number(item.qty_per_issue_unit ?? stockSource?.last_qty_per_receipt_unit ?? 0);
 
       if (packageCode && baseCode && packageCode !== baseCode && Number.isFinite(qtyPer) && qtyPer > 0 && baseQuantity > 0) {
         const baseSuffix = baseCode.toUpperCase() === "EACH" ? "" : ` ${baseCode}`;

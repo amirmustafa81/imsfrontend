@@ -132,6 +132,13 @@ type TransactionItem = {
   quantity: number;
   unit_cost: number | null;
   remarks: string | null;
+  base_uom_id?: number | null;
+  base_uom_code?: string | null;
+  base_uom_name?: string | null;
+  issue_uom_id?: number | null;
+  issue_uom_code?: string | null;
+  issue_uom_name?: string | null;
+  qty_per_issue_unit?: number | null;
   item_label?: string | null;
   asset_label?: string | null;
   printable_tag_id?: string | null;
@@ -1203,13 +1210,15 @@ function IssuesReturnsContent() {
     const stockSource = transaction
       ? matchingStockRowFromRows(stockRowsForItem(itemId), stockMatchScopeFromTransaction(transaction))
       : matchingStockRowForItem(itemId);
-    const baseCode = String(stockSource?.base_uom_code ?? stockSource?.base_uom_name ?? baseUomCodeForItem(itemId) ?? "").trim();
+    const baseCode = String(item.base_uom_code ?? item.base_uom_name ?? stockSource?.base_uom_code ?? stockSource?.base_uom_name ?? baseUomCodeForItem(itemId) ?? "").trim();
     const packageCode = String(
-      stockSource?.last_receipt_uom_code ??
+      item.issue_uom_code ??
+        item.issue_uom_name ??
+        stockSource?.last_receipt_uom_code ??
         stockSource?.last_receipt_uom_name ??
-        (stockSource?.last_receipt_uom_id ? unitCodeById(stockSource.last_receipt_uom_id) : ""),
+        (item.issue_uom_id ? unitCodeById(item.issue_uom_id) : stockSource?.last_receipt_uom_id ? unitCodeById(stockSource.last_receipt_uom_id) : ""),
     ).trim();
-    const qtyPer = Number(stockSource?.last_qty_per_receipt_unit ?? 0);
+    const qtyPer = Number(item.qty_per_issue_unit ?? stockSource?.last_qty_per_receipt_unit ?? 0);
 
     if (packageCode && baseCode && packageCode !== baseCode && Number.isFinite(qtyPer) && qtyPer > 0 && baseQuantity > 0) {
       const shouldShowBaseCode = baseCode.toUpperCase() !== "EACH";
