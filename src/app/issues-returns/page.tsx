@@ -2106,6 +2106,7 @@ function IssuesReturnsContent() {
           { label: "Posted At", value: transaction.posted_at },
         ],
         columns: [
+          { header: "Sr.#", render: (_item, index) => index + 1 },
           { header: "Item", render: (item) => item.item_label ?? lookupLabel("items", item.item_id) },
           { header: "Asset", render: (item) => item.asset_label ?? (item.asset_id ? `#${item.asset_id}` : "-") },
           { header: "Quantity", render: (item) => transactionQuantityPrintLabel(transaction, item, sourceRowsByItemId) },

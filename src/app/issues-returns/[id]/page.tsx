@@ -333,6 +333,7 @@ export default function TransactionDetailPage() {
         { label: "Posted At", value: toDate(transaction.posted_at) },
       ],
       columns: [
+        { header: "Sr.#", render: (_row, index) => index + 1 },
         { header: "Item", render: (row) => lookupLabel("items", row.item_id) },
         { header: "Quantity", render: (row) => transactionQuantityPrintLabel(row) },
         { header: "Remarks", render: (row) => row.remarks },
