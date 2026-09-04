@@ -60,13 +60,15 @@ const buildPrintHtml = <T,>({
     )
     .join("");
 
-  const tableHead = columns.map((column) => `<th>${escapeHtml(column.header)}</th>`).join("");
+  const columnStyle = (column: PrintColumn<T>): string =>
+    column.header === "Sr.#" ? ' style="width: 42px;"' : "";
+  const tableHead = columns.map((column) => `<th${columnStyle(column)}>${escapeHtml(column.header)}</th>`).join("");
   const tableBody = rows.length
     ? rows
         .map(
           (row, rowIndex) => `
             <tr>
-              ${columns.map((column) => `<td>${escapeHtml(displayValue(column.render(row, rowIndex)))}</td>`).join("")}
+              ${columns.map((column) => `<td${columnStyle(column)}>${escapeHtml(displayValue(column.render(row, rowIndex)))}</td>`).join("")}
             </tr>
           `,
         )
