@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import QRCode from "qrcode";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
@@ -10,6 +10,7 @@ import {
   FileAttachmentList,
   FilterBar,
   PageHeader,
+  PaginationControls,
   SearchableSelect,
   StatusBadge,
   type SearchableSelectOption,
@@ -19,6 +20,8 @@ type ReportType =
   | "controlled_stationery_batches"
   | "controlled_stationery_serials"
   | "controlled_stationery_movements"
+  | "old_stock_issue_history"
+  | "old_stock_cleanup"
   | "fixed_assets"
   | "stock_balance"
   | "low_stock"
@@ -67,7 +70,7 @@ type LookupKey =
 
 type RowData = {
   id: number;
-  [key: string]: string | number | null | undefined | Date;
+  [key: string]: string | number | string[] | null | undefined | Date;
 };
 
 type ReportFilters = Record<FilterKey, string>;
@@ -89,19 +92,194 @@ type FilterSelectOption = {
   label: string;
 };
 
+type TagPrintPreview = {
+  assetId: string;
+  assetCode: string;
+  printableTag: string;
+  serialNumber: string;
+  location: string;
+};
+
+type OldStockCleanupForm = {
+  item_id: string;
+  department_id: string;
+  building_id: string;
+  room_id: string;
+  recipient_user_id: string;
+  issue_date: string;
+  issue_no: string;
+  requisition_no: string;
+  receipt_reference: string;
+  legacy_received_by: string;
+  remarks: string;
+};
+
 const REPORT_EXPORT_ENDPOINT = "/reports/export";
 
-const buildReportTagPrintUrl = (row: RowData): string | null => {
+const textValue = (value: unknown): string => {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+};
+
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+
+const svgToDataUrl = (svgMarkup: string) => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgMarkup)}`;
+
+const tagRowKey = (row: RowData) => String(row.id);
+
+const buildReportTagPrintPreview = (row: RowData): TagPrintPreview | null => {
   const assetRecordId = row.asset_record_id;
-  const printableTag = String(row.printable_tag_id ?? "");
+  const printableTag = textValue(row.printable_tag_id);
 
   if (!assetRecordId || !printableTag) {
     return null;
   }
 
-  const assetCode = String(row.asset_tag ?? "");
+  const buildingRoom = [row.building_name, row.room_name].map(textValue).filter(Boolean).join(" / ");
+  const department = textValue(row.department_name) || textValue(row.department_code);
 
-  return `/tag-print-log?asset_id=${assetRecordId}&asset_code=${encodeURIComponent(assetCode)}&suggested_tag=${encodeURIComponent(printableTag)}`;
+  return {
+    assetId: String(assetRecordId),
+    assetCode: textValue(row.asset_tag),
+    printableTag,
+    serialNumber: textValue(row.serial_number) || "No serial recorded",
+    location: buildingRoom || department || "No location recorded",
+  };
+};
+
+const buildTagQrPayload = (preview: TagPrintPreview) => {
+  if (typeof window === "undefined") return preview.printableTag;
+  return new URL(`/assets/${preview.assetId}`, window.location.origin).toString();
+};
+
+const generateQrDataUrl = async (value: string): Promise<string> => {
+  try {
+    return await QRCode.toDataURL(value, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      scale: 8,
+      color: {
+        dark: "#20242a",
+        light: "#ffffff",
+      },
+    });
+  } catch {
+    const svgMarkup = await QRCode.toString(value, {
+      type: "svg",
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 192,
+      color: {
+        dark: "#20242a",
+        light: "#ffffff",
+      },
+    });
+
+    return svgToDataUrl(svgMarkup);
+  }
+};
+
+const buildPrintableTagHtml = (tags: Array<TagPrintPreview & { qrDataUrl: string }>) => {
+  const labels = tags.map((tag) => {
+    const qrImageMarkup = tag.qrDataUrl
+      ? `<img src="${escapeHtml(tag.qrDataUrl)}" alt="QR code for ${escapeHtml(tag.printableTag)}" />`
+      : `<span class="unavailable">QR unavailable</span>`;
+
+    return `
+      <div class="label">
+        <div class="qr">${qrImageMarkup}</div>
+        <div class="text">
+          <div class="tag">${escapeHtml(tag.printableTag)}</div>
+          <div class="meta">${escapeHtml(tag.assetCode || "No asset selected")}</div>
+          <div class="meta">${escapeHtml(tag.serialNumber)}</div>
+          <div class="meta">${escapeHtml(tag.location)}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <title>IMS tag print</title>
+        <style>
+          @page { size: A4; margin: 8mm; }
+          * { box-sizing: border-box; }
+          html, body {
+            margin: 0;
+            background: #fff;
+            color: #20242a;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+          .sheet {
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            align-items: flex-start;
+            justify-content: flex-start;
+            gap: 4mm;
+          }
+          .label {
+            width: 80mm;
+            height: 50mm;
+            padding: 7mm;
+            display: flex;
+            align-items: center;
+            gap: 5mm;
+            border: 1px solid #20242a;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          .qr {
+            width: 24mm;
+            height: 24mm;
+            flex: 0 0 24mm;
+            border: 1px solid #dfe3ea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .qr img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          }
+          .text {
+            min-width: 0;
+            flex: 1;
+            line-height: 1.25;
+          }
+          .tag {
+            font-size: 11pt;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+          }
+          .meta {
+            margin-top: 2mm;
+            color: #4f5865;
+            font-size: 8.4pt;
+            overflow-wrap: anywhere;
+          }
+          .unavailable {
+            color: #9a1f2b;
+            font-size: 7pt;
+            text-align: center;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="sheet">${labels}</div>
+      </body>
+    </html>
+  `;
 };
 
 type ReportConfig = {
@@ -318,6 +496,65 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       movementTypeFilter: { field: "movement_type", options: controlledMovementOptions },
     },
   },
+  old_stock_issue_history: {
+    title: "Old Stock Issue History",
+    subtitle: "Imported legacy issue rows with linked taggable assets where available.",
+    endpoint: "/reports/old-stock-issue-history",
+    columns: [
+      { key: "issue_date", label: "Issue Date" },
+      { key: "source_sheet", label: "Source Sheet" },
+      { key: "source_row_no", label: "Source Row" },
+      { key: "source_unit_no", label: "Unit" },
+      { key: "item_code", label: "Item Code" },
+      { key: "item_name", label: "Item" },
+      { key: "quantity_issued", label: "Qty" },
+      { key: "department_code", label: "Dept Code" },
+      { key: "department_name", label: "Department" },
+      { key: "recipient_name", label: "Received By" },
+      { key: "asset_tag", label: "Asset Tag" },
+      { key: "printable_tag_id", label: "Printable Tag" },
+      { key: "asset_status", label: "Asset Status" },
+      { key: "remarks", label: "Remarks" },
+    ],
+    filters: {
+      includeSearch: true,
+      includeDates: true,
+      includeDepartment: true,
+      includeItem: true,
+      includeBuilding: true,
+      includeRoom: true,
+    },
+  },
+  old_stock_cleanup: {
+    title: "Old Stock Cleanup",
+    subtitle: "Correct missing or ambiguous values in imported old stock records.",
+    endpoint: "/reports/old-stock-cleanup",
+    columns: [
+      { key: "cleanup_status", label: "Status" },
+      { key: "cleanup_issues", label: "Issues" },
+      { key: "issue_date", label: "Issue Date" },
+      { key: "source_sheet", label: "Source Sheet" },
+      { key: "source_row_no", label: "Source Row" },
+      { key: "source_unit_no", label: "Unit" },
+      { key: "item_code", label: "Item Code" },
+      { key: "item_name", label: "Item" },
+      { key: "department_name", label: "Department" },
+      { key: "building_name", label: "Building" },
+      { key: "room_name", label: "Room" },
+      { key: "recipient_name", label: "Received By" },
+      { key: "asset_tag", label: "Asset Tag" },
+      { key: "remarks", label: "Remarks" },
+      { key: "actions", label: "Actions" },
+    ],
+    filters: {
+      includeSearch: true,
+      includeDates: true,
+      includeDepartment: true,
+      includeItem: true,
+      includeBuilding: true,
+      includeRoom: true,
+    },
+  },
   fixed_assets: {
     title: "Fixed Asset Register",
     subtitle: "Asset master with capitalization, depreciation and custody details.",
@@ -373,6 +610,7 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       { key: "store_name", label: "Store" },
       { key: "project_code", label: "Project" },
       { key: "funding_source_code", label: "Funding Source" },
+      { key: "base_uom_code", label: "Base UOM" },
       { key: "minimum_stock_level", label: "Minimum Stock" },
       { key: "quantity_on_hand", label: "Quantity On Hand" },
       { key: "quantity_reserved", label: "Reserved" },
@@ -401,6 +639,7 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       { key: "department_name", label: "Department" },
       { key: "store_name", label: "Store" },
       { key: "project_code", label: "Project" },
+      { key: "base_uom_code", label: "Base UOM" },
       { key: "minimum_stock_level", label: "Minimum Stock" },
       { key: "quantity_on_hand", label: "Quantity On Hand" },
       { key: "quantity_reserved", label: "Reserved" },
@@ -430,12 +669,8 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       { key: "item_name", label: "Item Name" },
       { key: "category_name", label: "Category" },
       { key: "quantity", label: "Quantity" },
-      { key: "unit_cost", label: "Unit Cost" },
       { key: "from_department_name", label: "From Dept" },
       { key: "to_department_name", label: "To Dept" },
-      { key: "from_store_name", label: "From Store" },
-      { key: "to_store_name", label: "To Store" },
-      { key: "requested_by_name", label: "Requested By" },
       { key: "recipient_user_name", label: "Recipient" },
       { key: "project_code", label: "Project" },
       { key: "purpose", label: "Purpose" },
@@ -467,6 +702,7 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       { key: "item_name", label: "Item Name" },
       { key: "category_name", label: "Category" },
       { key: "quantity", label: "Quantity" },
+      { key: "base_uom_code", label: "Base UOM" },
       { key: "unit_cost", label: "Unit Cost" },
       { key: "from_department_name", label: "From Dept" },
       { key: "to_department_name", label: "To Dept" },
@@ -608,9 +844,14 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       { key: "item_code", label: "Item Code" },
       { key: "item_name", label: "Item Name" },
       { key: "quantity_received", label: "Received" },
+      { key: "receipt_uom_code", label: "Receipt UOM" },
+      { key: "qty_per_receipt_unit", label: "Qty Per Unit" },
       { key: "quantity_accepted", label: "Accepted" },
+      { key: "accepted_base_qty", label: "Stock Qty" },
+      { key: "base_uom_code", label: "Base UOM" },
       { key: "quantity_rejected", label: "Rejected" },
       { key: "unit_cost", label: "Unit Cost" },
+      { key: "base_unit_cost", label: "Base Unit Cost" },
       { key: "total_cost", label: "Total Cost" },
       { key: "batch_no", label: "Batch No" },
       { key: "expiry_date", label: "Expiry" },
@@ -649,6 +890,7 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       { key: "item_name", label: "Item Name" },
       { key: "category_name", label: "Category" },
       { key: "quantity", label: "Quantity" },
+      { key: "base_uom_code", label: "Base UOM" },
       { key: "unit_cost", label: "Unit Cost" },
       { key: "from_department_name", label: "From Dept" },
       { key: "to_department_name", label: "To Dept" },
@@ -791,6 +1033,26 @@ const toDisplayDate = (value: unknown): string => {
   return iso.includes("T") ? iso.split("T")[0] ?? "-" : iso;
 };
 
+const toInputDate = (value: unknown): string => {
+  if (!value) return "";
+  const iso = String(value);
+  return iso.includes("T") ? iso.split("T")[0] ?? "" : iso.slice(0, 10);
+};
+
+const oldStockCleanupFormFromRow = (row: RowData): OldStockCleanupForm => ({
+  item_id: textValue(row.item_id),
+  department_id: textValue(row.department_id),
+  building_id: textValue(row.building_id),
+  room_id: textValue(row.room_id),
+  recipient_user_id: textValue(row.recipient_user_id),
+  issue_date: toInputDate(row.issue_date),
+  issue_no: textValue(row.issue_no),
+  requisition_no: textValue(row.requisition_no),
+  receipt_reference: textValue(row.receipt_reference),
+  legacy_received_by: textValue(row.legacy_received_by),
+  remarks: textValue(row.remarks),
+});
+
 const boolText = (value: unknown): string => {
   if (value === true) return "Yes";
   if (value === false) return "No";
@@ -849,6 +1111,7 @@ export default function ReportsPage() {
     controlled_stationery_batches: { ...emptyFilters },
     controlled_stationery_serials: { ...emptyFilters },
     controlled_stationery_movements: { ...emptyFilters },
+    old_stock_issue_history: { ...emptyFilters },
     fixed_assets: { ...emptyFilters },
     stock_balance: { ...emptyFilters },
     low_stock: { ...emptyFilters },
@@ -861,17 +1124,47 @@ export default function ReportsPage() {
     consumable_issuance: { ...emptyFilters },
     disposal_writeoff: { ...emptyFilters },
     depreciation: { ...emptyFilters },
+    old_stock_cleanup: { ...emptyFilters },
   });
   const [rows, setRows] = useState<RowData[]>([]);
   const [exportArtifacts, setExportArtifacts] = useState<ExportArtifact[]>([]);
   const [message, setMessage] = useState("Load a report to begin.");
   const [error, setError] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [tagPreview, setTagPreview] = useState<TagPrintPreview | null>(null);
+  const [tagQrDataUrl, setTagQrDataUrl] = useState("");
+  const [selectedTagKeys, setSelectedTagKeys] = useState<string[]>([]);
+  const [printingTags, setPrintingTags] = useState(false);
+  const [editingCleanupRow, setEditingCleanupRow] = useState<RowData | null>(null);
+  const [cleanupForm, setCleanupForm] = useState<OldStockCleanupForm | null>(null);
+  const [savingCleanup, setSavingCleanup] = useState(false);
 
   const reportConfig = reportConfigs[activeReport];
   const currentFilters = filters[activeReport];
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(Math.max(page, 1), totalPages);
+  const paginatedRows = useMemo(
+    () => rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, pageSize, rows],
+  );
+
   const addExportArtifact = useCallback((artifact: ExportArtifact) => {
     setExportArtifacts((current) => [artifact, ...current].slice(0, 12));
   }, []);
+
+  const tagQrPayload = useMemo(() => {
+    if (!tagPreview) return "";
+    return buildTagQrPayload(tagPreview);
+  }, [tagPreview]);
+  const selectedTagPreviews = useMemo(
+    () => rows
+      .filter((row) => selectedTagKeys.includes(tagRowKey(row)))
+      .map(buildReportTagPrintPreview)
+      .filter((preview): preview is TagPrintPreview => Boolean(preview)),
+    [rows, selectedTagKeys],
+  );
 
   const lookupLabel = useCallback((rows: RowData[], value: unknown, fallback?: string) => {
     if (value === null || value === undefined || value === "") return fallback ?? "-";
@@ -916,19 +1209,36 @@ export default function ReportsPage() {
   const loadRows = useCallback(async () => {
     if (!authReady) return;
 
+    setReportLoading(true);
+    setError("");
+    setMessage(`Loading ${reportConfig.title}...`);
+
     try {
       const payload = buildFilterPayload(reportConfig, currentFilters);
       const response = await api.get(reportConfig.endpoint, { params: payload });
       const data = response.data?.data;
       setRows(Array.isArray(data) ? data : []);
+      setPage(1);
+      setSelectedTagKeys([]);
       setError("");
       setMessage(`${reportConfig.title} loaded`);
     } catch {
       setRows([]);
+      setPage(1);
+      setSelectedTagKeys([]);
       setMessage("");
       setError("Failed to load report. Verify token and endpoint availability.");
+    } finally {
+      setReportLoading(false);
     }
   }, [authReady, currentFilters, reportConfig]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -940,7 +1250,192 @@ export default function ReportsPage() {
     void loadLookups();
   }, [loadLookups]);
 
+  useEffect(() => {
+    const qrValue = tagQrPayload.trim();
+
+    if (!qrValue) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTagQrDataUrl("");
+      return;
+    }
+
+    let isMounted = true;
+    generateQrDataUrl(qrValue)
+      .then((dataUrl) => {
+        if (isMounted) setTagQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (isMounted) setTagQrDataUrl("");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tagQrPayload]);
+
+  const openTagPreview = useCallback((row: RowData) => {
+    const preview = buildReportTagPrintPreview(row);
+
+    if (!preview) {
+      setError("No printable tag is available for this row.");
+      return;
+    }
+
+    setTagPreview(preview);
+    setError("");
+  }, []);
+
+  const toggleTagSelection = useCallback((row: RowData, selected: boolean) => {
+    const preview = buildReportTagPrintPreview(row);
+    const key = tagRowKey(row);
+
+    if (!preview) {
+      return;
+    }
+
+    setSelectedTagKeys((current) => {
+      if (selected) {
+        return current.includes(key) ? current : [...current, key];
+      }
+
+      return current.filter((currentKey) => currentKey !== key);
+    });
+  }, []);
+
+  const printTagPreviews = useCallback(async (previews: TagPrintPreview[]) => {
+    if (typeof window === "undefined" || previews.length === 0) return;
+
+    setPrintingTags(true);
+    setError("");
+
+    let printableTags: Array<TagPrintPreview & { qrDataUrl: string }>;
+    try {
+      printableTags = await Promise.all(
+        previews.map(async (preview) => ({
+          ...preview,
+          qrDataUrl: await generateQrDataUrl(buildTagQrPayload(preview)),
+        })),
+      );
+    } catch {
+      setPrintingTags(false);
+      setError("Unable to generate one or more tag QR codes.");
+      return;
+    }
+
+    const frame = document.createElement("iframe");
+    frame.setAttribute("title", "IMS report tag print");
+    frame.style.position = "fixed";
+    frame.style.right = "0";
+    frame.style.bottom = "0";
+    frame.style.width = "0";
+    frame.style.height = "0";
+    frame.style.border = "0";
+    document.body.appendChild(frame);
+
+    const frameWindow = frame.contentWindow;
+    const frameDocument = frameWindow?.document;
+    if (!frameWindow || !frameDocument) {
+      frame.remove();
+      setPrintingTags(false);
+      setError("Unable to prepare tag print preview.");
+      return;
+    }
+
+    frameDocument.open();
+    frameDocument.write(buildPrintableTagHtml(printableTags));
+    frameDocument.close();
+
+    frameWindow.onafterprint = () => {
+      frame.remove();
+      setPrintingTags(false);
+    };
+    window.setTimeout(() => {
+      frameWindow.focus();
+      frameWindow.print();
+      window.setTimeout(() => {
+        frame.remove();
+        setPrintingTags(false);
+      }, 1000);
+    }, 100);
+  }, []);
+
+  const printTagPreview = useCallback(() => {
+    if (!tagPreview) return;
+    void printTagPreviews([tagPreview]);
+  }, [printTagPreviews, tagPreview]);
+
+  const printSelectedTags = useCallback(() => {
+    if (selectedTagPreviews.length === 0) {
+      setError("Select at least one printable tag first.");
+      return;
+    }
+
+    void printTagPreviews(selectedTagPreviews);
+  }, [printTagPreviews, selectedTagPreviews]);
+
+  const openCleanupEdit = useCallback((row: RowData) => {
+    setEditingCleanupRow(row);
+    setCleanupForm(oldStockCleanupFormFromRow(row));
+    setError("");
+  }, []);
+
+  const setCleanupField = useCallback((field: keyof OldStockCleanupForm, value: string) => {
+    setCleanupForm((current) => current ? { ...current, [field]: value } : current);
+  }, []);
+
+  const closeCleanupEdit = useCallback(() => {
+    setEditingCleanupRow(null);
+    setCleanupForm(null);
+    setSavingCleanup(false);
+  }, []);
+
+  const saveCleanupEdit = useCallback(async () => {
+    if (!editingCleanupRow || !cleanupForm) return;
+
+    if (!cleanupForm.item_id || !cleanupForm.department_id) {
+      setError("Item and department are required before saving cleanup changes.");
+      return;
+    }
+
+    setSavingCleanup(true);
+    setError("");
+
+    try {
+      const payload = {
+        item_id: Number(cleanupForm.item_id),
+        department_id: Number(cleanupForm.department_id),
+        building_id: cleanupForm.building_id ? Number(cleanupForm.building_id) : null,
+        room_id: cleanupForm.room_id ? Number(cleanupForm.room_id) : null,
+        recipient_user_id: cleanupForm.recipient_user_id ? Number(cleanupForm.recipient_user_id) : null,
+        issue_date: cleanupForm.issue_date || null,
+        issue_no: cleanupForm.issue_no || null,
+        requisition_no: cleanupForm.requisition_no || null,
+        receipt_reference: cleanupForm.receipt_reference || null,
+        legacy_received_by: cleanupForm.legacy_received_by || null,
+        remarks: cleanupForm.remarks || null,
+      };
+      const response = await api.put(`/old-stock-issue-histories/${editingCleanupRow.id}`, payload);
+      const updatedRow = response.data?.data;
+
+      if (updatedRow) {
+        setRows((current) => current.map((row) => row.id === editingCleanupRow.id ? updatedRow : row));
+      }
+
+      setMessage("Old stock cleanup row updated.");
+      closeCleanupEdit();
+    } catch (errorResponse) {
+      const message = typeof errorResponse === "object" && errorResponse !== null && "response" in errorResponse
+        ? (errorResponse as { response?: { data?: { message?: string } } }).response?.data?.message
+        : null;
+      setError(message || "Unable to save cleanup changes.");
+    } finally {
+      setSavingCleanup(false);
+    }
+  }, [cleanupForm, closeCleanupEdit, editingCleanupRow]);
+
   const updateFilter = (key: FilterKey, value: string) => {
+    setPage(1);
+    setSelectedTagKeys([]);
     setFilters((current) => ({
       ...current,
       [activeReport]: {
@@ -951,6 +1446,8 @@ export default function ReportsPage() {
   };
 
   const resetFilters = () => {
+    setPage(1);
+    setSelectedTagKeys([]);
     setFilters((current) => ({
       ...current,
       [activeReport]: { ...emptyFilters },
@@ -1013,6 +1510,51 @@ export default function ReportsPage() {
   const renderBooleanCell = useCallback((value: unknown): string => {
     return value === undefined || value === null ? "-" : boolText(value);
   }, []);
+
+  const formatReportQuantity = useCallback((value: unknown): string => {
+    const quantity = Number(value ?? 0);
+    if (!Number.isFinite(quantity)) return "-";
+
+    return new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: 3,
+    }).format(quantity);
+  }, []);
+
+  const reportUnitCode = useCallback((value: unknown): string => String(value ?? "").trim(), []);
+
+  const renderReportQuantity = useCallback(
+    (row: RowData) => {
+      const baseQuantity = Number(row.quantity ?? 0);
+      const baseCode = reportUnitCode(row.base_uom_code || row.base_uom_name);
+      const packageCode = reportUnitCode(row.last_receipt_uom_code || row.last_receipt_uom_name);
+      const qtyPer = Number(row.last_qty_per_receipt_unit ?? 0);
+      const hasPackageConversion = packageCode && baseCode && packageCode !== baseCode && Number.isFinite(qtyPer) && qtyPer > 0;
+
+      if (hasPackageConversion && baseQuantity > 0) {
+        const shouldShowBaseCode = baseCode.toUpperCase() !== "EACH";
+
+        return (
+          <div className="stock-quantity-cell">
+            <span>
+              {formatReportQuantity(baseQuantity / qtyPer)} {packageCode}
+            </span>
+            <small>
+              {formatReportQuantity(baseQuantity)}
+              {shouldShowBaseCode ? ` ${baseCode}` : ""}
+            </small>
+          </div>
+        );
+      }
+
+      return (
+        <span>
+          {formatReportQuantity(baseQuantity)}
+          {baseCode ? ` ${baseCode}` : ""}
+        </span>
+      );
+    },
+    [formatReportQuantity, reportUnitCode],
+  );
 
   const renderCellValue = useCallback((columnKey: string, value: unknown): string => {
     if (value === null || value === undefined || value === "") {
@@ -1095,33 +1637,106 @@ export default function ReportsPage() {
   );
 
   const tableColumns = useMemo(
-    () =>
-      reportConfig.columns.map((column) => ({
+    () => {
+      const baseColumns = reportConfig.columns.map((column) => ({
         key: column.key,
         header: column.label,
         render: (row: RowData) => {
           const raw = row[column.key];
-          if (activeReport === "old_stock_issue_history" && column.key === "printable_tag_id") {
-            const tagPrintUrl = buildReportTagPrintUrl(row);
+          if (activeReport === "old_stock_cleanup") {
+            if (column.key === "cleanup_status") {
+              const status = String(raw ?? "Needs Review");
+              return (
+                <span className={`badge rounded-pill ${status === "Complete" ? "text-bg-success" : "text-bg-warning"}`}>
+                  {status}
+                </span>
+              );
+            }
 
-            if (!tagPrintUrl) {
+            if (column.key === "cleanup_issues") {
+              const issues = Array.isArray(raw) ? raw : [];
+
+              if (issues.length === 0) {
+                return <span className="badge rounded-pill text-bg-success">Complete</span>;
+              }
+
+              return (
+                <div className="d-flex flex-wrap gap-1">
+                  {issues.map((issue) => (
+                    <span className="badge rounded-pill text-bg-warning" key={issue}>
+                      {issue}
+                    </span>
+                  ))}
+                </div>
+              );
+            }
+
+            if (column.key === "actions") {
+              return (
+                <button className="btn btn-sm btn-outline-primary text-nowrap" type="button" onClick={() => openCleanupEdit(row)}>
+                  <i className="bi bi-pencil-square me-1" />
+                  Edit
+                </button>
+              );
+            }
+          }
+
+          if (activeReport === "old_stock_issue_history" && column.key === "printable_tag_id") {
+            const tagPrintPreview = buildReportTagPrintPreview(row);
+
+            if (!tagPrintPreview) {
               return "-";
             }
 
             return (
-              <Link className="btn btn-sm btn-outline-primary text-nowrap" href={tagPrintUrl}>
+              <button
+                className="btn btn-sm btn-outline-primary text-nowrap"
+                type="button"
+                onClick={() => openTagPreview(row)}
+              >
                 <i className="bi bi-qr-code me-1" />
                 {String(raw)}
-              </Link>
+              </button>
             );
+          }
+          if (activeReport === "issue_return" && column.key === "quantity") {
+            return renderReportQuantity(row);
           }
           if (column.key === "status") {
             return <StatusBadge status={toReportStatus(raw)} />;
           }
           return renderCellValue(column.key, raw);
         },
-      })),
-    [activeReport, reportConfig.columns, renderCellValue],
+      }));
+
+      if (activeReport !== "old_stock_issue_history") {
+        return baseColumns;
+      }
+
+      return [
+        {
+          key: "tag_select",
+          header: "Select",
+          render: (row: RowData) => {
+            const preview = buildReportTagPrintPreview(row);
+            const key = tagRowKey(row);
+
+            return (
+              <input
+                className="form-check-input"
+                type="checkbox"
+                aria-label={`Select ${preview?.printableTag ?? "tag"}`}
+                checked={selectedTagKeys.includes(key)}
+                disabled={!preview}
+                onChange={(event) => toggleTagSelection(row, event.target.checked)}
+              />
+            );
+          },
+        },
+        ...baseColumns,
+      ];
+    },
+    [activeReport, openCleanupEdit, openTagPreview, renderCellValue, renderReportQuantity, reportConfig.columns, selectedTagKeys, toggleTagSelection],
   );
 
   return (
@@ -1131,7 +1746,7 @@ export default function ReportsPage() {
           title="Reports"
           subtitle={reportConfig.subtitle}
           actions={
-            <div className="d-flex gap-2 align-items-end flex-wrap">
+            activeReport === "old_stock_cleanup" ? null : <div className="d-flex gap-2 align-items-end flex-wrap">
               <ExportButtons
                 name={`report-${activeReport}`}
                 onExportPdf={() => {
@@ -1153,8 +1768,12 @@ export default function ReportsPage() {
               key={reportKey}
               type="button"
               onClick={() => {
+                setRows([]);
+                setPage(1);
+                setSelectedTagKeys([]);
                 setActiveReport(reportKey);
                 setError("");
+                setMessage(`Loading ${reportConfigs[reportKey].title}...`);
               }}
             >
               <i className="bi bi-bar-chart-line me-1" />
@@ -1168,7 +1787,11 @@ export default function ReportsPage() {
             <i className="bi bi-graph-up me-2" />
             {reportConfig.title}
           </div>
-          {(message || error) && <small className={error ? "text-danger" : "text-success"}>{error || message}</small>}
+          {(message || error || reportLoading) && (
+            <small className={error ? "text-danger" : reportLoading ? "text-primary" : "text-success"}>
+              {error || (reportLoading ? `Loading ${reportConfig.title}...` : message)}
+            </small>
+          )}
         </div>
 
         <FilterBar onReset={resetFilters}>
@@ -1242,12 +1865,238 @@ export default function ReportsPage() {
 
         <div className="row g-3">
           <div className="col-12">
-            <DataTable columns={tableColumns} rows={rows} empty="No rows found." />
+            {reportLoading ? (
+              <div className="card shadow-sm">
+                <div className="card-body py-5 text-center text-secondary">
+                  <div className="spinner-border text-primary mb-3" role="status" aria-hidden="true" />
+                  <div className="fw-semibold">Loading report...</div>
+                  <div className="small">{reportConfig.title}</div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {activeReport === "old_stock_issue_history" ? (
+                  <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <div className="small text-secondary">
+                      {selectedTagPreviews.length.toLocaleString()} tag{selectedTagPreviews.length === 1 ? "" : "s"} selected
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button
+                        className="btn btn-sm btn-outline-secondary"
+                        type="button"
+                        disabled={selectedTagPreviews.length === 0 || printingTags}
+                        onClick={() => setSelectedTagKeys([])}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        type="button"
+                        disabled={selectedTagPreviews.length === 0 || printingTags}
+                        onClick={printSelectedTags}
+                      >
+                        <i className="bi bi-printer me-1" />
+                        {printingTags ? "Preparing..." : "Print Selected"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                <DataTable columns={tableColumns} rows={paginatedRows} empty="No rows found." />
+                <PaginationControls
+                  page={currentPage}
+                  pageSize={pageSize}
+                  totalItems={rows.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={(nextPageSize) => {
+                    setPageSize(nextPageSize);
+                    setPage(1);
+                  }}
+                />
+              </>
+            )}
           </div>
           <div className="col-12">
             <FileAttachmentList files={exportArtifacts} />
           </div>
         </div>
+
+        {editingCleanupRow && cleanupForm ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="old-stock-cleanup-title">
+              <div className="modal-dialog modal-lg modal-dialog-centered">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h2 className="modal-title h5" id="old-stock-cleanup-title">Edit Old Stock Record</h2>
+                    <button className="btn-close" type="button" aria-label="Close" onClick={closeCleanupEdit} />
+                  </div>
+                  <div className="modal-body">
+                    <div className="alert alert-light border small mb-3">
+                      <div><strong>Source:</strong> {String(editingCleanupRow.source_sheet ?? "-")} row {String(editingCleanupRow.source_row_no ?? "-")}</div>
+                      <div><strong>Asset:</strong> {String(editingCleanupRow.asset_tag ?? "-")}</div>
+                    </div>
+                    <div className="row g-3">
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Item</label>
+                        <select className="form-select form-select-sm" value={cleanupForm.item_id} onChange={(event) => setCleanupField("item_id", event.target.value)}>
+                          <option value="">Select item</option>
+                          {lookups.items.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {toLookupOption(lookups.items, item).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Department</label>
+                        <select className="form-select form-select-sm" value={cleanupForm.department_id} onChange={(event) => setCleanupField("department_id", event.target.value)}>
+                          <option value="">Select department</option>
+                          {lookups.departments.map((department) => (
+                            <option key={department.id} value={department.id}>
+                              {toLookupOption(lookups.departments, department).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Building</label>
+                        <select className="form-select form-select-sm" value={cleanupForm.building_id} onChange={(event) => setCleanupField("building_id", event.target.value)}>
+                          <option value="">No building</option>
+                          {lookups.buildings.map((building) => (
+                            <option key={building.id} value={building.id}>
+                              {toLookupOption(lookups.buildings, building, false).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Room</label>
+                        <select className="form-select form-select-sm" value={cleanupForm.room_id} onChange={(event) => setCleanupField("room_id", event.target.value)}>
+                          <option value="">No room</option>
+                          {lookups.rooms.map((room) => (
+                            <option key={room.id} value={room.id}>
+                              {toLookupOption(lookups.rooms, room, false).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Recipient User</label>
+                        <select className="form-select form-select-sm" value={cleanupForm.recipient_user_id} onChange={(event) => setCleanupField("recipient_user_id", event.target.value)}>
+                          <option value="">No mapped user</option>
+                          {lookups.users.map((user) => (
+                            <option key={user.id} value={user.id}>
+                              {toLookupOption(lookups.users, user, false).label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Legacy Received By</label>
+                        <input className="form-control form-control-sm" value={cleanupForm.legacy_received_by} onChange={(event) => setCleanupField("legacy_received_by", event.target.value)} />
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small">Issue Date</label>
+                        <input type="date" className="form-control form-control-sm" value={cleanupForm.issue_date} onChange={(event) => setCleanupField("issue_date", event.target.value)} />
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small">Issue No</label>
+                        <input className="form-control form-control-sm" value={cleanupForm.issue_no} onChange={(event) => setCleanupField("issue_no", event.target.value)} />
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small">Requisition No</label>
+                        <input className="form-control form-control-sm" value={cleanupForm.requisition_no} onChange={(event) => setCleanupField("requisition_no", event.target.value)} />
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small">Receipt Reference</label>
+                        <input className="form-control form-control-sm" value={cleanupForm.receipt_reference} onChange={(event) => setCleanupField("receipt_reference", event.target.value)} />
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label small">Remarks</label>
+                        <textarea className="form-control form-control-sm" rows={3} value={cleanupForm.remarks} onChange={(event) => setCleanupField("remarks", event.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button className="btn btn-outline-secondary" type="button" onClick={closeCleanupEdit} disabled={savingCleanup}>
+                      Close
+                    </button>
+                    <button className="btn btn-primary" type="button" onClick={() => void saveCleanupEdit()} disabled={savingCleanup}>
+                      {savingCleanup ? (
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                      ) : (
+                        <i className="bi bi-check2-circle me-1" />
+                      )}
+                      Save Cleanup
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-backdrop fade show" />
+          </>
+        ) : null}
+
+        {tagPreview ? (
+          <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="tag-print-preview-title">
+              <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h2 className="modal-title h5" id="tag-print-preview-title">Print Tag</h2>
+                    <button className="btn-close" type="button" aria-label="Close" onClick={() => setTagPreview(null)} />
+                  </div>
+                  <div className="modal-body">
+                    <div className="border rounded bg-light p-3">
+                      <div className="small text-secondary mb-2">Tag Preview</div>
+                      <div className="d-flex align-items-center gap-3">
+                        <div
+                          className="border bg-white d-flex align-items-center justify-content-center"
+                          style={{ width: 132, height: 132, flex: "0 0 132px" }}
+                        >
+                          {tagQrDataUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={tagQrDataUrl}
+                              alt={`QR code for ${tagPreview.printableTag}`}
+                              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                            />
+                          ) : (
+                            <span className="small text-secondary text-center">Generating QR...</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="fw-semibold text-break">{tagPreview.printableTag}</div>
+                          <div className="small text-secondary text-break">{tagPreview.assetCode || "No asset selected"}</div>
+                          <div className="small text-secondary text-break">{tagPreview.serialNumber}</div>
+                          <div className="small text-secondary text-break">{tagPreview.location}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button className="btn btn-outline-secondary" type="button" onClick={() => setTagPreview(null)}>
+                      Close
+                    </button>
+                    <button
+                      className="btn btn-outline-primary"
+                      type="button"
+                      disabled={selectedTagPreviews.length === 0 || printingTags}
+                      onClick={printSelectedTags}
+                    >
+                      <i className="bi bi-printer me-1" />
+                      {printingTags ? "Preparing..." : `Print Selected (${selectedTagPreviews.length})`}
+                    </button>
+                    <button className="btn btn-primary" type="button" disabled={!tagQrDataUrl || printingTags} onClick={printTagPreview}>
+                      <i className="bi bi-printer me-1" />
+                      {printingTags ? "Preparing..." : "Print This Tag"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-backdrop fade show" />
+          </>
+        ) : null}
       </div>
     </main>
   );

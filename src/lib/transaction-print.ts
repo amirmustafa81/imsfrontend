@@ -7,8 +7,6 @@ type PrintField = {
 
 type PrintColumn<T> = {
   header: string;
-  className?: string;
-  width?: string;
   render: (row: T, index: number) => PrintValue;
 };
 
@@ -62,21 +60,13 @@ const buildPrintHtml = <T,>({
     )
     .join("");
 
-  const columnAttributes = (column: PrintColumn<T>): string => {
-    const className = column.className ? ` class="${escapeHtml(column.className)}"` : "";
-    const style = column.width ? ` style="width: ${escapeHtml(column.width)}"` : "";
-    return `${className}${style}`;
-  };
-
-  const tableHead = columns.map((column) => `<th${columnAttributes(column)}>${escapeHtml(column.header)}</th>`).join("");
+  const tableHead = columns.map((column) => `<th>${escapeHtml(column.header)}</th>`).join("");
   const tableBody = rows.length
     ? rows
         .map(
           (row, rowIndex) => `
             <tr>
-              ${columns
-                .map((column) => `<td${columnAttributes(column)}>${escapeHtml(displayValue(column.render(row, rowIndex)))}</td>`)
-                .join("")}
+              ${columns.map((column) => `<td>${escapeHtml(displayValue(column.render(row, rowIndex)))}</td>`).join("")}
             </tr>
           `,
         )
@@ -190,10 +180,6 @@ const buildPrintHtml = <T,>({
           .empty {
             color: #6b7280;
             text-align: center;
-          }
-          .serial-column {
-            text-align: center;
-            white-space: nowrap;
           }
           .note {
             border-top: 1px solid #cbd5e1;

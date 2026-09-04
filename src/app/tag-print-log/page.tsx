@@ -84,6 +84,8 @@ const normalizePrintFormat = (format: string | null | undefined): NormalizedPrin
   return "QR";
 };
 
+const svgToDataUrl = (svgMarkup: string) => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgMarkup)}`;
+
 const relationLabel = (relation?: { code?: string | null; name?: string | null } | null, fallback?: string | null) =>
   relation?.name || relation?.code || fallback || "";
 
@@ -103,11 +105,39 @@ const assetLocationLabel = (asset: AssetOption | null) => {
 
 const mergeAssetOptions = (baseAssets: AssetOption[], extraAssets: AssetOption[]) => {
   const merged = new Map<number, AssetOption>();
-
   baseAssets.forEach((asset) => merged.set(asset.id, asset));
   extraAssets.forEach((asset) => merged.set(asset.id, asset));
-
   return Array.from(merged.values());
+};
+
+const MAX_ASSET_OPTIONS = 100;
+
+const createPrefillFallbackAsset = (
+  assetId: number,
+  assetCode: string,
+  suggestedTag: string,
+  location?: {
+    departmentCode?: string;
+    departmentName?: string;
+    buildingName?: string;
+    roomName?: string;
+  },
+): AssetOption | null => {
+  if (assetId <= 0) {
+    return null;
+  }
+
+  return {
+    id: assetId,
+    asset_id: assetCode || suggestedTag.replace(/^TAG-/, "") || `FA-${assetId}`,
+    serial_number: null,
+    printable_tag_id: suggestedTag || null,
+    department: location?.departmentCode || location?.departmentName
+      ? { code: location.departmentCode || null, name: location.departmentName || null }
+      : null,
+    building: location?.buildingName ? { name: location.buildingName } : null,
+    room: location?.roomName ? { name: location.roomName } : null,
+  };
 };
 
 export default function TagPrintLogPage() {
@@ -121,29 +151,63 @@ export default function TagPrintLogPage() {
 function TagPrintLogContent() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
+  const prefillAssetId = Number(searchParams.get("asset_id") ?? "");
+  const prefillAssetCode = searchParams.get("asset_code") || "";
+  const prefillSuggestedTag = searchParams.get("suggested_tag") || "";
+  const prefillDepartmentCode = searchParams.get("department_code") || "";
+  const prefillDepartmentName = searchParams.get("department_name") || "";
+  const prefillBuildingName = searchParams.get("building_name") || "";
+  const prefillRoomName = searchParams.get("room_name") || "";
+  const prefillLocation = useMemo(
+    () => ({
+      departmentCode: prefillDepartmentCode,
+      departmentName: prefillDepartmentName,
+      buildingName: prefillBuildingName,
+      roomName: prefillRoomName,
+    }),
+    [prefillBuildingName, prefillDepartmentCode, prefillDepartmentName, prefillRoomName],
+  );
+  const prefillFallbackAsset = useMemo(
+    () => createPrefillFallbackAsset(prefillAssetId, prefillAssetCode, prefillSuggestedTag, prefillLocation),
+    [prefillAssetCode, prefillAssetId, prefillLocation, prefillSuggestedTag],
+  );
 
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const [rows, setRows] = useState<TagPrintLog[]>([]);
   const [search, setSearch] = useState("");
+  const [assetSearch, setAssetSearch] = useState("");
   const [assetFilterId, setAssetFilterId] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [savingLog, setSavingLog] = useState(false);
+  const [deletingLogId, setDeletingLogId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [form, setForm] = useState<TagPrintForm>({
-    asset_id: "",
-    printable_tag_id: "",
+    asset_id: prefillAssetId > 0 ? String(prefillAssetId) : "",
+    printable_tag_id: prefillSuggestedTag,
     print_format: "",
-    remarks: "",
+    remarks: prefillAssetCode ? `Tag print entry for ${prefillAssetCode}` : "",
   });
   const [message, setMessage] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState("");
 
-  const prefillAssetId = useMemo(() => Number(searchParams.get("asset_id") ?? ""), [searchParams]);
-  const prefillAssetCode = searchParams.get("asset_code") || "";
-  const prefillSuggestedTag = searchParams.get("suggested_tag") || "";
   const selectedAsset = useMemo(
-    () => assets.find((asset) => String(asset.id) === form.asset_id) ?? null,
-    [assets, form.asset_id],
+    () =>
+      assets.find((asset) => String(asset.id) === form.asset_id) ??
+      (prefillFallbackAsset && form.asset_id === String(prefillFallbackAsset.id) ? prefillFallbackAsset : null),
+    [assets, form.asset_id, prefillFallbackAsset],
   );
+  const visibleAssets = useMemo(() => {
+    const sourceAssets = prefillFallbackAsset ? mergeAssetOptions(assets, [prefillFallbackAsset]) : assets;
+    const limitedAssets = sourceAssets.slice(0, MAX_ASSET_OPTIONS);
+
+    if (!form.asset_id || limitedAssets.some((asset) => String(asset.id) === form.asset_id)) {
+      return limitedAssets;
+    }
+
+    const selectedOption = sourceAssets.find((asset) => String(asset.id) === form.asset_id);
+    return selectedOption ? [...limitedAssets, selectedOption] : limitedAssets;
+  }, [assets, form.asset_id, prefillFallbackAsset]);
   const suggestedTag = useMemo(() => {
     if (!selectedAsset) return "";
     return `${selectedAsset.asset_id || `FA-${selectedAsset.id}`}-TAG`;
@@ -168,16 +232,21 @@ function TagPrintLogContent() {
         return loadedAssets;
       }
 
+      const fallbackAsset = createPrefillFallbackAsset(prefillAssetId, prefillAssetCode, prefillSuggestedTag, prefillLocation);
+
       const alreadyLoaded = loadedAssets.some((asset) => {
         if (prefillAssetId > 0 && asset.id === prefillAssetId) return true;
         if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
         if (prefillSuggestedTag && asset.printable_tag_id === prefillSuggestedTag) return true;
-
         return false;
       });
 
       if (alreadyLoaded) {
         return loadedAssets;
+      }
+
+      if (fallbackAsset && (prefillAssetCode || prefillSuggestedTag)) {
+        return mergeAssetOptions(loadedAssets, [fallbackAsset]);
       }
 
       try {
@@ -190,7 +259,7 @@ function TagPrintLogContent() {
           }
         }
       } catch {
-        // Fall through to search because some deployments may not expose asset detail to this view.
+        // Search fallback supports deployments where asset detail is not exposed to this page.
       }
 
       const searchValue = prefillAssetCode || prefillSuggestedTag || (prefillAssetId > 0 ? String(prefillAssetId) : "");
@@ -199,21 +268,32 @@ function TagPrintLogContent() {
         return loadedAssets;
       }
 
-      const searchResponse = await api.get<{ data: AssetOption[] }>("/assets", {
-        params: { search: searchValue },
-      });
-      const searchedAssets = searchResponse.data.data ?? [];
-      const matchedAsset = searchedAssets.find((asset) => {
-        if (prefillAssetId > 0 && asset.id === prefillAssetId) return true;
-        if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
-        if (prefillSuggestedTag && asset.printable_tag_id === prefillSuggestedTag) return true;
+      try {
+        const searchResponse = await api.get<{ data: AssetOption[] }>("/assets", {
+          params: { search: searchValue },
+        });
+        const searchedAssets = (searchResponse.data.data ?? []).slice(0, MAX_ASSET_OPTIONS);
+        const matchedAsset = searchedAssets.find((asset) => {
+          if (prefillAssetId > 0 && asset.id === prefillAssetId) return true;
+          if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
+          if (prefillSuggestedTag && asset.printable_tag_id === prefillSuggestedTag) return true;
+          return false;
+        });
 
-        return false;
-      });
+        if (matchedAsset) {
+          return mergeAssetOptions(loadedAssets, [matchedAsset]);
+        }
 
-      return mergeAssetOptions(loadedAssets, matchedAsset ? [matchedAsset] : searchedAssets);
+        if (searchedAssets.length > 0) {
+          return mergeAssetOptions(loadedAssets, searchedAssets);
+        }
+      } catch {
+        // The URL still contains enough legacy asset context to prefill the form.
+      }
+
+      return fallbackAsset ? mergeAssetOptions(loadedAssets, [fallbackAsset]) : loadedAssets;
     },
-    [prefillAssetCode, prefillAssetId, prefillSuggestedTag],
+    [prefillAssetCode, prefillAssetId, prefillLocation, prefillSuggestedTag],
   );
 
   const loadLookups = useCallback(async () => {
@@ -221,18 +301,62 @@ function TagPrintLogContent() {
       return;
     }
 
+    if (!prefillAssetId && !prefillAssetCode && !prefillSuggestedTag) {
+      setAssets([]);
+      return;
+    }
+
+    setLoadingAssets(true);
     try {
-      const response = await api.get<{ data: AssetOption[] }>("/assets");
-      const loadedAssets = response.data.data ?? [];
-      const assetsWithPrefill = await loadPrefillAsset(loadedAssets);
-      setAssets(assetsWithPrefill);
+      setAssets(await loadPrefillAsset([]));
     } catch {
       setError("Unable to load asset list for tagging.");
+    } finally {
+      setLoadingAssets(false);
     }
-  }, [authLoading, isAuthenticated, loadPrefillAsset]);
+  }, [authLoading, isAuthenticated, loadPrefillAsset, prefillAssetCode, prefillAssetId, prefillSuggestedTag]);
+
+  const searchAssetOptions = useCallback(async () => {
+    if (authLoading || !isAuthenticated) {
+      setError("Please log in before searching assets.");
+      return;
+    }
+
+    const query = assetSearch.trim();
+    if (!query) {
+      setError("Enter an asset code, tag, or serial number to search.");
+      return;
+    }
+
+    setLoadingAssets(true);
+    setError("");
+
+    try {
+      const response = await api.get<{ data: AssetOption[] }>("/assets", {
+        params: { search: query, per_page: MAX_ASSET_OPTIONS, limit: MAX_ASSET_OPTIONS },
+      });
+      const nextAssets = (response.data.data ?? []).slice(0, MAX_ASSET_OPTIONS);
+      setAssets((currentAssets) => mergeAssetOptions(currentAssets, nextAssets).slice(0, MAX_ASSET_OPTIONS));
+
+      if (nextAssets.length === 0) {
+        setError("No assets found for that search.");
+      }
+    } catch {
+      setError("Unable to search assets.");
+    } finally {
+      setLoadingAssets(false);
+    }
+  }, [assetSearch, authLoading, isAuthenticated]);
 
   const loadRows = useCallback(async () => {
     if (authLoading || !isAuthenticated) {
+      return;
+    }
+
+    const hasUrlPrefill = prefillAssetId > 0 || Boolean(prefillAssetCode) || Boolean(prefillSuggestedTag);
+    if (hasUrlPrefill && !search.trim()) {
+      setRows([]);
+      setLoading(false);
       return;
     }
 
@@ -240,14 +364,15 @@ function TagPrintLogContent() {
     setError("");
 
     try {
+      const effectiveAssetFilterId = assetFilterId || (prefillAssetId > 0 ? prefillAssetId : 0);
       const response = await api.get<{ data: TagPrintLog[] }>(
         "/asset-tag-print-logs",
         {
-          params: assetFilterId
-            ? { asset_id: assetFilterId }
+          params: effectiveAssetFilterId
+            ? { asset_id: effectiveAssetFilterId, per_page: 50 }
             : search.trim()
-              ? { searchable_tag_id: search.trim() }
-              : undefined,
+              ? { searchable_tag_id: search.trim(), per_page: 50 }
+              : { per_page: 50 },
         },
       );
       setRows(response.data.data ?? []);
@@ -257,21 +382,35 @@ function TagPrintLogContent() {
     } finally {
       setLoading(false);
     }
-  }, [assetFilterId, authLoading, isAuthenticated, search]);
+  }, [assetFilterId, authLoading, isAuthenticated, prefillAssetCode, prefillAssetId, prefillSuggestedTag, search]);
 
   const applyPrefillFromQuery = useCallback(() => {
     if (prefillAssetId > 0) {
-      const matchedAsset = assets.find((asset) => asset.id === prefillAssetId);
+      const matchedAsset = assets.find((asset) => {
+        if (asset.id === prefillAssetId) return true;
+        if (prefillAssetCode && asset.asset_id === prefillAssetCode) return true;
+        if (prefillSuggestedTag && asset.printable_tag_id === prefillSuggestedTag) return true;
+        return false;
+      });
 
       setForm((current) => {
-        const nextAssetId = matchedAsset?.id ? String(matchedAsset.id) : current.asset_id;
+        const nextAssetId = matchedAsset?.id ? String(matchedAsset.id) : String(prefillAssetId);
         const nextPrintableTagId = prefillSuggestedTag || current.printable_tag_id;
+        const nextRemarks = current.remarks || `Tag print entry for ${matchedAsset?.asset_id || prefillAssetCode || nextAssetId}`;
+
+        if (
+          current.asset_id === nextAssetId &&
+          current.printable_tag_id === nextPrintableTagId &&
+          current.remarks === nextRemarks
+        ) {
+          return current;
+        }
 
         return {
           ...current,
           asset_id: nextAssetId,
           printable_tag_id: nextPrintableTagId,
-          remarks: current.remarks || (matchedAsset ? `Tag print entry for ${matchedAsset.asset_id}` : current.remarks),
+          remarks: nextRemarks,
         };
       });
 
@@ -330,8 +469,23 @@ function TagPrintLogContent() {
       .then((dataUrl) => {
         if (isMounted) setQrDataUrl(dataUrl);
       })
-      .catch(() => {
-        if (isMounted) setQrDataUrl("");
+      .catch(async () => {
+        try {
+          const svgMarkup = await QRCode.toString(qrValue, {
+            type: "svg",
+            errorCorrectionLevel: "M",
+            margin: 2,
+            width: 192,
+            color: {
+              dark: "#20242a",
+              light: "#ffffff",
+            },
+          });
+
+          if (isMounted) setQrDataUrl(svgToDataUrl(svgMarkup));
+        } catch {
+          if (isMounted) setQrDataUrl("");
+        }
       });
 
     return () => {
@@ -562,7 +716,8 @@ function TagPrintLogContent() {
     setError("");
     setMessage("");
 
-    if (!assets.some((asset) => String(asset.id) === form.asset_id)) {
+    const isUrlPrefilledAsset = prefillAssetId > 0 && form.asset_id === String(prefillAssetId);
+    if (!assets.some((asset) => String(asset.id) === form.asset_id) && !isUrlPrefilledAsset) {
       setError("Please choose a valid asset before saving the print log.");
       return;
     }
@@ -573,6 +728,7 @@ function TagPrintLogContent() {
     }
 
     try {
+      setSavingLog(true);
       await api.post("/asset-tag-print-logs", form);
       await loadRows();
       setMessage("Tag print log saved.");
@@ -584,6 +740,8 @@ function TagPrintLogContent() {
       });
     } catch {
       setError("Unable to save tag print log. Verify required fields.");
+    } finally {
+      setSavingLog(false);
     }
   };
 
@@ -594,13 +752,19 @@ function TagPrintLogContent() {
     }
 
     try {
+      setDeletingLogId(logId);
       await api.delete(`/asset-tag-print-logs/${logId}`);
       await loadRows();
       setMessage("Tag print log removed.");
     } catch {
       setError("Unable to delete print log.");
+    } finally {
+      setDeletingLogId(null);
     }
   };
+
+  const isInitialLoading = authLoading || loadingAssets;
+  const isLogListLoading = isInitialLoading || loading;
 
   return (
     <main className="min-vh-100 bg-body-tertiary">
@@ -625,14 +789,44 @@ function TagPrintLogContent() {
                 <form className="row g-3" onSubmit={saveLog}>
                   <div className="col-12">
                     <FieldLabel className="mb-1" info={tagPrintFieldInfo.asset}>Asset</FieldLabel>
+                    <div className="input-group input-group-sm mb-2">
+                      <input
+                        className="form-control"
+                        value={assetSearch}
+                        onChange={(event) => setAssetSearch(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void searchAssetOptions();
+                          }
+                        }}
+                        placeholder="Search asset code, tag, or serial"
+                        disabled={isInitialLoading}
+                      />
+                      <button
+                        className="btn btn-outline-secondary"
+                        type="button"
+                        disabled={isInitialLoading || !assetSearch.trim()}
+                        onClick={() => void searchAssetOptions()}
+                      >
+                        Search
+                      </button>
+                    </div>
                     <select
                       className="form-select form-select-sm"
                       value={form.asset_id}
                       onChange={(event) => selectAsset(event.target.value)}
+                      disabled={isInitialLoading}
                       required
                     >
-                      <option value="">Choose asset</option>
-                      {assets.map((asset) => (
+                      <option value="">
+                        {isInitialLoading
+                          ? "Loading assets..."
+                          : visibleAssets.length > 0
+                            ? "Choose asset"
+                            : "Search asset to choose"}
+                      </option>
+                      {visibleAssets.map((asset) => (
                         <option key={asset.id} value={asset.id}>
                           {asset.asset_id} — {asset.serial_number || "No serial"}
                         </option>
@@ -731,11 +925,15 @@ function TagPrintLogContent() {
                     </div>
                   </div>
                   <div className="col-12">
-                    <button className="btn btn-sm btn-primary me-2" type="submit" disabled={!form.asset_id || !form.printable_tag_id}>
-                      <i className="bi bi-printer me-1" />
-                      Save Print Log
+                    <button className="btn btn-sm btn-primary me-2" type="submit" disabled={savingLog || !form.asset_id || !form.printable_tag_id}>
+                      {savingLog ? (
+                        <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
+                      ) : (
+                        <i className="bi bi-printer me-1" />
+                      )}
+                      {savingLog ? "Saving..." : "Save Print Log"}
                     </button>
-                    <button className="btn btn-sm btn-outline-primary" type="button" disabled={!form.asset_id || !form.printable_tag_id} onClick={printCurrentTag}>
+                    <button className="btn btn-sm btn-outline-primary" type="button" disabled={savingLog || !form.asset_id || !form.printable_tag_id} onClick={printCurrentTag}>
                       <i className="bi bi-printer-fill me-1" />
                       Print Tag
                     </button>
@@ -762,47 +960,65 @@ function TagPrintLogContent() {
             </FilterBar>
             {assetFilterId ? <div className="text-secondary small mb-2">Showing logs for selected asset ID: {assetFilterId}</div> : null}
 
-            <DataTable
-              columns={[
-                { key: "asset", header: "Asset", render: (row: TagPrintLog) => row.asset?.asset_id ?? "-" },
-                { key: "printable_tag_id", header: "Tag ID" },
-                { key: "print_format", header: "Format" },
-                { key: "printed_at", header: "Printed At" },
-                { key: "printed_by", header: "Printed By", render: (row: TagPrintLog) => row.printed_by?.name ?? "System" },
-                {
-                  key: "created_at",
-                  header: "Status",
-                  render: () => <StatusBadge status="Posted" />,
-                },
-                {
-                  key: "actions",
-                  header: "Actions",
-                  render: (row: TagPrintLog) => (
-                    <button
-                      className="btn btn-sm btn-outline-danger"
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void deleteLog(row.id);
-                      }}
-                    >
-                      <i className="bi bi-trash me-1" />
-                      Delete
-                    </button>
-                  ),
-                },
-              ]}
-              rows={rows}
-              empty="No print logs found."
-              rowClassName={() => "cursor-pointer"}
-              onRowClick={(row) => selectLogForPrinting(row)}
-            />
+            {isLogListLoading ? (
+              <div className="card border-0 shadow-sm">
+                <div className="card-body py-5 text-center text-secondary">
+                  <div className="spinner-border text-primary mb-3" role="status" aria-hidden="true" />
+                  <div className="fw-semibold">Loading tag print logs...</div>
+                  <div className="small">Fetching asset tag history and selected asset details.</div>
+                </div>
+              </div>
+            ) : (
+              <DataTable
+                columns={[
+                  { key: "asset", header: "Asset", render: (row: TagPrintLog) => row.asset?.asset_id ?? "-" },
+                  { key: "printable_tag_id", header: "Tag ID" },
+                  { key: "print_format", header: "Format" },
+                  { key: "printed_at", header: "Printed At" },
+                  { key: "printed_by", header: "Printed By", render: (row: TagPrintLog) => row.printed_by?.name ?? "System" },
+                  {
+                    key: "created_at",
+                    header: "Status",
+                    render: () => <StatusBadge status="Posted" />,
+                  },
+                  {
+                    key: "actions",
+                    header: "Actions",
+                    render: (row: TagPrintLog) => {
+                      const isDeleting = deletingLogId === row.id;
+
+                      return (
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void deleteLog(row.id);
+                          }}
+                        >
+                          {isDeleting ? (
+                            <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" />
+                          ) : (
+                            <i className="bi bi-trash me-1" />
+                          )}
+                          {isDeleting ? "Deleting..." : "Delete"}
+                        </button>
+                      );
+                    },
+                  },
+                ]}
+                rows={rows}
+                empty="No print logs found."
+                rowClassName={() => "cursor-pointer"}
+                onRowClick={(row) => selectLogForPrinting(row)}
+              />
+            )}
           </div>
         </div>
 
         {message ? <div className="alert alert-success mt-2">{message}</div> : null}
         {error ? <div className="alert alert-danger mt-2">{error}</div> : null}
-        {loading ? <span className="small text-secondary">Loading…</span> : null}
       </div>
     </main>
   );

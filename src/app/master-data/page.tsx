@@ -61,6 +61,28 @@ type RowData = {
 
 type FormState = Record<string, string | number | boolean | null>;
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
+const getApiErrorMessage = (error: unknown, fallback: string): string => {
+  const data = (error as { response?: { data?: unknown } }).response?.data;
+
+  if (isRecord(data)) {
+    if (typeof data.message === "string" && data.message.trim()) {
+      return data.message;
+    }
+
+    if (isRecord(data.errors)) {
+      const firstError = Object.values(data.errors).flat().find((message) => typeof message === "string");
+
+      if (typeof firstError === "string" && firstError.trim()) {
+        return firstError;
+      }
+    }
+  }
+
+  return fallback;
+};
+
 const resources: Record<ResourceKey, ResourceDef> = {
   faculties: {
     label: "Faculties",
@@ -689,8 +711,8 @@ export default function MasterDataPage() {
       setEditingId(null);
       setForm(initialFormFor(definition.fields));
       setDialogOpen(false);
-    } catch {
-      setError("Could not save record. Check required fields and values.");
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "Could not save record. Check required fields and values."));
     }
   };
 
@@ -925,9 +947,9 @@ export default function MasterDataPage() {
           }
         />
 
-        {(error || message || !authReady) && (
+        {((error && !dialogOpen) || message || !authReady) && (
           <div className="mb-3">
-            {error && <div className="alert alert-danger mb-0">{error}</div>}
+            {error && !dialogOpen ? <div className="alert alert-danger mb-0">{error}</div> : null}
             {message && <div className="alert alert-success mb-0">{message}</div>}
             {!authReady && (
               <div className="alert alert-warning mb-0">Please sign in before loading and editing master data.</div>
@@ -1047,6 +1069,7 @@ export default function MasterDataPage() {
                     <button className="btn-close" type="button" aria-label="Close" onClick={closeDialog} />
                   </div>
                   <div className="modal-body px-4 py-4">
+                    {error ? <div className="alert alert-danger py-2">{error}</div> : null}
                     <div className="row g-3">
                       {definition.fields.map((field) => (
                         <div

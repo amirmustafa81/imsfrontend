@@ -30,6 +30,7 @@ const importTypeOptions = [
   { value: "assets", label: "Assets" },
   { value: "stock", label: "Stock" },
   { value: "controlled_stationery", label: "Controlled Stationery" },
+  { value: "items", label: "Items" },
   { value: "faculties", label: "Faculties" },
   { value: "departments", label: "Departments" },
   { value: "designations", label: "Designations" },
@@ -37,6 +38,7 @@ const importTypeOptions = [
   { value: "buildings", label: "Buildings" },
   { value: "rooms", label: "Rooms" },
   { value: "room_holders", label: "Room Holders" },
+  { value: "old_stock_issue_history", label: "Old Stock Issue History" },
   { value: "locations", label: "Locations" },
   { value: "projects", label: "Projects" },
 ];
@@ -46,6 +48,7 @@ const templateTypeOptions = [
   { value: "stock", label: "Stock" },
   { value: "assets", label: "Assets" },
   { value: "controlled_stationery", label: "Controlled Stationery" },
+  { value: "items", label: "Items" },
   { value: "faculties", label: "Faculties" },
   { value: "departments", label: "Departments" },
   { value: "designations", label: "Designations" },
@@ -53,6 +56,7 @@ const templateTypeOptions = [
   { value: "buildings", label: "Buildings" },
   { value: "rooms", label: "Rooms" },
   { value: "room_holders", label: "Room Holders" },
+  { value: "old_stock_issue_history", label: "Old Stock Issue History" },
 ];
 
 export default function ImportPage() {

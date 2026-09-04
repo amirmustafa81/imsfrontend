@@ -503,52 +503,6 @@ body {
   overflow-wrap: anywhere;
 }
 
-.grn-items-grid {
-  max-height: 430px;
-  overflow: auto;
-}
-
-.grn-items-grid table {
-  min-width: 1320px;
-}
-
-.grn-items-grid thead th {
-  font-size: 0.78rem;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  white-space: nowrap;
-}
-
-.grn-items-grid td,
-.grn-items-grid th {
-  min-width: 112px;
-}
-
-.grn-items-grid .grn-row-number {
-  min-width: 44px;
-  width: 44px;
-}
-
-.grn-items-grid .grn-item-col {
-  min-width: 310px;
-  width: 310px;
-}
-
-.grn-items-grid .grn-description-col {
-  min-width: 210px;
-  width: 210px;
-}
-
-.grn-items-grid .form-control,
-.grn-items-grid .ims-search-select input {
-  min-height: 34px;
-}
-
-.grn-item-detail-row td {
-  background: #f8fbff;
-}
-
 button,
 a {
   transition:
