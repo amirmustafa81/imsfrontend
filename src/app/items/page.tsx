@@ -42,7 +42,6 @@ type Lookup = {
   code?: string;
   name?: string;
   parent_category_id?: number | string | null;
-  status?: string;
 };
 
 type LookupMap = {
@@ -131,8 +130,6 @@ const toLookupOption = (row: Lookup): SearchableSelectOption => ({
   keywords: `${row.code ?? ""} ${row.name ?? ""}`,
 });
 
-const isActiveLookup = (row: Lookup): boolean => (row.status ?? "").toLowerCase() !== "inactive";
-
 const toNumericString = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined || value === "") return "0";
 
@@ -180,7 +177,7 @@ const infoText = {
   itemType: "Controls how the item behaves, such as consumable stock, fixed asset, controlled stationery, project inventory, or license.",
   category: "Main classification used for reporting, coding, depreciation policy, and item grouping.",
   subcategory: "More specific classification under the selected category, used for consistent item and asset coding.",
-  unit: "Base stock unit used for stock balance, issue, return, and consumption quantities.",
+  unit: "Default measurement unit for receipt, stock balance, issue, return, and consumption quantities.",
   minimumStock: "Minimum quantity expected in stock. Reports use this to identify low-stock items.",
   capitalizable: "Enable when this item can become a fixed asset after purchase or registration.",
   sensitive: "Enable for controlled or sensitive items that need stronger tracking and accountability.",
@@ -203,8 +200,6 @@ export default function ItemsPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Load data to begin.");
@@ -301,14 +296,12 @@ export default function ItemsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, typeFilter, statusFilter, categoryFilter, subcategoryFilter]);
+  }, [search, typeFilter, statusFilter]);
 
   const resetFilters = () => {
     setSearch("");
     setTypeFilter("");
     setStatusFilter("");
-    setCategoryFilter("");
-    setSubcategoryFilter("");
   };
 
   const openCreateDialog = () => {
@@ -349,7 +342,7 @@ export default function ItemsPage() {
   };
 
   const parentCategories = useMemo(
-    () => lookups["asset-categories"].filter((category) => !category.parent_category_id && isActiveLookup(category)),
+    () => lookups["asset-categories"].filter((category) => !category.parent_category_id),
     [lookups],
   );
 
@@ -358,40 +351,14 @@ export default function ItemsPage() {
     [form.category_id, parentCategories],
   );
 
-  const selectedFilterCategory = useMemo(
-    () => parentCategories.find((category) => String(category.id) === categoryFilter),
-    [categoryFilter, parentCategories],
-  );
-
   const subcategoryOptions = useMemo(
-    () =>
-      selectedCategory
-        ? lookups["asset-categories"].filter(
-            (category) =>
-              String(category.parent_category_id ?? "") === String(selectedCategory.id) && isActiveLookup(category),
-          )
-        : [],
+    () => selectedCategory
+      ? lookups["asset-categories"].filter((category) => String(category.parent_category_id ?? "") === String(selectedCategory.id))
+      : [],
     [lookups, selectedCategory],
-  );
-  const filterSubcategoryOptions = useMemo(
-    () =>
-      lookups["asset-categories"].filter((category) => {
-        if (!category.parent_category_id || !isActiveLookup(category)) {
-          return false;
-        }
-
-        return selectedFilterCategory
-          ? String(category.parent_category_id) === String(selectedFilterCategory.id)
-          : true;
-      }),
-    [lookups, selectedFilterCategory],
   );
   const categorySelectOptions = useMemo(() => parentCategories.map(toLookupOption), [parentCategories]);
   const subcategorySelectOptions = useMemo(() => subcategoryOptions.map(toLookupOption), [subcategoryOptions]);
-  const filterSubcategorySelectOptions = useMemo(
-    () => filterSubcategoryOptions.map(toLookupOption),
-    [filterSubcategoryOptions],
-  );
   const unitSelectOptions = useMemo(() => lookups["units-of-measure"].map(toLookupOption), [lookups]);
   const activeItemTypeOptions = useMemo(
     () => itemTypeOptions.filter((option) => option.value) as SearchableSelectOption[],
@@ -449,11 +416,6 @@ export default function ItemsPage() {
       subcategory_id: "",
       attributes: {},
     }));
-  };
-
-  const selectCategoryFilter = (categoryId: string) => {
-    setCategoryFilter(categoryId);
-    setSubcategoryFilter("");
   };
 
   const reloadMasterLookup = async (endpoint: keyof LookupMap) => {
@@ -618,25 +580,12 @@ export default function ItemsPage() {
 
   const filteredRows = useMemo(() => {
     const normalizedType = typeFilter.trim();
-    const normalizedCategory = categoryFilter.trim();
-    const normalizedSubcategory = subcategoryFilter.trim();
+    if (!normalizedType) {
+      return rows;
+    }
 
-    return rows.filter((row) => {
-      if (normalizedType && row.item_type !== normalizedType) {
-        return false;
-      }
-
-      if (normalizedCategory && String(row.category_id ?? "") !== normalizedCategory) {
-        return false;
-      }
-
-      if (normalizedSubcategory && String(row.subcategory_id ?? "") !== normalizedSubcategory) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [categoryFilter, rows, subcategoryFilter, typeFilter]);
+    return rows.filter((row) => row.item_type === normalizedType);
+  }, [rows, typeFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -664,7 +613,7 @@ export default function ItemsPage() {
     },
     {
       key: "unit_id",
-      header: "Base UOM",
+      header: "UoM",
       render: (row: ItemRow) => formatLookup(lookups["units-of-measure"], row.unit_id),
     },
     {
@@ -831,7 +780,7 @@ export default function ItemsPage() {
         />
 
         <FilterBar onReset={resetFilters}>
-          <div className="col-12 col-lg-3">
+          <div className="col-12 col-lg-4">
             <label className="form-label fw-semibold">Search</label>
             <input
               className="form-control"
@@ -847,28 +796,6 @@ export default function ItemsPage() {
           <div className="col-12 col-lg-3">
             <label className="form-label fw-semibold">Status</label>
             <SearchableSelect id="item-filter-status" value={statusFilter} options={statusOptions} onChange={setStatusFilter} placeholder="Search status" />
-          </div>
-          <div className="col-12 col-lg-3">
-            <label className="form-label fw-semibold">Category</label>
-            <SearchableSelect
-              id="item-filter-category"
-              value={categoryFilter}
-              options={[{ value: "", label: "All categories" }, ...categorySelectOptions]}
-              onChange={selectCategoryFilter}
-              placeholder="Search category"
-              emptyLabel="No active categories configured."
-            />
-          </div>
-          <div className="col-12 col-lg-3">
-            <label className="form-label fw-semibold">Subcategory</label>
-            <SearchableSelect
-              id="item-filter-subcategory"
-              value={subcategoryFilter}
-              options={[{ value: "", label: "All subcategories" }, ...filterSubcategorySelectOptions]}
-              onChange={setSubcategoryFilter}
-              placeholder={categoryFilter ? "Search subcategory" : "All subcategories"}
-              emptyLabel="No active subcategories configured."
-            />
           </div>
         </FilterBar>
 
@@ -971,7 +898,7 @@ export default function ItemsPage() {
                       </div>
                       <div className="col-12 col-md-4">
                         <div className="d-flex align-items-start justify-content-between gap-2">
-                          <FieldLabel required info={infoText.unit}>Base UOM / Stock UOM</FieldLabel>
+                          <FieldLabel required info={infoText.unit}>Unit of Measure</FieldLabel>
                           <button className="btn btn-link btn-sm p-0 text-decoration-none" type="button" onClick={() => openQuickMasterDialog("unit")}>
                             <i className="bi bi-plus-circle me-1" />
                             New UoM
@@ -989,12 +916,12 @@ export default function ItemsPage() {
                         />
                       </div>
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Specification / Variant</label>
+                        <label className="form-label small">Model</label>
                         <input
                           className="form-control form-control-sm"
                           value={form.model}
                           onChange={(event) => setFormField("model", event.target.value)}
-                          placeholder="e.g. 500g, analytical grade, model/version"
+                          placeholder="e.g. Latitude 5440"
                         />
                       </div>
                       <div className="col-12 col-md-4">

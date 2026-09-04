@@ -41,13 +41,7 @@ type LookupKey = keyof LookupMap;
 
 type RowLookupKey = Exclude<LookupKey, "asset-attribute-definitions">;
 
-type QuickMasterResource =
-  | "departments"
-  | "stores"
-  | "suppliers"
-  | "funding-sources"
-  | "research-projects"
-  | "units-of-measure";
+type QuickMasterResource = "departments" | "stores" | "suppliers" | "funding-sources" | "research-projects";
 
 type SystemSetting = {
   setting_key: string;
@@ -82,17 +76,10 @@ type ReceiptItem = {
   item_id: number;
   description: string | null;
   quantity_received: number;
-  receipt_uom_id: number | null;
-  qty_per_receipt_unit: number;
-  base_uom_id: number | null;
-  calculated_base_qty: number | null;
   quantity_accepted: number;
-  accepted_base_qty: number | null;
   quantity_rejected: number;
-  rejected_base_qty: number | null;
   unit_cost: number | null;
   total_cost: number | null;
-  base_unit_cost: number | null;
   batch_no: string | null;
   expiry_date: string | null;
   inspection_status: string;
@@ -103,8 +90,6 @@ type ReceiptItemInput = {
   item_id: string;
   description: string;
   quantity_received: string;
-  receipt_uom_id: string;
-  qty_per_receipt_unit: string;
   quantity_accepted: string;
   quantity_rejected: string;
   unit_cost: string;
@@ -170,14 +155,6 @@ type PendingAttachment = {
   file: File;
   name: string;
   size: number;
-};
-
-type DocumentRow = {
-  id: number;
-  document_type: string;
-  original_file_name: string;
-  mime_type: string;
-  file_size: number;
 };
 
 const receiptTypes = [
@@ -253,16 +230,12 @@ const projectStatusOptions: SearchableSelectOption[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
-const quickMasterResourceMeta: Record<
-  QuickMasterResource,
-  { title: string; selectField?: keyof ReceiptForm; quickItemField?: keyof QuickItemForm }
-> = {
+const quickMasterResourceMeta: Record<QuickMasterResource, { title: string; selectField: keyof ReceiptForm }> = {
   departments: { title: "Department", selectField: "department_id" },
   stores: { title: "Store", selectField: "store_id" },
   suppliers: { title: "Supplier", selectField: "supplier_id" },
   "funding-sources": { title: "Funding Source", selectField: "funding_source_id" },
   "research-projects": { title: "Project", selectField: "project_id" },
-  "units-of-measure": { title: "Unit of Measure", quickItemField: "unit_id" },
 };
 
 const statusOptions: ReceiptStatus[] = [
@@ -320,29 +293,11 @@ const formatMoneyInput = (value: number) => {
   return fixed.replace(/\.?0+$/, "");
 };
 
-const formatDocumentType = (value: string) =>
-  value
-    .split(/[_\s-]+/)
-    .filter(Boolean)
-    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
-
 const totalCostFor = (acceptedValue: string, unitCostValue: string) => {
   const accepted = Number(acceptedValue || 0);
   const unitCost = Number(unitCostValue || 0);
   if (!Number.isFinite(accepted) || !Number.isFinite(unitCost) || accepted <= 0 || unitCost < 0) return "";
   return formatMoneyInput(accepted * unitCost);
-};
-
-const unitCostForTotal = (acceptedValue: string, receivedValue: string, totalCostValue: string) => {
-  const totalCost = Number(totalCostValue || 0);
-  const quantity = Number(acceptedValue || receivedValue || 0);
-
-  if (!Number.isFinite(totalCost) || !Number.isFinite(quantity) || totalCost < 0 || quantity <= 0) {
-    return "";
-  }
-
-  return formatMoneyInput(totalCost / quantity);
 };
 
 const itemOptionLabel = (row: RowData) =>
@@ -367,8 +322,6 @@ const emptyItem: ReceiptItemInput = {
   item_id: "",
   description: "",
   quantity_received: "",
-  receipt_uom_id: "",
-  qty_per_receipt_unit: "1",
   quantity_accepted: "",
   quantity_rejected: "",
   unit_cost: "",
@@ -383,8 +336,6 @@ const isReceiptItemEmpty = (item: ReceiptItemInput) =>
   !item.item_id &&
   !item.description.trim() &&
   !item.quantity_received &&
-  !item.receipt_uom_id &&
-  (!item.qty_per_receipt_unit || item.qty_per_receipt_unit === "1") &&
   !item.quantity_accepted &&
   !item.quantity_rejected &&
   !item.unit_cost &&
@@ -425,53 +376,6 @@ const createQuickItemForm = (): QuickItemForm => ({
   attributes: {},
   status: "active",
 });
-
-const quickItemDefaultsForCategory = (
-  category: RowData | null | undefined,
-): Pick<
-  QuickItemForm,
-  | "item_type"
-  | "is_capitalizable"
-  | "is_sensitive_controlled"
-  | "requires_serial_tracking"
-  | "requires_batch_tracking"
-  | "requires_expiry_tracking"
-> => {
-  const code = String(category?.code ?? "").trim().toUpperCase();
-  const name = String(category?.name ?? "").trim().toLowerCase();
-  const haystack = `${code} ${name}`;
-
-  if (code === "STR" || haystack.includes("station")) {
-    return {
-      item_type: "consumable",
-      is_capitalizable: false,
-      is_sensitive_controlled: false,
-      requires_serial_tracking: false,
-      requires_batch_tracking: false,
-      requires_expiry_tracking: false,
-    };
-  }
-
-  if (haystack.includes("controlled")) {
-    return {
-      item_type: "controlled_item",
-      is_capitalizable: false,
-      is_sensitive_controlled: true,
-      requires_serial_tracking: true,
-      requires_batch_tracking: false,
-      requires_expiry_tracking: false,
-    };
-  }
-
-  return {
-    item_type: "fixed_asset",
-    is_capitalizable: true,
-    is_sensitive_controlled: false,
-    requires_serial_tracking: false,
-    requires_batch_tracking: false,
-    requires_expiry_tracking: false,
-  };
-};
 
 const createQuickMasterForm = (resource: QuickMasterResource, receiptForm: ReceiptForm): QuickMasterForm => {
   if (resource === "departments") {
@@ -515,14 +419,6 @@ const createQuickMasterForm = (resource: QuickMasterResource, receiptForm: Recei
     };
   }
 
-  if (resource === "units-of-measure") {
-    return {
-      code: "",
-      name: "",
-      status: "active",
-    };
-  }
-
   return {
     project_code: "",
     title: "",
@@ -542,8 +438,6 @@ const toLookupOption = (row: RowData): SearchableSelectOption => ({
   label: `${row.code ?? ""}${row.code && row.name ? " - " : ""}${row.name ?? ""}`.trim() || `#${row.id}`,
   keywords: [row.code, row.name].filter(Boolean).join(" "),
 });
-
-const isActiveLookupRow = (row: RowData): boolean => String(row.status ?? "").toLowerCase() !== "inactive";
 
 const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 50 * 1024 * 1024;
@@ -570,28 +464,6 @@ const defaultForm: ReceiptForm = {
 };
 
 const toPayloadDate = (value: string): string | null => value.trim() ? value : null;
-
-const toInputDate = (value: string | null | undefined): string => {
-  if (!value) return "";
-  const raw = String(value);
-  return raw.includes("T") ? raw.split("T")[0] ?? "" : raw.slice(0, 10);
-};
-
-const receiptItemToInput = (item: ReceiptItem): ReceiptItemInput => ({
-  item_id: String(item.item_id ?? ""),
-  description: item.description ?? "",
-  quantity_received: formatQuantityInput(Number(item.quantity_received ?? 0)),
-  receipt_uom_id: item.receipt_uom_id ? String(item.receipt_uom_id) : item.base_uom_id ? String(item.base_uom_id) : "",
-  qty_per_receipt_unit: formatQuantityInput(Number(item.qty_per_receipt_unit ?? 1)),
-  quantity_accepted: formatQuantityInput(Number(item.quantity_accepted ?? 0)),
-  quantity_rejected: formatQuantityInput(Number(item.quantity_rejected ?? 0)),
-  unit_cost: item.unit_cost === null || item.unit_cost === undefined ? "" : formatMoneyInput(Number(item.unit_cost)),
-  total_cost: item.total_cost === null || item.total_cost === undefined ? "" : formatMoneyInput(Number(item.total_cost)),
-  batch_no: item.batch_no ?? "",
-  expiry_date: toInputDate(item.expiry_date),
-  inspection_status: item.inspection_status || "pending",
-  inspection_remarks: item.inspection_remarks ?? "",
-});
 
 const previewYearFromDate = (date: string): string => {
   const isoYear = date.match(/^(\d{4})-/)?.[1];
@@ -621,7 +493,6 @@ export default function InventoryReceiptsPage() {
     remarks: "",
   });
   const [items, setItems] = useState<ReceiptItemInput[]>([emptyItem]);
-  const [receiptDialogTab, setReceiptDialogTab] = useState<"header" | "items" | "documents" | "preview">("header");
   const [itemDetailsIndex, setItemDetailsIndex] = useState<number | null>(null);
   const [attachmentFiles, setAttachmentFiles] = useState<PendingAttachment[]>([]);
   const [message, setMessage] = useState("");
@@ -630,14 +501,6 @@ export default function InventoryReceiptsPage() {
   const [expandedItems, setExpandedItems] = useState<Record<number, ReceiptItem[]>>({});
   const [expandedLoading, setExpandedLoading] = useState<Record<number, boolean>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingReceiptId, setEditingReceiptId] = useState<number | null>(null);
-  const [editingReceiptNo, setEditingReceiptNo] = useState("");
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailReceipt, setDetailReceipt] = useState<Receipt | null>(null);
-  const [detailItems, setDetailItems] = useState<ReceiptItem[]>([]);
-  const [detailDocuments, setDetailDocuments] = useState<DocumentRow[]>([]);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [downloadingDocumentId, setDownloadingDocumentId] = useState<number | null>(null);
   const [quickItemOpen, setQuickItemOpen] = useState(false);
   const [quickItemRowIndex, setQuickItemRowIndex] = useState<number | null>(null);
   const [quickItemSaving, setQuickItemSaving] = useState(false);
@@ -661,47 +524,14 @@ export default function InventoryReceiptsPage() {
       items.reduce(
         (summary, item) => ({
           rowCount: summary.rowCount + (isReceiptItemEmpty(item) ? 0 : 1),
-          emptyRowCount: summary.emptyRowCount + (isReceiptItemEmpty(item) ? 1 : 0),
           receivedQty: summary.receivedQty + Number(item.quantity_received || 0),
           acceptedQty: summary.acceptedQty + Number(item.quantity_accepted || 0),
           totalCost: summary.totalCost + Number(item.total_cost || 0),
         }),
-        { rowCount: 0, emptyRowCount: 0, receivedQty: 0, acceptedQty: 0, totalCost: 0 },
+        { rowCount: 0, receivedQty: 0, acceptedQty: 0, totalCost: 0 },
       ),
     [items],
   );
-  const receiptReady = useMemo(() => {
-    const receiptItems = items.filter((item) => !isReceiptItemEmpty(item));
-
-    if (
-      !form.receipt_type ||
-      !form.store_id ||
-      !form.department_id ||
-      receiptItems.length === 0 ||
-      itemSummary.emptyRowCount > 0
-    ) {
-      return false;
-    }
-
-    return receiptItems.every((item) => {
-      const received = Number(item.quantity_received || 0);
-      const accepted = Number(item.quantity_accepted || 0);
-      const rejected = Number(item.quantity_rejected || 0);
-      const qtyPerUnit = Number(item.qty_per_receipt_unit || 0);
-
-      return (
-        Boolean(item.item_id) &&
-        Number.isFinite(received) &&
-        Number.isFinite(accepted) &&
-        Number.isFinite(rejected) &&
-        Number.isFinite(qtyPerUnit) &&
-        received > 0 &&
-        qtyPerUnit > 0 &&
-        accepted <= received &&
-        accepted + rejected <= received
-      );
-    });
-  }, [form.department_id, form.receipt_type, form.store_id, itemSummary.emptyRowCount, items]);
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return "0 KB";
@@ -750,13 +580,11 @@ export default function InventoryReceiptsPage() {
 
   const itemOptions = useMemo(
     () =>
-      [...lookups.items]
-        .sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0))
-        .map((row) => ({
-          value: String(row.id),
-          label: itemOptionLabel(row),
-          keywords: [row.item_code, row.code, row.name, row.title].filter(Boolean).join(" "),
-        })),
+      lookups.items.map((row) => ({
+        value: String(row.id),
+        label: itemOptionLabel(row),
+        keywords: [row.item_code, row.code, row.name, row.title].filter(Boolean).join(" "),
+      })),
     [lookups.items],
   );
 
@@ -836,7 +664,7 @@ export default function InventoryReceiptsPage() {
   );
 
   const parentCategories = useMemo(
-    () => lookups["asset-categories"].filter((category) => !category.parent_category_id && isActiveLookupRow(category)),
+    () => lookups["asset-categories"].filter((category) => !category.parent_category_id),
     [lookups],
   );
 
@@ -849,9 +677,7 @@ export default function InventoryReceiptsPage() {
     () =>
       selectedQuickItemCategory
         ? lookups["asset-categories"].filter(
-            (category) =>
-              String(category.parent_category_id ?? "") === String(selectedQuickItemCategory.id) &&
-              isActiveLookupRow(category),
+            (category) => String(category.parent_category_id ?? "") === String(selectedQuickItemCategory.id),
           )
         : [],
     [lookups, selectedQuickItemCategory],
@@ -860,142 +686,6 @@ export default function InventoryReceiptsPage() {
   const categoryOptions = useMemo(() => parentCategories.map(toLookupOption), [parentCategories]);
   const subcategoryOptions = useMemo(() => quickItemSubcategories.map(toLookupOption), [quickItemSubcategories]);
   const unitOptions = useMemo(() => lookups["units-of-measure"].map(toLookupOption), [lookups]);
-
-  const selectedItemForId = (itemId: string | number | null | undefined): RowData | undefined =>
-    lookups.items.find((row) => String(row.id) === String(itemId ?? ""));
-
-  const unitCodeForId = (unitId: string | number | null | undefined): string => {
-    if (!unitId) return "";
-    const unit = lookups["units-of-measure"].find((row) => String(row.id) === String(unitId));
-    return String(unit?.code ?? unit?.name ?? unitId);
-  };
-
-  const baseUnitIdForItem = (itemId: string | number | null | undefined): string => {
-    const item = selectedItemForId(itemId);
-    return item?.unit_id ? String(item.unit_id) : "";
-  };
-
-  const departmentIdForStore = (storeId: string | number | null | undefined): string => {
-    if (!storeId) return "";
-    const store = lookups.stores.find((row) => String(row.id) === String(storeId));
-    return store?.department_id ? String(store.department_id) : "";
-  };
-
-  const receiptUnitCodeForRow = (row: ReceiptItemInput): string =>
-    unitCodeForId(row.receipt_uom_id || baseUnitIdForItem(row.item_id));
-
-  const baseUnitCodeForRow = (row: ReceiptItemInput): string =>
-    unitCodeForId(baseUnitIdForItem(row.item_id));
-
-  const receiptUsesBaseUnit = (row: ReceiptItemInput): boolean => {
-    const baseUnitId = baseUnitIdForItem(row.item_id);
-    const receiptUnitId = row.receipt_uom_id || baseUnitId;
-
-    return Boolean(baseUnitId && receiptUnitId && String(receiptUnitId) === String(baseUnitId));
-  };
-
-  const unitLabel = (label: string, unitCode: string): string =>
-    unitCode ? `${label} (${unitCode})` : label;
-
-  const qtyPerUnitLabel = (row: ReceiptItemInput): string => {
-    const receiptUnit = receiptUnitCodeForRow(row);
-    const baseUnit = baseUnitCodeForRow(row);
-
-    if (receiptUsesBaseUnit(row)) {
-      return "Same as Base UOM";
-    }
-
-    if (receiptUnit && baseUnit) {
-      return `Qty Per Receipt Unit (${baseUnit} per ${receiptUnit})`;
-    }
-
-    if (baseUnit) {
-      return `Qty Per Receipt Unit (${baseUnit})`;
-    }
-
-    return "Qty Per Receipt Unit";
-  };
-
-  const qtyPerUnitShortLabel = (row: ReceiptItemInput): string => {
-    const receiptUnit = receiptUnitCodeForRow(row);
-    const baseUnit = baseUnitCodeForRow(row);
-
-    if (receiptUsesBaseUnit(row)) {
-      return "1:1";
-    }
-
-    if (receiptUnit && baseUnit) {
-      return `${baseUnit}/${receiptUnit}`;
-    }
-
-    return baseUnit || "unit";
-  };
-
-  const stockQuantityForRow = (row: ReceiptItemInput): string => {
-    const accepted = Number(row.quantity_accepted || 0);
-    const qtyPer = Number(row.qty_per_receipt_unit || 1);
-
-    if (!Number.isFinite(accepted) || !Number.isFinite(qtyPer) || accepted <= 0 || qtyPer <= 0) {
-      return "0";
-    }
-
-    return formatQuantityInput(accepted * qtyPer);
-  };
-
-  const packageDisplayForItem = (item: ReceiptItem): string => {
-    const receiptUnit = unitCodeForId(item.receipt_uom_id ?? item.base_uom_id);
-    const baseUnit = unitCodeForId(item.base_uom_id ?? baseUnitIdForItem(item.item_id));
-    const qtyPer = Number(item.qty_per_receipt_unit ?? 1);
-
-    return `${formatQuantityInput(Number(item.quantity_received ?? 0))} ${receiptUnit || "unit"} x ${formatQuantityInput(qtyPer)} ${baseUnit || "base"}`;
-  };
-
-  const stockDisplayTextForItem = (item: ReceiptItem): string => {
-    const baseUnit = unitCodeForId(item.base_uom_id ?? baseUnitIdForItem(item.item_id));
-    const receiptUnit = unitCodeForId(item.receipt_uom_id ?? item.base_uom_id);
-    const accepted = Number(item.quantity_accepted ?? 0);
-    const qtyPer = Number(item.qty_per_receipt_unit ?? 1);
-    const stockQty = Number(item.accepted_base_qty ?? accepted * qtyPer);
-
-    if (receiptUnit && baseUnit && receiptUnit !== baseUnit && Number.isFinite(qtyPer) && qtyPer > 0 && accepted > 0) {
-      const baseSuffix = baseUnit.toUpperCase() === "EACH" ? "" : ` ${baseUnit}`;
-      return `${formatQuantityInput(accepted)} ${receiptUnit} / ${formatQuantityInput(stockQty)}${baseSuffix}`;
-    }
-
-    return `${formatQuantityInput(stockQty)}${baseUnit ? ` ${baseUnit}` : ""}`;
-  };
-
-  const stockDisplayForItem = (item: ReceiptItem) => {
-    const baseUnit = unitCodeForId(item.base_uom_id ?? baseUnitIdForItem(item.item_id));
-    const receiptUnit = unitCodeForId(item.receipt_uom_id ?? item.base_uom_id);
-    const accepted = Number(item.quantity_accepted ?? 0);
-    const qtyPer = Number(item.qty_per_receipt_unit ?? 1);
-    const stockQty = Number(item.accepted_base_qty ?? accepted * qtyPer);
-
-    if (receiptUnit && baseUnit && receiptUnit !== baseUnit && Number.isFinite(qtyPer) && qtyPer > 0 && accepted > 0) {
-      const shouldShowBaseCode = baseUnit.toUpperCase() !== "EACH";
-
-      return (
-        <div className="stock-quantity-cell">
-          <span>
-            {formatQuantityInput(accepted)} {receiptUnit}
-          </span>
-          <small>
-            {formatQuantityInput(stockQty)}
-            {shouldShowBaseCode ? ` ${baseUnit}` : ""}
-          </small>
-        </div>
-      );
-    }
-
-    return (
-      <span>
-        {formatQuantityInput(stockQty)}
-        {baseUnit ? ` ${baseUnit}` : ""}
-      </span>
-    );
-  };
-
   const generatedQuickItemCode = useMemo(() => {
     if (!selectedQuickItemCategory?.code) {
       return "";
@@ -1131,35 +821,8 @@ export default function InventoryReceiptsPage() {
     setForm((current) => ({
       ...current,
       [key]: value,
-      ...(key === "store_id" && typeof value === "string"
-        ? { department_id: value ? departmentIdForStore(value) || current.department_id : "" }
-        : {}),
     }));
   };
-
-  useEffect(() => {
-    if (!dialogOpen || editingReceiptId || form.store_id) {
-      return;
-    }
-
-    const activeStores = lookups.stores.filter(isActiveLookupRow);
-    if (activeStores.length !== 1) {
-      return;
-    }
-
-    const defaultStoreId = String(activeStores[0].id);
-    const defaultDepartmentId = activeStores[0].department_id ? String(activeStores[0].department_id) : "";
-
-    setForm((current) => {
-      if (current.store_id) return current;
-
-      return {
-        ...current,
-        store_id: defaultStoreId,
-        department_id: defaultDepartmentId || current.department_id,
-      };
-    });
-  }, [dialogOpen, editingReceiptId, form.store_id, lookups.stores]);
 
   const setApprovalReferenceValue = (next: ApprovalReferenceState) => {
     setApprovalReference(next);
@@ -1175,17 +838,6 @@ export default function InventoryReceiptsPage() {
     setItems((current) =>
       current.map((row, idx) => {
         if (idx !== index) return row;
-        if (key === "item_id") {
-          const baseUnitId = baseUnitIdForItem(value);
-
-          return {
-            ...row,
-            item_id: value,
-            receipt_uom_id: baseUnitId,
-            qty_per_receipt_unit: "1",
-          };
-        }
-
         if (key === "quantity_received") {
           const quantityReceived = normalizeQuantityInput(value);
           const received = Number(quantityReceived || 0);
@@ -1201,18 +853,6 @@ export default function InventoryReceiptsPage() {
             quantity_accepted: quantityAccepted,
             quantity_rejected: rejectedQuantityFor(quantityReceived, quantityAccepted),
             total_cost: totalCostFor(quantityAccepted, row.unit_cost),
-          };
-        }
-
-        if (key === "receipt_uom_id") {
-          const baseUnitId = baseUnitIdForItem(row.item_id);
-
-          return {
-            ...row,
-            receipt_uom_id: value,
-            qty_per_receipt_unit: baseUnitId && value && String(value) === String(baseUnitId)
-              ? "1"
-              : row.qty_per_receipt_unit,
           };
         }
 
@@ -1261,22 +901,7 @@ export default function InventoryReceiptsPage() {
         }
 
         if (key === "total_cost") {
-          const totalCost = normalizeMoneyInput(value);
-
-          return {
-            ...row,
-            total_cost: totalCost,
-            unit_cost: totalCost === "" ? row.unit_cost : unitCostForTotal(row.quantity_accepted, row.quantity_received, totalCost),
-          };
-        }
-
-        if (key === "qty_per_receipt_unit") {
-          const qtyPer = normalizeQuantityInput(value);
-
-          return {
-            ...row,
-            qty_per_receipt_unit: receiptUsesBaseUnit(row) ? "1" : qtyPer,
-          };
+          return { ...row, total_cost: normalizeMoneyInput(value) };
         }
 
         return { ...row, [key]: value };
@@ -1321,11 +946,8 @@ export default function InventoryReceiptsPage() {
       remarks: "",
     });
     setItems([{ ...emptyItem }]);
-    setReceiptDialogTab("header");
     setItemDetailsIndex(null);
     setAttachmentFiles([]);
-    setEditingReceiptId(null);
-    setEditingReceiptNo("");
     setIsPostingReceipt(false);
   };
 
@@ -1337,8 +959,6 @@ export default function InventoryReceiptsPage() {
 
   const closeCreateDialog = () => {
     setDialogOpen(false);
-    setEditingReceiptId(null);
-    setEditingReceiptNo("");
     setQuickItemOpen(false);
     setQuickItemRowIndex(null);
     setQuickItemError("");
@@ -1366,11 +986,8 @@ export default function InventoryReceiptsPage() {
   };
 
   const selectQuickItemCategory = (categoryId: string) => {
-    const selectedCategory = parentCategories.find((category) => String(category.id) === categoryId);
-
     setQuickItemForm((current) => ({
       ...current,
-      ...quickItemDefaultsForCategory(selectedCategory),
       category_id: categoryId,
       subcategory_id: "",
       attributes: {},
@@ -1411,7 +1028,7 @@ export default function InventoryReceiptsPage() {
         !quickItemForm.category_id ||
         !quickItemForm.unit_id
       ) {
-        setQuickItemError("Item Name, Item Type, Category, and Base UOM / Stock UOM are required.");
+        setQuickItemError("Item Name, Item Type, Category, and Unit of Measure are required.");
         setQuickItemSaving(false);
         return;
       }
@@ -1445,18 +1062,7 @@ export default function InventoryReceiptsPage() {
           : nextItems.find((item) => String(item.item_code ?? item.code ?? "") === generatedQuickItemCode);
 
       if (createdItem?.id && quickItemRowIndex !== null) {
-        setItems((current) =>
-          current.map((row, index) =>
-            index === quickItemRowIndex
-              ? {
-                  ...row,
-                  item_id: String(createdItem.id),
-                  receipt_uom_id: createdItem.unit_id ? String(createdItem.unit_id) : "",
-                  qty_per_receipt_unit: "1",
-                }
-              : row,
-          ),
-        );
+        setItemValue(quickItemRowIndex, "item_id", String(createdItem.id));
       }
 
       setMessage("Item created in Item Master and selected for this receipt.");
@@ -1532,14 +1138,6 @@ export default function InventoryReceiptsPage() {
       };
     }
 
-    if (quickMasterResource === "units-of-measure") {
-      return {
-        code: quickMasterForm.code?.trim(),
-        name: quickMasterForm.name?.trim(),
-        status: quickMasterForm.status,
-      };
-    }
-
     return {
       project_code: quickMasterForm.project_code?.trim(),
       title: quickMasterForm.title?.trim(),
@@ -1575,10 +1173,6 @@ export default function InventoryReceiptsPage() {
     }
 
     if (quickMasterResource === "funding-sources") {
-      return Boolean(quickMasterForm.code?.trim() && quickMasterForm.name?.trim());
-    }
-
-    if (quickMasterResource === "units-of-measure") {
       return Boolean(quickMasterForm.code?.trim() && quickMasterForm.name?.trim());
     }
 
@@ -1621,18 +1215,10 @@ export default function InventoryReceiptsPage() {
             });
 
       if (createdRow?.id) {
-        const meta = quickMasterResourceMeta[quickMasterResource];
-
-        if (meta.selectField) {
-          setFormValue(meta.selectField, String(createdRow.id));
-        }
-
-        if (meta.quickItemField) {
-          setQuickItemField(meta.quickItemField, String(createdRow.id) as never);
-        }
+        setFormValue(quickMasterResourceMeta[quickMasterResource].selectField, String(createdRow.id));
       }
 
-      setMessage(`${quickMasterResourceMeta[quickMasterResource].title} created and selected.`);
+      setMessage(`${quickMasterResourceMeta[quickMasterResource].title} created and selected for this receipt.`);
       setError("");
       setQuickMasterOpen(false);
     } catch (masterError) {
@@ -1682,9 +1268,8 @@ export default function InventoryReceiptsPage() {
 
   const expandedItemColumns = [
     { key: "item", header: "Item", render: (receiptItem: ReceiptItem) => lookupLabel("items", receiptItem.item_id) },
-    { key: "package", header: "Package", render: (receiptItem: ReceiptItem) => packageDisplayForItem(receiptItem) },
+    { key: "qty", header: "Qty Rec", render: (receiptItem: ReceiptItem) => receiptItem.quantity_received },
     { key: "accepted", header: "Accepted", render: (receiptItem: ReceiptItem) => receiptItem.quantity_accepted },
-    { key: "stockQty", header: "Stock Qty", render: (receiptItem: ReceiptItem) => stockDisplayForItem(receiptItem) },
     { key: "rejected", header: "Rejected", render: (receiptItem: ReceiptItem) => receiptItem.quantity_rejected },
     { key: "unitCost", header: `Unit Cost (${currency})`, render: (receiptItem: ReceiptItem) => receiptItem.unit_cost ?? "-" },
     { key: "totalCost", header: `Total Cost (${currency})`, render: (receiptItem: ReceiptItem) => receiptItem.total_cost ?? "-" },
@@ -1693,29 +1278,6 @@ export default function InventoryReceiptsPage() {
       header: "Inspection",
       render: (receiptItem: ReceiptItem) => (
         <span className="d-flex align-items-center gap-2">
-          <StatusBadge status={inspectionStatusDisplay[receiptItem.inspection_status] ?? receiptItem.inspection_status ?? "-"} />
-          <span className="text-secondary small">{receiptItem.inspection_remarks ?? ""}</span>
-        </span>
-      ),
-    },
-  ];
-
-  const detailItemColumns = [
-    { key: "item", header: "Item", render: (receiptItem: ReceiptItem) => lookupLabel("items", receiptItem.item_id) },
-    { key: "description", header: "Description", render: (receiptItem: ReceiptItem) => receiptItem.description || "-" },
-    { key: "package", header: "Package", render: (receiptItem: ReceiptItem) => packageDisplayForItem(receiptItem) },
-    { key: "accepted", header: "Accepted", render: (receiptItem: ReceiptItem) => receiptItem.quantity_accepted },
-    { key: "stockQty", header: "Stock Qty", render: (receiptItem: ReceiptItem) => stockDisplayForItem(receiptItem) },
-    { key: "rejected", header: "Rejected", render: (receiptItem: ReceiptItem) => receiptItem.quantity_rejected },
-    { key: "unitCost", header: `Unit Cost (${currency})`, render: (receiptItem: ReceiptItem) => receiptItem.unit_cost ?? "-" },
-    { key: "totalCost", header: `Total Cost (${currency})`, render: (receiptItem: ReceiptItem) => receiptItem.total_cost ?? "-" },
-    { key: "batch", header: "Batch", render: (receiptItem: ReceiptItem) => receiptItem.batch_no || "-" },
-    { key: "expiry", header: "Expiry", render: (receiptItem: ReceiptItem) => receiptItem.expiry_date || "-" },
-    {
-      key: "inspection",
-      header: "Inspection",
-      render: (receiptItem: ReceiptItem) => (
-        <span className="d-flex flex-column">
           <StatusBadge status={inspectionStatusDisplay[receiptItem.inspection_status] ?? receiptItem.inspection_status ?? "-"} />
           <span className="text-secondary small">{receiptItem.inspection_remarks ?? ""}</span>
         </span>
@@ -1788,121 +1350,6 @@ export default function InventoryReceiptsPage() {
     }
   };
 
-  const openEditDialog = async (receipt: Receipt) => {
-    if (!authReady) return;
-
-    if (receipt.status !== "draft") {
-      setError("Only draft receipts can be edited.");
-      return;
-    }
-
-    try {
-      setError("");
-      const response = await api.get(`/inventory-receipts/${receipt.id}`);
-      const receiptData = response.data?.data as Receipt | undefined;
-      const receiptItems = response.data?.items;
-
-      if (!receiptData) {
-        throw new Error("Receipt not found.");
-      }
-
-      const nextForm: ReceiptForm = {
-        receipt_no: receiptData.receipt_no ?? "",
-        receipt_type: receiptData.receipt_type || "purchase",
-        supplier_id: receiptData.supplier_id ? String(receiptData.supplier_id) : "",
-        po_reference: receiptData.po_reference ?? "",
-        invoice_no: receiptData.invoice_no ?? "",
-        challan_no: receiptData.challan_no ?? "",
-        receipt_date: toInputDate(receiptData.receipt_date),
-        store_id: receiptData.store_id ? String(receiptData.store_id) : "",
-        department_id: receiptData.department_id ? String(receiptData.department_id) : "",
-        funding_source_id: receiptData.funding_source_id ? String(receiptData.funding_source_id) : "",
-        project_id: receiptData.project_id ? String(receiptData.project_id) : "",
-        manual_approval_ref: receiptData.manual_approval_ref ?? "",
-        manual_approval_date: toInputDate(receiptData.manual_approval_date),
-        manual_approved_by: receiptData.manual_approved_by ?? "",
-        remarks: receiptData.remarks ?? "",
-        status: "draft",
-        post_now: false,
-      };
-
-      setForm(nextForm);
-      setApprovalReference({
-        ref: nextForm.manual_approval_ref,
-        authority: nextForm.manual_approved_by,
-        date: nextForm.manual_approval_date,
-        remarks: "",
-      });
-      setItems(Array.isArray(receiptItems) && receiptItems.length > 0 ? receiptItems.map(receiptItemToInput) : [{ ...emptyItem }]);
-      setReceiptDialogTab("items");
-      setAttachmentFiles([]);
-      setEditingReceiptId(receipt.id);
-      setEditingReceiptNo(receiptData.receipt_no ?? receipt.receipt_no);
-      setDialogOpen(true);
-    } catch (editError) {
-      setError(extractApiMessage(editError, "Could not load receipt for editing."));
-    }
-  };
-
-  const closeDetailDialog = () => {
-    setDetailOpen(false);
-    setDetailReceipt(null);
-    setDetailItems([]);
-    setDetailDocuments([]);
-    setDetailLoading(false);
-  };
-
-  const openDetailDialog = async (receipt: Receipt) => {
-    if (!authReady) return;
-
-    setDetailOpen(true);
-    setDetailLoading(true);
-    setDetailReceipt(receipt);
-    setDetailItems([]);
-    setDetailDocuments([]);
-
-    try {
-      const [receiptResponse, documentResponse] = await Promise.all([
-        api.get(`/inventory-receipts/${receipt.id}`),
-        api.get<{ data?: DocumentRow[] }>("/documents", {
-          params: { entity_type: "inventory_receipt", entity_id: receipt.id },
-        }),
-      ]);
-
-      const receiptData = receiptResponse.data?.data as Receipt | undefined;
-      const receiptItems = receiptResponse.data?.items;
-      setDetailReceipt(receiptData ?? receipt);
-      setDetailItems(Array.isArray(receiptItems) ? receiptItems : []);
-      setDetailDocuments(Array.isArray(documentResponse.data?.data) ? documentResponse.data.data : []);
-      setError("");
-    } catch (detailError) {
-      setError(extractApiMessage(detailError, "Could not load complete GRN detail."));
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  const downloadDetailDocument = async (documentRow: DocumentRow) => {
-    setDownloadingDocumentId(documentRow.id);
-
-    try {
-      const response = await api.get<Blob>(`/documents/${documentRow.id}/download`, { responseType: "blob" });
-      const url = window.URL.createObjectURL(response.data);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = documentRow.original_file_name || `document-${documentRow.id}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      setError("");
-    } catch {
-      setError("Unable to download document.");
-    } finally {
-      setDownloadingDocumentId(null);
-    }
-  };
-
   const saveReceipt = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -1926,7 +1373,10 @@ export default function InventoryReceiptsPage() {
       return;
     }
 
-    const isEditingReceipt = editingReceiptId !== null;
+    if (form.post_now && attachmentFiles.length === 0) {
+      setError("Please add at least one supporting document before posting this receipt.");
+      return;
+    }
 
     const payload: Record<string, unknown> = {
       receipt_type: form.receipt_type,
@@ -1953,8 +1403,6 @@ export default function InventoryReceiptsPage() {
           item_id: Number(row.item_id),
           description: row.description.trim() || null,
           quantity_received: Number(row.quantity_received || 0),
-          receipt_uom_id: row.receipt_uom_id ? Number(row.receipt_uom_id) : null,
-          qty_per_receipt_unit: Number(row.qty_per_receipt_unit || 1),
           quantity_accepted: Number.isFinite(quantityAccepted ?? 0) ? (quantityAccepted ?? undefined) : undefined,
           quantity_rejected: Number.isFinite(quantityRejected ?? 0) ? (quantityRejected ?? undefined) : undefined,
           unit_cost: row.unit_cost !== "" ? Number(row.unit_cost) : null,
@@ -1977,11 +1425,6 @@ export default function InventoryReceiptsPage() {
       return;
     }
 
-    if (receiptItems.some((row) => Number(row.qty_per_receipt_unit || 0) <= 0)) {
-      setError("Quantity per receipt unit must be greater than 0.");
-      return;
-    }
-
     if (receiptItems.some((row) => Number(row.quantity_accepted || 0) > Number(row.quantity_received || 0))) {
       setError("Qty Accepted cannot be greater than Qty Received.");
       return;
@@ -1996,46 +1439,22 @@ export default function InventoryReceiptsPage() {
       return;
     }
 
-    const missingBatchItem = receiptItems.find((row) => {
-      const selectedItem = selectedItemForId(row.item_id);
-      return selectedItem?.requires_batch_tracking && !row.batch_no.trim();
-    });
-
-    if (missingBatchItem) {
-      setError(`Batch No is required for ${lookupLabel("items", missingBatchItem.item_id)}.`);
-      return;
-    }
-
-    const missingExpiryItem = receiptItems.find((row) => {
-      const selectedItem = selectedItemForId(row.item_id);
-      return selectedItem?.requires_expiry_tracking && !row.expiry_date;
-    });
-
-    if (missingExpiryItem) {
-      setError(`Expiry is required for ${lookupLabel("items", missingExpiryItem.item_id)}.`);
-      return;
-    }
-
     try {
       setIsPostingReceipt(true);
-      const receiptResponse = isEditingReceipt
-        ? await api.put(`/inventory-receipts/${editingReceiptId}`, { ...payload, post_now: false })
-        : await api.post("/inventory-receipts", { ...payload, post_now: false });
+      const receiptResponse = await api.post("/inventory-receipts", { ...payload, post_now: false });
       const receiptId = receiptResponse.data?.data?.id;
 
       if (!receiptId) {
-        throw new Error(isEditingReceipt ? "Could not update receipt." : "Could not create receipt.");
+        throw new Error("Could not create receipt.");
       }
 
       for (const attachment of attachmentFiles) {
         await uploadReceiptAttachment(receiptId, attachment.file);
       }
 
-      if (!isEditingReceipt && form.post_now) {
+      if (form.post_now) {
         await postReceipt(receiptId);
         setMessage("Receipt created and posted successfully.");
-      } else if (isEditingReceipt) {
-        setMessage("Receipt updated successfully.");
       } else {
         setMessage("Receipt created successfully.");
       }
@@ -2050,15 +1469,11 @@ export default function InventoryReceiptsPage() {
         remarks: "",
       });
       setItems([{ ...emptyItem }]);
-      setReceiptDialogTab("header");
-      setItemDetailsIndex(null);
       setAttachmentFiles([]);
-      setEditingReceiptId(null);
-      setEditingReceiptNo("");
       setDialogOpen(false);
       await refreshRows();
     } catch (saveError) {
-      setError(extractApiMessage(saveError, isEditingReceipt ? "Could not update receipt. Verify required fields." : "Could not create receipt. Verify required fields."));
+      setError(extractApiMessage(saveError, "Could not create receipt. Verify required fields."));
       setIsPostingReceipt(false);
       return;
     }
@@ -2136,9 +1551,8 @@ export default function InventoryReceiptsPage() {
         columns: [
           { header: "Item", render: (item) => lookupLabel("items", item.item_id) },
           { header: "Description", render: (item) => item.description },
-          { header: "Package Received", render: (item) => packageDisplayForItem(item) },
+          { header: "Qty Received", render: (item) => item.quantity_received },
           { header: "Qty Accepted", render: (item) => item.quantity_accepted },
-          { header: "Stock Qty", render: (item) => stockDisplayTextForItem(item) },
           { header: "Qty Rejected", render: (item) => item.quantity_rejected },
           { header: `Unit Cost (${currency})`, render: (item) => item.unit_cost },
           { header: `Total Cost (${currency})`, render: (item) => item.total_cost },
@@ -2401,43 +1815,6 @@ export default function InventoryReceiptsPage() {
       );
     }
 
-    if (quickMasterResource === "units-of-measure") {
-      return (
-        <>
-          <div className="col-12 col-md-4">
-            <FieldLabel required>Code</FieldLabel>
-            <input
-              className="form-control form-control-sm"
-              value={quickMasterForm.code ?? ""}
-              onChange={(event) => setQuickMasterField("code", event.target.value)}
-              placeholder="e.g. PCS"
-              required
-            />
-          </div>
-          <div className="col-12 col-md-8">
-            <FieldLabel required>Name</FieldLabel>
-            <input
-              className="form-control form-control-sm"
-              value={quickMasterForm.name ?? ""}
-              onChange={(event) => setQuickMasterField("name", event.target.value)}
-              placeholder="e.g. Pieces"
-              required
-            />
-          </div>
-          <div className="col-12 col-md-4">
-            <label className="form-label small">Status</label>
-            <SearchableSelect
-              id="receipt-quick-unit-status"
-              value={quickMasterForm.status ?? "active"}
-              options={quickItemStatusOptions}
-              placeholder="Search status"
-              onChange={(value) => setQuickMasterField("status", value)}
-            />
-          </div>
-        </>
-      );
-    }
-
     return (
       <>
         <div className="col-12 col-md-4">
@@ -2549,60 +1926,6 @@ export default function InventoryReceiptsPage() {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
 
-  const renderExpandedReceiptItems = (receipt: Receipt) => {
-    if (expandedId !== receipt.id) {
-      return null;
-    }
-
-    if (expandedLoading[receipt.id]) {
-      return (
-        <div className="d-flex align-items-center gap-2 text-secondary py-3">
-          <span className="spinner-border spinner-border-sm" aria-hidden="true" />
-          Loading items...
-        </div>
-      );
-    }
-
-    const receiptItems = expandedItems[receipt.id] ?? [];
-
-    if (receiptItems.length === 0) {
-      return (
-        <div className="text-secondary py-3">
-          No item rows returned by backend.
-        </div>
-      );
-    }
-
-    return (
-      <div className="py-2">
-        <div className="d-flex justify-content-between align-items-center mb-2">
-          <h3 className="h6 mb-0">Items for {receipt.receipt_no}</h3>
-          <span className="small text-secondary">{receiptItems.length} row{receiptItems.length === 1 ? "" : "s"}</span>
-        </div>
-        <div className="table-responsive border rounded bg-white">
-          <table className="table table-sm mb-0 align-middle">
-            <thead>
-              <tr>
-                {expandedItemColumns.map((column) => (
-                  <th key={column.key}>{column.header}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {receiptItems.map((receiptItem) => (
-                <tr key={receiptItem.id}>
-                  {expandedItemColumns.map((column) => (
-                    <td key={column.key}>{column.render(receiptItem)}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <main className="min-vh-100 bg-body-tertiary">
       <div className="container-fluid p-4">
@@ -2617,10 +1940,10 @@ export default function InventoryReceiptsPage() {
           }
         />
 
-        {(message || (error && !dialogOpen)) && (
+        {(message || error) && (
           <div className="mb-4">
             {message && <div className="alert alert-success py-2">{message}</div>}
-            {error && !dialogOpen ? <div className="alert alert-danger py-2">{error}</div> : null}
+            {error && <div className="alert alert-danger py-2">{error}</div>}
           </div>
         )}
 
@@ -2634,12 +1957,8 @@ export default function InventoryReceiptsPage() {
                 <form className="modal-content border-0 shadow-lg" onSubmit={saveReceipt}>
                   <div className="modal-header px-4 py-3">
                     <div>
-                      <h2 className="h5 mb-1">{editingReceiptId ? `Edit ${editingReceiptNo}` : "Create Receipt"}</h2>
-                      <p className="text-secondary mb-0">
-                        {editingReceiptId
-                          ? "Update draft GRN details before posting."
-                          : "Record a GRN, add received items, and optionally post stock."}
-                      </p>
+                      <h2 className="h5 mb-1">Create Receipt</h2>
+                      <p className="text-secondary mb-0">Record a GRN, add received items, and optionally post stock.</p>
                     </div>
                     <button
                       className="btn-close"
@@ -2649,59 +1968,20 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
                   <div className="modal-body px-4 py-3">
-                    {error ? (
-                      <div className="position-sticky top-0 bg-white pb-2" style={{ zIndex: 5 }}>
-                        <div className="alert alert-danger py-2 mb-0">{error}</div>
-                      </div>
-                    ) : null}
-                    <div className="grn-dialog-tabs nav nav-tabs mb-3" role="tablist" aria-label="GRN form sections">
-                      <button
-                        className={`nav-link ${receiptDialogTab === "header" ? "active" : ""}`}
-                        type="button"
-                        onClick={() => setReceiptDialogTab("header")}
-                      >
-                        Header
-                      </button>
-                      <button
-                        className={`nav-link ${receiptDialogTab === "items" ? "active" : ""}`}
-                        type="button"
-                        onClick={() => setReceiptDialogTab("items")}
-                      >
-                        Items ({itemSummary.rowCount})
-                      </button>
-                      <button
-                        className={`nav-link ${receiptDialogTab === "documents" ? "active" : ""}`}
-                        type="button"
-                        onClick={() => setReceiptDialogTab("documents")}
-                      >
-                        Documents
-                      </button>
-                      <button
-                        className={`nav-link ${receiptDialogTab === "preview" ? "active" : ""}`}
-                        type="button"
-                        onClick={() => setReceiptDialogTab("preview")}
-                      >
-                        Preview
-                      </button>
-                    </div>
-                    <div className="row g-2 grn-header-grid" hidden={receiptDialogTab !== "header"}>
-                  <div className="col-12 col-md-3">
-                    <label className="form-label small mb-1">Receipt No.</label>
+                    <div className="row g-2">
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small">Receipt No.</label>
                     <input
                       className="form-control form-control-sm bg-light text-muted"
-                      value={editingReceiptId ? editingReceiptNo : previewReceiptNo(form.receipt_date)}
+                      value={previewReceiptNo(form.receipt_date)}
                       readOnly
                       aria-readonly="true"
-                      title={
-                        editingReceiptId
-                          ? "Receipt number stays unchanged while editing a draft."
-                          : "Preview only. The backend assigns the next available GRN number when saved."
-                      }
                     />
+                    <div className="form-text small">Preview only. The backend assigns the next available GRN number when saved.</div>
                   </div>
 
-                  <div className="col-12 col-md-3">
-                    <label className="form-label small mb-1">Receipt Type</label>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small">Receipt Type</label>
                     <SearchableSelect
                       id="receipt-type"
                       value={form.receipt_type}
@@ -2711,8 +1991,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-3">
-                    <label className="form-label small mb-1">Receipt Date</label>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small">Receipt Date</label>
                     <input
                       className="form-control form-control-sm"
                       type="date"
@@ -2722,23 +2002,29 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-3">
-                    <label className="form-label small mb-1">Status</label>
-                    {editingReceiptId ? (
-                      <input className="form-control form-control-sm bg-light text-muted" value="Draft" readOnly aria-readonly="true" />
-                    ) : (
-                      <SearchableSelect
-                        id="receipt-status"
-                        value={form.status}
-                        options={receiptStatusOptions}
-                        placeholder="Search status"
-                        onChange={(value) => setFormValue("status", value as ReceiptStatus)}
-                      />
-                    )}
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small">Status</label>
+                    <SearchableSelect
+                      id="receipt-status"
+                      value={form.status}
+                      options={receiptStatusOptions}
+                      placeholder="Search status"
+                      onChange={(value) => setFormValue("status", value as ReceiptStatus)}
+                    />
                   </div>
 
-                  <div className="col-12 col-md-4">
-                    <label className="form-label small mb-1">Store</label>
+                  <div className="col-12 col-md-6">
+                    <div className="d-flex align-items-center justify-content-between">
+                      <label className="form-label small">Store</label>
+                      <button
+                        className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
+                        type="button"
+                        onClick={() => openQuickMasterDialog("stores")}
+                      >
+                        <i className="bi bi-plus-circle me-1" />
+                        New Store
+                      </button>
+                    </div>
                     <SearchableSelect
                       id="receipt-store"
                       value={form.store_id}
@@ -2748,8 +2034,18 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-4">
-                    <label className="form-label small mb-1">Department</label>
+                  <div className="col-12 col-md-6">
+                    <div className="d-flex align-items-center justify-content-between">
+                      <label className="form-label small">Department</label>
+                      <button
+                        className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
+                        type="button"
+                        onClick={() => openQuickMasterDialog("departments")}
+                      >
+                        <i className="bi bi-plus-circle me-1" />
+                        New Department
+                      </button>
+                    </div>
                     <SearchableSelect
                       id="receipt-department"
                       value={form.department_id}
@@ -2759,9 +2055,9 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-4">
+                  <div className="col-12 col-md-6">
                     <div className="d-flex align-items-center justify-content-between">
-                      <label className="form-label small mb-1">Supplier</label>
+                      <label className="form-label small">Supplier</label>
                       <button
                         className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
                         type="button"
@@ -2780,9 +2076,9 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-4">
+                  <div className="col-12 col-md-6">
                     <div className="d-flex align-items-center justify-content-between">
-                      <label className="form-label small mb-1">Funding Source</label>
+                      <label className="form-label small">Funding Source</label>
                       <button
                         className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
                         type="button"
@@ -2801,9 +2097,9 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-5">
+                  <div className="col-12 col-md-6">
                     <div className="d-flex align-items-center justify-content-between">
-                      <label className="form-label small mb-1">Project</label>
+                      <label className="form-label small">Project</label>
                       <button
                         className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
                         type="button"
@@ -2822,8 +2118,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-3">
-                    <label className="form-label small mb-1">PO Reference</label>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small">PO Reference</label>
                     <input
                       className="form-control form-control-sm"
                       value={form.po_reference}
@@ -2831,8 +2127,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-3">
-                    <label className="form-label small mb-1">Invoice No</label>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small">Invoice No</label>
                     <input
                       className="form-control form-control-sm"
                       value={form.invoice_no}
@@ -2840,8 +2136,8 @@ export default function InventoryReceiptsPage() {
                     />
                   </div>
 
-                  <div className="col-12 col-md-3">
-                    <label className="form-label small mb-1">Challan No</label>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small">Challan No</label>
                     <input
                       className="form-control form-control-sm"
                       value={form.challan_no}
@@ -2853,29 +2149,25 @@ export default function InventoryReceiptsPage() {
                     <ApprovalReferenceFields
                       value={approvalReference}
                       onChange={setApprovalReferenceValue}
-                      compact
                     />
                   </div>
 
                   <div className="col-12">
-                    <label className="form-label small mb-1">Remarks</label>
+                    <label className="form-label small">Remarks</label>
                     <textarea
                       className="form-control form-control-sm"
-                      rows={1}
+                      rows={2}
                       value={form.remarks}
                       onChange={(event) => setFormValue("remarks", event.target.value)}
                     />
                   </div>
 
-                    </div>
-                    <div className="row g-2" hidden={receiptDialogTab !== "items"}>
                   <div className="col-12">
                     <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
                       <div>
                         <h3 className="h6 mb-1">Receipt Items</h3>
                         <div className="small text-secondary">
-                          {itemSummary.rowCount} item rows, {formatQuantityInput(itemSummary.receivedQty)} received,{" "}
-                          {formatQuantityInput(itemSummary.acceptedQty)} accepted, {currency}{" "}
+                          {itemSummary.rowCount} item rows, {formatQuantityInput(itemSummary.receivedQty)} received, {currency}{" "}
                           {formatMoneyInput(itemSummary.totalCost)}
                         </div>
                       </div>
@@ -2904,15 +2196,15 @@ export default function InventoryReceiptsPage() {
                             <th className="text-center grn-row-number">#</th>
                             <th className="grn-item-col">Item</th>
                             <th className="grn-description-col">Description</th>
-                            <th className="grn-qty-col" title="Quantity received">Recv</th>
-                            <th className="grn-uom-col">UOM</th>
-                            <th className="grn-qty-col grn-qty-per-col">Qty/Unit</th>
-                            <th className="grn-stock-col" title="Stock addition">Stock</th>
-                            <th className="grn-qty-col" title="Quantity accepted">Acc</th>
-                            <th className="grn-qty-col" title="Quantity rejected">Rej</th>
-                            <th className="grn-money-col">Unit Cost</th>
-                            <th className="grn-money-col">Total</th>
-                            <th className="text-end grn-action-col">Actions</th>
+                            <th>Qty Received</th>
+                            <th>Qty Accepted</th>
+                            <th>Qty Rejected</th>
+                            <th>Unit Cost ({currency})</th>
+                            <th>Total Cost ({currency})</th>
+                            <th>Batch No</th>
+                            <th>Expiry</th>
+                            <th>Inspection</th>
+                            <th className="text-end">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2921,13 +2213,26 @@ export default function InventoryReceiptsPage() {
                               <tr>
                                 <td className="text-center text-secondary grn-row-number">{index + 1}</td>
                                 <td className="grn-item-col">
-                                  <SearchableSelect
-                                    id={`receipt-item-${index}`}
-                                    value={item.item_id}
-                                    options={itemOptions}
-                                    placeholder="Search item"
-                                    onChange={(value) => setItemValue(index, "item_id", value)}
-                                  />
+                                  <div className="d-flex gap-1">
+                                    <div className="flex-grow-1">
+                                      <SearchableSelect
+                                        id={`receipt-item-${index}`}
+                                        value={item.item_id}
+                                        options={itemOptions}
+                                        placeholder="Search item"
+                                        onChange={(value) => setItemValue(index, "item_id", value)}
+                                      />
+                                    </div>
+                                    <button
+                                      className="btn btn-sm btn-outline-primary px-2"
+                                      type="button"
+                                      title="Create new item"
+                                      aria-label={`Create item for row ${index + 1}`}
+                                      onClick={() => openQuickItemDialog(index)}
+                                    >
+                                      <i className="bi bi-plus-lg" />
+                                    </button>
+                                  </div>
                                 </td>
                                 <td className="grn-description-col">
                                   <input
@@ -2936,48 +2241,17 @@ export default function InventoryReceiptsPage() {
                                     onChange={(event) => setItemValue(index, "description", event.target.value)}
                                   />
                                 </td>
-                                <td className="grn-qty-col">
+                                <td>
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
                                     value={item.quantity_received}
                                     step="0.001"
                                     min="0"
-                                    aria-label={unitLabel(`Row ${index + 1} quantity received`, receiptUnitCodeForRow(item))}
                                     onChange={(event) => setItemValue(index, "quantity_received", event.target.value)}
                                   />
                                 </td>
-                                <td className="grn-uom-col">
-                                  <SearchableSelect
-                                    id={`receipt-uom-${index}`}
-                                    value={item.receipt_uom_id}
-                                    options={unitOptions}
-                                    placeholder="UOM"
-                                    onChange={(value) => setItemValue(index, "receipt_uom_id", value)}
-                                  />
-                                </td>
-                                <td className="grn-qty-col grn-qty-per-col">
-                                  <div className="input-group input-group-sm" title={qtyPerUnitLabel(item)}>
-                                    <input
-                                      className="form-control text-end"
-                                      type="number"
-                                      value={item.qty_per_receipt_unit}
-                                      step="0.000001"
-                                      min="0.000001"
-                                      disabled={receiptUsesBaseUnit(item)}
-                                      placeholder={receiptUsesBaseUnit(item) ? "1" : undefined}
-                                      aria-label={qtyPerUnitLabel(item)}
-                                      onChange={(event) => setItemValue(index, "qty_per_receipt_unit", event.target.value)}
-                                    />
-                                    <span className="input-group-text grn-unit-addon">{qtyPerUnitShortLabel(item)}</span>
-                                  </div>
-                                </td>
-                                <td className="grn-stock-col">
-                                  <div className="form-control form-control-sm bg-white text-secondary text-end">
-                                    {stockQuantityForRow(item)} {baseUnitCodeForRow(item) || ""}
-                                  </div>
-                                </td>
-                                <td className="grn-qty-col">
+                                <td>
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
@@ -2985,11 +2259,10 @@ export default function InventoryReceiptsPage() {
                                     step="0.001"
                                     min="0"
                                     max={item.quantity_received || undefined}
-                                    aria-label={unitLabel(`Row ${index + 1} quantity accepted`, receiptUnitCodeForRow(item))}
                                     onChange={(event) => setItemValue(index, "quantity_accepted", event.target.value)}
                                   />
                                 </td>
-                                <td className="grn-qty-col">
+                                <td>
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
@@ -2999,111 +2272,86 @@ export default function InventoryReceiptsPage() {
                                     max={formatQuantityInput(
                                       Math.max(0, Number(item.quantity_received || 0) - Number(item.quantity_accepted || 0)),
                                     ) || undefined}
-                                    aria-label={unitLabel(`Row ${index + 1} quantity rejected`, receiptUnitCodeForRow(item))}
                                     onChange={(event) => setItemValue(index, "quantity_rejected", event.target.value)}
                                   />
                                 </td>
-                                <td className="grn-money-col">
+                                <td>
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
                                     value={item.unit_cost}
                                     step="0.01"
                                     min="0"
-                                    aria-label={`Row ${index + 1} unit cost in ${currency}`}
                                     onChange={(event) => setItemValue(index, "unit_cost", event.target.value)}
                                   />
                                 </td>
-                                <td className="grn-money-col">
+                                <td>
                                   <input
                                     className="form-control form-control-sm text-end"
                                     type="number"
                                     value={item.total_cost}
                                     step="0.01"
                                     min="0"
-                                    aria-label={`Row ${index + 1} total cost in ${currency}`}
                                     onChange={(event) => setItemValue(index, "total_cost", event.target.value)}
                                   />
                                 </td>
-                                <td className="text-end grn-action-col">
-                                  <div className="btn-group btn-group-sm">
-                                    <button
-                                      className="btn btn-outline-primary px-2"
-                                      type="button"
-                                      title="Create new item"
-                                      aria-label={`Create item for row ${index + 1}`}
-                                      onClick={() => openQuickItemDialog(index)}
-                                    >
-                                      <i className="bi bi-plus-lg" />
-                                    </button>
-                                    <button
-                                      className="btn btn-outline-secondary px-2"
-                                      type="button"
-                                      title="Batch, expiry and inspection"
-                                      aria-label={`Batch, expiry and inspection for row ${index + 1}`}
-                                      onClick={() => setItemDetailsIndex((current) => (current === index ? null : index))}
-                                    >
-                                      <i className="bi bi-card-text" />
-                                    </button>
-                                    <button
-                                      className="btn btn-outline-danger px-2"
-                                      type="button"
-                                      title="Remove row"
-                                      aria-label={`Remove row ${index + 1}`}
-                                      onClick={() => removeItemRow(index)}
-                                      disabled={items.length === 1}
-                                    >
-                                      <i className="bi bi-trash3" />
-                                    </button>
-                                  </div>
+                                <td>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={item.batch_no}
+                                    onChange={(event) => setItemValue(index, "batch_no", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    type="date"
+                                    value={item.expiry_date}
+                                    onChange={(event) => setItemValue(index, "expiry_date", event.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <SearchableSelect
+                                    id={`receipt-inspection-status-${index}`}
+                                    value={item.inspection_status}
+                                    options={inspectionStatusOptions}
+                                    placeholder="Inspection"
+                                    onChange={(value) => setItemValue(index, "inspection_status", value)}
+                                  />
+                                </td>
+                                <td className="text-end">
+                                  <button
+                                    className="btn btn-sm btn-outline-secondary px-2 me-1"
+                                    type="button"
+                                    title="Inspection remarks"
+                                    aria-label={`Inspection remarks for row ${index + 1}`}
+                                    onClick={() => setItemDetailsIndex((current) => (current === index ? null : index))}
+                                  >
+                                    <i className="bi bi-card-text" />
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-outline-danger px-2"
+                                    type="button"
+                                    title="Remove row"
+                                    aria-label={`Remove row ${index + 1}`}
+                                    onClick={() => removeItemRow(index)}
+                                    disabled={items.length === 1}
+                                  >
+                                    <i className="bi bi-trash3" />
+                                  </button>
                                 </td>
                               </tr>
                               {itemDetailsIndex === index ? (
                                 <tr className="grn-item-detail-row">
                                   <td />
                                   <td colSpan={11}>
-                                    <div className="row g-2">
-                                      <div className="col-12 col-md-3">
-                                        <label className="form-label small mb-1">Batch No</label>
-                                        <input
-                                          className="form-control form-control-sm"
-                                          value={item.batch_no}
-                                          aria-label={`Row ${index + 1} batch number`}
-                                          onChange={(event) => setItemValue(index, "batch_no", event.target.value)}
-                                        />
-                                      </div>
-                                      <div className="col-12 col-md-3">
-                                        <label className="form-label small mb-1">Expiry</label>
-                                        <input
-                                          className="form-control form-control-sm"
-                                          type="date"
-                                          value={item.expiry_date}
-                                          aria-label={`Row ${index + 1} expiry date`}
-                                          onChange={(event) => setItemValue(index, "expiry_date", event.target.value)}
-                                        />
-                                      </div>
-                                      <div className="col-12 col-md-3">
-                                        <label className="form-label small mb-1">Inspection Status</label>
-                                        <SearchableSelect
-                                          id={`receipt-inspection-status-${index}`}
-                                          value={item.inspection_status}
-                                          options={inspectionStatusOptions}
-                                          placeholder="Inspection"
-                                          onChange={(value) => setItemValue(index, "inspection_status", value)}
-                                        />
-                                      </div>
-                                      <div className="col-12">
-                                        <label className="form-label small mb-1">Inspection Remarks</label>
-                                        <textarea
-                                          className="form-control form-control-sm"
-                                          rows={2}
-                                          value={item.inspection_remarks}
-                                          onChange={(event) =>
-                                            setItemValue(index, "inspection_remarks", event.target.value)
-                                          }
-                                        />
-                                      </div>
-                                    </div>
+                                    <label className="form-label small mb-1">Inspection Remarks</label>
+                                    <textarea
+                                      className="form-control form-control-sm"
+                                      rows={2}
+                                      value={item.inspection_remarks}
+                                      onChange={(event) => setItemValue(index, "inspection_remarks", event.target.value)}
+                                    />
                                   </td>
                                 </tr>
                               ) : null}
@@ -3114,8 +2362,6 @@ export default function InventoryReceiptsPage() {
                     </div>
                   </div>
 
-                    </div>
-                    <div className="row g-2" hidden={receiptDialogTab !== "documents"}>
                   <div className="col-12">
                     <label className="form-label small">Supporting Documents</label>
                     <div className="mb-2 small text-secondary">
@@ -3164,125 +2410,29 @@ export default function InventoryReceiptsPage() {
                     )}
                   </div>
 
-                    </div>
-                    <div className="row g-3" hidden={receiptDialogTab !== "preview"}>
-                      <div className="col-12 col-lg-7">
-                        <div className="border rounded bg-light p-3 h-100">
-                          <h3 className="h6 mb-3">GRN Summary</h3>
-                          <div className="row g-2 small">
-                            <div className="col-12 col-md-6">
-                              <span className="text-secondary d-block">Receipt No.</span>
-                              <strong>{editingReceiptId ? editingReceiptNo : previewReceiptNo(form.receipt_date)}</strong>
-                            </div>
-                            <div className="col-12 col-md-6">
-                              <span className="text-secondary d-block">Receipt Date</span>
-                              <strong>{form.receipt_date || "-"}</strong>
-                            </div>
-                            <div className="col-12 col-md-6">
-                              <span className="text-secondary d-block">Store</span>
-                              <strong>{lookupLabel("stores", form.store_id) || "-"}</strong>
-                            </div>
-                            <div className="col-12 col-md-6">
-                              <span className="text-secondary d-block">Department</span>
-                              <strong>{lookupLabel("departments", form.department_id) || "-"}</strong>
-                            </div>
-                            <div className="col-12">
-                              <span className="text-secondary d-block">Supplier</span>
-                              <strong>{lookupLabel("suppliers", form.supplier_id) || "-"}</strong>
-                            </div>
-                            <div className="col-12">
-                              <span className="text-secondary d-block">Project</span>
-                              <strong>{lookupLabel("research-projects", form.project_id) || "-"}</strong>
-                            </div>
-                            <div className="col-12 col-md-4">
-                              <span className="text-secondary d-block">Item Rows</span>
-                              <strong>{itemSummary.rowCount}</strong>
-                            </div>
-                            <div className="col-12 col-md-4">
-                              <span className="text-secondary d-block">Accepted Qty</span>
-                              <strong>{formatQuantityInput(itemSummary.acceptedQty)}</strong>
-                            </div>
-                            <div className="col-12 col-md-4">
-                              <span className="text-secondary d-block">Total Cost</span>
-                              <strong>
-                                {currency} {formatMoneyInput(itemSummary.totalCost)}
-                              </strong>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-12 col-lg-5">
-                        <div className="border rounded bg-white p-3 h-100">
-                          <h3 className="h6 mb-3">Before Saving</h3>
-                          <div className="list-group list-group-flush small">
-                            <div className="list-group-item px-0 d-flex justify-content-between">
-                              <span className="text-secondary">Documents</span>
-                              <strong>{attachmentFiles.length} attached</strong>
-                            </div>
-                            <div className="list-group-item px-0 d-flex justify-content-between">
-                              <span className="text-secondary">Attachment Size</span>
-                              <strong>{formatBytes(attachmentTotalBytes)}</strong>
-                            </div>
-                            <div className="list-group-item px-0 d-flex justify-content-between">
-                              <span className="text-secondary">Status</span>
-                              <strong>{editingReceiptId ? "Draft" : form.status}</strong>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                  {!editingReceiptId ? (
-                    <div className="col-12 form-check">
-                      <input
-                        id="post_now"
-                        type="checkbox"
-                        className="form-check-input"
-                        checked={form.post_now}
-                        onChange={(event) => setFormValue("post_now", event.target.checked)}
-                      />
-                      <label className="form-check-label" htmlFor="post_now">
-                        Post receipt after creation
-                      </label>
-                    </div>
-                  ) : null}
+                  <div className="col-12 form-check">
+                    <input
+                      id="post_now"
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={form.post_now}
+                      onChange={(event) => setFormValue("post_now", event.target.checked)}
+                    />
+                    <label className="form-check-label" htmlFor="post_now">
+                      Post receipt after creation
+                    </label>
+                  </div>
 
                     </div>
                   </div>
-                  <div className="modal-footer grn-receipt-footer px-4 py-3">
-                    <div className="grn-footer-summary">
-                      <div className="grn-footer-metric">
-                        <strong>{itemSummary.rowCount}</strong>
-                        <span>Items</span>
-                      </div>
-                      <div className="grn-footer-metric">
-                        <strong>{formatQuantityInput(itemSummary.acceptedQty || itemSummary.receivedQty)}</strong>
-                        <span>Total Qty</span>
-                      </div>
-                      <div className="grn-footer-metric grn-footer-amount">
-                        <strong>
-                          {currency} {formatMoneyInput(itemSummary.totalCost)}
-                        </strong>
-                        <span>Total Amount</span>
-                      </div>
-                      <div className={`grn-footer-ready ${receiptReady ? "is-ready" : "is-incomplete"}`}>
-                        <strong>{receiptReady ? "Ready" : "Incomplete"}</strong>
-                        <span>
-                          {receiptReady
-                            ? "All required rows complete"
-                            : itemSummary.emptyRowCount > 0
-                              ? `${itemSummary.emptyRowCount} empty row${itemSummary.emptyRowCount === 1 ? "" : "s"} to clear`
-                              : "Check required fields"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="d-flex gap-2 ms-auto">
-                      <button className="btn btn-outline-secondary" type="button" onClick={closeCreateDialog}>
-                        Cancel
-                      </button>
-                      <button className="btn btn-primary" type="submit" disabled={isPostingReceipt}>
-                        <i className="bi bi-receipt me-1" />
-                        {isPostingReceipt ? "Saving..." : editingReceiptId ? "Update Receipt" : "Save Receipt"}
-                      </button>
-                    </div>
+                  <div className="modal-footer px-4 py-3">
+                    <button className="btn btn-outline-secondary" type="button" onClick={closeCreateDialog}>
+                      Cancel
+                    </button>
+                    <button className="btn btn-primary" type="submit" disabled={isPostingReceipt}>
+                      <i className="bi bi-receipt me-1" />
+                      {isPostingReceipt ? "Saving..." : "Save Receipt"}
+                    </button>
                   </div>
                 </form>
               </div>
@@ -3404,17 +2554,7 @@ export default function InventoryReceiptsPage() {
                           </div>
 
                           <div className="col-12 col-md-4">
-                            <div className="d-flex align-items-center justify-content-between">
-                              <FieldLabel required>Base UOM / Stock UOM</FieldLabel>
-                              <button
-                                className="btn btn-sm btn-link p-0 mb-1 text-decoration-none"
-                                type="button"
-                                onClick={() => openQuickMasterDialog("units-of-measure")}
-                              >
-                                <i className="bi bi-plus-circle me-1" />
-                                New Unit
-                              </button>
-                            </div>
+                            <FieldLabel required>Unit of Measure</FieldLabel>
                             <SearchableSelect
                               id="receipt-quick-item-unit"
                               value={quickItemForm.unit_id}
@@ -3435,12 +2575,12 @@ export default function InventoryReceiptsPage() {
                           </div>
 
                           <div className="col-12 col-md-4">
-                            <label className="form-label small">Specification / Variant</label>
+                            <label className="form-label small">Model</label>
                             <input
                               className="form-control form-control-sm"
                               value={quickItemForm.model}
                               onChange={(event) => setQuickItemField("model", event.target.value)}
-                              placeholder="e.g. 500g, analytical grade, model/version"
+                              placeholder="e.g. Latitude 5440"
                             />
                           </div>
 
@@ -3541,163 +2681,6 @@ export default function InventoryReceiptsPage() {
           </>
         ) : null}
 
-        {detailOpen ? (
-          <>
-            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
-              <div
-                className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
-                style={{ width: "min(96vw, 1400px)", maxWidth: "min(96vw, 1400px)" }}
-              >
-                <div className="modal-content border-0 shadow-lg">
-                  <div className="modal-header px-4 py-3 d-flex align-items-start gap-3">
-                    <div className="flex-grow-1 min-w-0">
-                      <div className="d-flex align-items-center gap-2 mb-1">
-                        <h2 className="h5 mb-0">{detailReceipt?.receipt_no ?? "GRN Detail"}</h2>
-                        {detailReceipt ? <StatusBadge status={detailReceipt.status} /> : null}
-                      </div>
-                      <p className="text-secondary mb-0">Complete goods receipt detail and item lines.</p>
-                    </div>
-                    <div className="d-flex align-items-center gap-3 ms-auto flex-shrink-0">
-                      {detailReceipt ? (
-                        <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => printReceipt(detailReceipt)}>
-                          <i className="bi bi-printer me-1" />
-                          Print
-                        </button>
-                      ) : null}
-                      <button className="btn-close" type="button" aria-label="Close" onClick={closeDetailDialog} />
-                    </div>
-                  </div>
-                  <div className="modal-body px-4 py-3">
-                    {detailLoading ? (
-                      <div className="d-flex align-items-center gap-2 text-secondary py-4">
-                        <span className="spinner-border spinner-border-sm" aria-hidden="true" />
-                        Loading GRN detail...
-                      </div>
-                    ) : detailReceipt ? (
-                      <>
-                        <div className="row g-3 mb-3">
-                          <div className="col-12 col-lg-4">
-                            <div className="border rounded-2 p-3 h-100 bg-white">
-                              <h3 className="h6 fw-semibold mb-3">Receipt</h3>
-                              <dl className="row small mb-0 gy-2">
-                                <dt className="col-5 text-secondary">Receipt No</dt>
-                                <dd className="col-7 mb-0">{detailReceipt.receipt_no}</dd>
-                                <dt className="col-5 text-secondary">Type</dt>
-                                <dd className="col-7 mb-0">{detailReceipt.receipt_type}</dd>
-                                <dt className="col-5 text-secondary">Date</dt>
-                                <dd className="col-7 mb-0">{String(detailReceipt.receipt_date).split("T")[0]}</dd>
-                                <dt className="col-5 text-secondary">Status</dt>
-                                <dd className="col-7 mb-0"><StatusBadge status={detailReceipt.status} /></dd>
-                                <dt className="col-5 text-secondary">Posted At</dt>
-                                <dd className="col-7 mb-0">{detailReceipt.posted_at || "-"}</dd>
-                                <dt className="col-5 text-secondary">Created</dt>
-                                <dd className="col-7 mb-0">{String(detailReceipt.created_at).split("T")[0]}</dd>
-                              </dl>
-                            </div>
-                          </div>
-                          <div className="col-12 col-lg-4">
-                            <div className="border rounded-2 p-3 h-100 bg-white">
-                              <h3 className="h6 fw-semibold mb-3">Source</h3>
-                              <dl className="row small mb-0 gy-2">
-                                <dt className="col-5 text-secondary">Store</dt>
-                                <dd className="col-7 mb-0">{lookupLabel("stores", detailReceipt.store_id)}</dd>
-                                <dt className="col-5 text-secondary">Department</dt>
-                                <dd className="col-7 mb-0">{lookupLabel("departments", detailReceipt.department_id)}</dd>
-                                <dt className="col-5 text-secondary">Supplier</dt>
-                                <dd className="col-7 mb-0">{lookupLabel("suppliers", detailReceipt.supplier_id)}</dd>
-                                <dt className="col-5 text-secondary">Funding</dt>
-                                <dd className="col-7 mb-0">{lookupLabel("funding-sources", detailReceipt.funding_source_id)}</dd>
-                                <dt className="col-5 text-secondary">Project</dt>
-                                <dd className="col-7 mb-0">{lookupLabel("research-projects", detailReceipt.project_id)}</dd>
-                              </dl>
-                            </div>
-                          </div>
-                          <div className="col-12 col-lg-4">
-                            <div className="border rounded-2 p-3 h-100 bg-white">
-                              <h3 className="h6 fw-semibold mb-3">References</h3>
-                              <dl className="row small mb-0 gy-2">
-                                <dt className="col-5 text-secondary">PO Reference</dt>
-                                <dd className="col-7 mb-0">{detailReceipt.po_reference || "-"}</dd>
-                                <dt className="col-5 text-secondary">Invoice No</dt>
-                                <dd className="col-7 mb-0">{detailReceipt.invoice_no || "-"}</dd>
-                                <dt className="col-5 text-secondary">Challan No</dt>
-                                <dd className="col-7 mb-0">{detailReceipt.challan_no || "-"}</dd>
-                                <dt className="col-5 text-secondary">Approval Ref</dt>
-                                <dd className="col-7 mb-0">{detailReceipt.manual_approval_ref || "-"}</dd>
-                                <dt className="col-5 text-secondary">Approved By</dt>
-                                <dd className="col-7 mb-0">{detailReceipt.manual_approved_by || "-"}</dd>
-                                <dt className="col-5 text-secondary">Approval Date</dt>
-                                <dd className="col-7 mb-0">{detailReceipt.manual_approval_date || "-"}</dd>
-                              </dl>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="border rounded-2 p-3 bg-white mb-3">
-                          <h3 className="h6 fw-semibold mb-2">Remarks</h3>
-                          <p className="mb-0 text-secondary">{detailReceipt.remarks || "No remarks recorded."}</p>
-                        </div>
-
-                        <div className="border rounded-2 p-3 bg-white mb-3">
-                          <div className="d-flex justify-content-between align-items-center mb-2">
-                            <h3 className="h6 fw-semibold mb-0">Documents</h3>
-                            <span className="small text-secondary">{detailDocuments.length} file{detailDocuments.length === 1 ? "" : "s"}</span>
-                          </div>
-                          {detailDocuments.length ? (
-                            <div className="table-responsive">
-                              <table className="table table-sm align-middle mb-0">
-                                <thead>
-                                  <tr>
-                                    <th>Type</th>
-                                    <th>File</th>
-                                    <th>Size</th>
-                                    <th className="text-end">Action</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {detailDocuments.map((documentRow) => (
-                                    <tr key={documentRow.id}>
-                                      <td>{formatDocumentType(documentRow.document_type)}</td>
-                                      <td>{documentRow.original_file_name}</td>
-                                      <td>{formatBytes(Number(documentRow.file_size ?? 0))}</td>
-                                      <td className="text-end">
-                                        <button
-                                          className="btn btn-sm btn-outline-primary"
-                                          type="button"
-                                          disabled={downloadingDocumentId === documentRow.id}
-                                          onClick={() => downloadDetailDocument(documentRow)}
-                                        >
-                                          <i className="bi bi-download me-1" />
-                                          {downloadingDocumentId === documentRow.id ? "Downloading" : "Download"}
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ) : (
-                            <p className="mb-0 text-secondary">No documents attached.</p>
-                          )}
-                        </div>
-
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <h3 className="h6 fw-semibold mb-0">Item Lines</h3>
-                          <span className="small text-secondary">{detailItems.length} row{detailItems.length === 1 ? "" : "s"}</span>
-                        </div>
-                        <DataTable columns={detailItemColumns} rows={detailItems} empty="No item rows returned by backend." />
-                      </>
-                    ) : (
-                      <EmptyState icon="bi-receipt" title="GRN detail unavailable" message="Receipt details could not be loaded." />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="modal-backdrop fade show" />
-          </>
-        ) : null}
-
         <section className="col-12">
           <div className="card border-0 shadow-sm mb-3">
             <div className="card-body">
@@ -3779,9 +2762,6 @@ export default function InventoryReceiptsPage() {
                           className: "text-end",
                           render: (row) => (
                             <div className="btn-group btn-group-sm">
-                              <button className="btn btn-outline-secondary" type="button" onClick={() => void openDetailDialog(row)} title="View GRN detail">
-                                <i className="bi bi-eye" />
-                              </button>
                               <button
                                 className="btn btn-outline-primary"
                                 type="button"
@@ -3799,21 +2779,11 @@ export default function InventoryReceiptsPage() {
                                 <i className="bi bi-printer me-1" />
                                 Print
                               </button>
-                              {row.status === "draft" ? (
-                                <button
-                                  className="btn btn-outline-primary"
-                                  type="button"
-                                  onClick={() => void openEditDialog(row)}
-                                >
-                                  <i className="bi bi-pencil-square me-1" />
-                                  Edit
-                                </button>
-                              ) : null}
                               {row.status !== "posted" ? (
                                 <>
                                   <label
                                     className={`btn btn-outline-secondary ${uploadingAttachmentId === row.id ? "disabled" : ""}`}
-                                    title="Attach supporting document"
+                                    title="Attach supporting document required before posting"
                                   >
                                     <i className="bi bi-paperclip me-1" />
                                     {uploadingAttachmentId === row.id ? "Attaching" : "Attach"}
@@ -3848,7 +2818,6 @@ export default function InventoryReceiptsPage() {
                         },
                       ]}
                       rows={paginatedRows as never}
-                      renderExpandedRow={(row) => renderExpandedReceiptItems(row as Receipt)}
                     />
                     <PaginationControls
                       page={currentPage}
@@ -3864,6 +2833,23 @@ export default function InventoryReceiptsPage() {
                         setExpandedId(null);
                       }}
                     />
+
+                    {expandedId && expandedItems[expandedId] ? (
+                      <div className="mt-3">
+                        <h3 className="h6 mb-2">Items for #{expandedId}</h3>
+                        {expandedLoading[expandedId] ? (
+                          <div className="text-secondary">Loading items...</div>
+                        ) : expandedItems[expandedId].length === 0 ? (
+                          <EmptyState
+                            icon="bi-box-seam"
+                            title="No items on selected receipt"
+                            message="Receipt details are not available yet."
+                          />
+                        ) : (
+                          <DataTable columns={expandedItemColumns} rows={expandedItems[expandedId]} empty="No item rows returned by backend." />
+                        )}
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <EmptyState
