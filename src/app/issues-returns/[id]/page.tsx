@@ -290,11 +290,12 @@ export default function TransactionDetailPage() {
 
   const itemColumns = useMemo(
     () => [
+      { key: "sr_no", header: "Sr.#", className: "text-nowrap", render: (row: TransactionItem) => items.indexOf(row) + 1 },
       { key: "item", header: "Item", render: (row: TransactionItem) => lookupLabel("items", row.item_id) },
       { key: "quantity", header: "Qty", className: "text-end", render: (row: TransactionItem) => transactionQuantityLabel(row) },
       { key: "remarks", header: "Remarks", render: (row: TransactionItem) => row.remarks ?? "-" },
     ],
-    [lookupLabel, transactionQuantityLabel],
+    [items, lookupLabel, transactionQuantityLabel],
   );
 
   const printVoucher = () => {
@@ -339,7 +340,7 @@ export default function TransactionDetailPage() {
         { header: "Remarks", render: (row) => row.remarks },
       ],
       rows: items,
-      note: transaction.remarks ?? transaction.purpose,
+      note: transaction.remarks,
     });
 
     if (!printed) {

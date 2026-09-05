@@ -2113,7 +2113,7 @@ function IssuesReturnsContent() {
           { header: "Remarks", render: (item) => item.remarks },
         ],
         rows: itemRows,
-        note: transaction.remarks ?? transaction.purpose,
+        note: transaction.remarks,
       });
 
       if (!printed) {
