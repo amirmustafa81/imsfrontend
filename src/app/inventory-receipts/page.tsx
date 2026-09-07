@@ -2180,6 +2180,23 @@ export default function InventoryReceiptsPage() {
     try {
       const itemRows = expandedItems[receipt.id] ?? (await fetchReceiptItems(receipt.id));
       setExpandedItems((current) => ({ ...current, [receipt.id]: itemRows }));
+      const hasUnitDetails = itemRows.some((item) => unitSummary(item).length > 0);
+      const printColumns = [
+        { header: "Item", render: (item: ReceiptItem) => lookupLabel("items", item.item_id) },
+        { header: "Description", render: (item: ReceiptItem) => item.description },
+        ...(hasUnitDetails
+          ? [{ header: "Serials & Specifications", render: (item: ReceiptItem) => unitSummary(item).join("; ") }]
+          : []),
+        { header: "Package Received", render: (item: ReceiptItem) => packageDisplayForItem(item) },
+        { header: "Qty Accepted", render: (item: ReceiptItem) => item.quantity_accepted },
+        { header: "Stock Qty", render: (item: ReceiptItem) => stockDisplayTextForItem(item) },
+        { header: "Qty Rejected", render: (item: ReceiptItem) => item.quantity_rejected },
+        { header: `Unit Cost (${currency})`, render: (item: ReceiptItem) => item.unit_cost },
+        { header: `Total Cost (${currency})`, render: (item: ReceiptItem) => item.total_cost },
+        { header: "Batch", render: (item: ReceiptItem) => item.batch_no },
+        { header: "Expiry", render: (item: ReceiptItem) => item.expiry_date },
+        { header: "Inspection", render: (item: ReceiptItem) => inspectionStatusDisplay[item.inspection_status] ?? item.inspection_status },
+      ];
       const printed = printTransactionDocument<ReceiptItem>({
         title: "Goods Receipt Note",
         subtitle: "Inventory receipt voucher with received, accepted, and rejected quantities.",
@@ -2201,20 +2218,7 @@ export default function InventoryReceiptsPage() {
           { label: "Approved By", value: receipt.manual_approved_by },
           { label: "Approval Date", value: receipt.manual_approval_date },
         ],
-        columns: [
-          { header: "Item", render: (item) => lookupLabel("items", item.item_id) },
-          { header: "Description", render: (item) => item.description },
-          { header: "Serials & Specifications", render: (item) => unitSummary(item).join("; ") },
-          { header: "Package Received", render: (item) => packageDisplayForItem(item) },
-          { header: "Qty Accepted", render: (item) => item.quantity_accepted },
-          { header: "Stock Qty", render: (item) => stockDisplayTextForItem(item) },
-          { header: "Qty Rejected", render: (item) => item.quantity_rejected },
-          { header: `Unit Cost (${currency})`, render: (item) => item.unit_cost },
-          { header: `Total Cost (${currency})`, render: (item) => item.total_cost },
-          { header: "Batch", render: (item) => item.batch_no },
-          { header: "Expiry", render: (item) => item.expiry_date },
-          { header: "Inspection", render: (item) => inspectionStatusDisplay[item.inspection_status] ?? item.inspection_status },
-        ],
+        columns: printColumns,
         rows: itemRows,
         note: receipt.remarks,
       });
