@@ -211,38 +211,35 @@ const buildPrintableTagHtml = (tags: Array<TagPrintPreview & { qrDataUrl: string
       <head>
         <title>IMS tag print</title>
         <style>
-          @page { size: A4; margin: 8mm; }
+          @page { size: 38.1mm 25.4mm; margin: 0; }
           * { box-sizing: border-box; }
           html, body {
             margin: 0;
             background: #fff;
             color: #20242a;
             font-family: Arial, Helvetica, sans-serif;
+            overflow: hidden;
           }
           .sheet {
-            display: flex;
-            flex-wrap: wrap;
-            align-content: flex-start;
-            align-items: flex-start;
-            justify-content: flex-start;
-            gap: 4mm;
+            margin: 0;
           }
           .label {
-            width: 80mm;
-            height: 50mm;
-            padding: 7mm;
+            width: 38.1mm;
+            height: 25.4mm;
+            padding: 1.6mm;
             display: flex;
             align-items: center;
-            gap: 5mm;
-            border: 1px solid #20242a;
+            gap: 1.6mm;
+            overflow: hidden;
             break-inside: avoid;
             page-break-inside: avoid;
+            page-break-after: always;
           }
+          .label:last-child { page-break-after: auto; }
           .qr {
-            width: 24mm;
-            height: 24mm;
-            flex: 0 0 24mm;
-            border: 1px solid #dfe3ea;
+            width: 14.5mm;
+            height: 14.5mm;
+            flex: 0 0 14.5mm;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -255,22 +252,22 @@ const buildPrintableTagHtml = (tags: Array<TagPrintPreview & { qrDataUrl: string
           .text {
             min-width: 0;
             flex: 1;
-            line-height: 1.25;
+            line-height: 1.12;
           }
           .tag {
-            font-size: 11pt;
+            font-size: 5.6pt;
             font-weight: 700;
             overflow-wrap: anywhere;
           }
           .meta {
-            margin-top: 2mm;
+            margin-top: 0.9mm;
             color: #4f5865;
-            font-size: 8.4pt;
+            font-size: 4.8pt;
             overflow-wrap: anywhere;
           }
           .unavailable {
             color: #9a1f2b;
-            font-size: 7pt;
+            font-size: 4.5pt;
             text-align: center;
           }
         </style>

@@ -561,30 +561,30 @@ function TagPrintLogContent() {
         <head>
           <title>${escapeHtml(tagId)}</title>
           <style>
-            @page { size: 80mm 50mm; margin: 0; }
+            @page { size: 38.1mm 25.4mm; margin: 0; }
             * { box-sizing: border-box; }
             html, body {
-              width: 80mm;
-              height: 50mm;
+              width: 38.1mm;
+              height: 25.4mm;
               margin: 0;
               background: #fff;
               color: #20242a;
               font-family: Arial, Helvetica, sans-serif;
+              overflow: hidden;
             }
             .label {
-              width: 80mm;
-              height: 50mm;
-              padding: 7mm;
+              width: 38.1mm;
+              height: 25.4mm;
+              padding: 1.6mm;
               display: flex;
               align-items: center;
-              gap: 5mm;
-              border: 1px solid #20242a;
+              gap: 1.6mm;
+              overflow: hidden;
             }
             .qr {
-              width: 24mm;
-              height: 24mm;
-              flex: 0 0 24mm;
-              border: 1px solid #dfe3ea;
+              width: 14.5mm;
+              height: 14.5mm;
+              flex: 0 0 14.5mm;
               display: flex;
               align-items: center;
               justify-content: center;
@@ -596,67 +596,66 @@ function TagPrintLogContent() {
             }
             .unavailable {
               color: #9a1f2b;
-              font-size: 7pt;
+              font-size: 4.5pt;
               text-align: center;
             }
             .barcode {
-              width: 36mm;
-              height: 18mm;
-              flex: 0 0 36mm;
-              border: 1px solid #dfe3ea;
+              width: 17mm;
+              height: 9mm;
+              flex: 0 0 17mm;
               display: flex;
               align-items: center;
               justify-content: center;
               background: #fff;
             }
             .barcode svg {
-              width: 32mm;
-              height: 12mm;
+              width: 16mm;
+              height: 8mm;
             }
             .combined {
-              width: 28mm;
-              flex: 0 0 28mm;
+              width: 15mm;
+              flex: 0 0 15mm;
               display: flex;
               flex-direction: column;
               align-items: center;
-              gap: 2mm;
+              gap: 1mm;
             }
             .combined .qr {
-              width: 20mm;
-              height: 20mm;
-              flex: 0 0 20mm;
+              width: 11.5mm;
+              height: 11.5mm;
+              flex: 0 0 11.5mm;
             }
             .combined .qr svg {
-              width: 17mm;
-              height: 17mm;
+              width: 11mm;
+              height: 11mm;
             }
             .combined .qr img {
-              width: 17mm;
-              height: 17mm;
+              width: 11mm;
+              height: 11mm;
             }
             .combined .barcode {
-              width: 28mm;
-              height: 10mm;
-              flex: 0 0 10mm;
+              width: 15mm;
+              height: 6mm;
+              flex: 0 0 6mm;
             }
             .combined .barcode svg {
-              width: 25mm;
-              height: 7mm;
+              width: 14mm;
+              height: 5mm;
             }
             .text {
               min-width: 0;
               flex: 1;
-              line-height: 1.25;
+              line-height: 1.12;
             }
             .tag {
-              font-size: 11pt;
+              font-size: 5.6pt;
               font-weight: 700;
               overflow-wrap: anywhere;
             }
             .meta {
-              margin-top: 2mm;
+              margin-top: 0.9mm;
               color: #4f5865;
-              font-size: 8.4pt;
+              font-size: 4.8pt;
               overflow-wrap: anywhere;
             }
           </style>
