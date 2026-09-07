@@ -992,7 +992,7 @@ export default function MasterDataPage() {
   ];
 
   return (
-    <main className="min-vh-100 bg-body-tertiary">
+    <main className="min-vh-100 bg-body-tertiary" data-skip-select-enhancer="true">
       <div className="container-fluid p-4">
         <PageHeader
           title="Master Data Console"
@@ -1116,7 +1116,8 @@ export default function MasterDataPage() {
 
         {dialogOpen ? (
           <>
-            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+            <div className="modal-backdrop fade show" style={{ zIndex: 1040 }} onClick={closeDialog} />
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" style={{ zIndex: 1050 }}>
               <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable" style={{ width: "min(52vw, 980px)", maxWidth: "min(52vw, 980px)" }}>
                 <form className="modal-content border-0 shadow-lg" onSubmit={submitRecord}>
                   <div className="modal-header px-4 py-3">
@@ -1155,7 +1156,6 @@ export default function MasterDataPage() {
                 </form>
               </div>
             </div>
-            <div className="modal-backdrop fade show" onClick={closeDialog} />
           </>
         ) : null}
       </div>
