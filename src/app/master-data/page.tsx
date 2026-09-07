@@ -413,6 +413,8 @@ const displayValue = (value: unknown) => {
 
 const assetCategoryLabel = (row: RowData) => `${row.code ?? row.id} - ${row.name ?? ""}`;
 
+const isActiveMasterRow = (row: RowData) => String(row.status ?? "").toLowerCase() !== "inactive";
+
 const isAssetClassificationResource = (resource: ResourceKey) =>
   resource === "asset-categories" || resource === "asset-subcategories" || resource === "asset-attribute-definitions";
 
@@ -516,10 +518,16 @@ export default function MasterDataPage() {
 
   const definition = resources[activeResource];
   const configColumns = definition.tableColumns;
-  const assetCategoryRows = lookups["asset-categories"] ?? [];
+  const assetCategoryRows = (lookups["asset-categories"] ?? []).filter(isActiveMasterRow);
   const categoryOptions = assetCategoryRows.filter(isParentCategory);
-  const subcategoryOptions = (lookups["asset-categories"] ?? []).filter((row) => {
+  const selectedFormCategoryId = String(form.category_id || categoryFilterId || "");
+  const formSubcategoryOptions = assetCategoryRows.filter((row) => {
     if (!isSubcategory(row)) return false;
+    if (!selectedFormCategoryId) return false;
+    return String(row.parent_category_id) === selectedFormCategoryId;
+  });
+  const subcategoryOptions = (lookups["asset-categories"] ?? []).filter((row) => {
+    if (!isSubcategory(row) || !isActiveMasterRow(row)) return false;
     if (!categoryFilterId) return true;
     return String(row.parent_category_id) === categoryFilterId;
   });
@@ -848,13 +856,13 @@ export default function MasterDataPage() {
           }
 
           if (field.key === "subcategory_id") {
-            const selectedCategoryId = String(form.category_id || categoryFilterId || "");
-
-            return assetCategoryRows.filter((row) => {
-              if (!isSubcategory(row)) return false;
-              if (!selectedCategoryId) return true;
-              return String(row.parent_category_id) === selectedCategoryId;
-            });
+            return activeResource === "asset-attribute-definitions"
+              ? formSubcategoryOptions
+              : assetCategoryRows.filter((row) => {
+                  if (!isSubcategory(row)) return false;
+                  if (!selectedFormCategoryId) return true;
+                  return String(row.parent_category_id) === selectedFormCategoryId;
+                });
           }
 
           return assetCategoryRows;
@@ -873,6 +881,7 @@ export default function MasterDataPage() {
           onChange={(event) => setFieldValue(field.key, event.target.value)}
           disabled={
             (activeResource === "asset-attribute-definitions" && field.key === "applies_to") ||
+            (activeResource === "asset-attribute-definitions" && field.key === "subcategory_id" && !selectedFormCategoryId) ||
             (field.key === "subcategory_id" && Boolean(form.category_id || categoryFilterId) && options.length === 0)
           }
         >
