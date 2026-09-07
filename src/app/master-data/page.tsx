@@ -416,6 +416,9 @@ const assetCategoryLabel = (row: RowData) => `${row.code ?? row.id} - ${row.name
 const isAssetClassificationResource = (resource: ResourceKey) =>
   resource === "asset-categories" || resource === "asset-subcategories" || resource === "asset-attribute-definitions";
 
+const isParentCategory = (row: RowData) => !row.parent_category_id;
+const isSubcategory = (row: RowData) => Boolean(row.parent_category_id);
+
 const toDateInput = (value: unknown): string => {
   if (value === null || value === undefined || value === "") {
     return "";
@@ -513,9 +516,10 @@ export default function MasterDataPage() {
 
   const definition = resources[activeResource];
   const configColumns = definition.tableColumns;
-  const categoryOptions = (lookups["asset-categories"] ?? []).filter((row) => !row.parent_category_id);
+  const assetCategoryRows = lookups["asset-categories"] ?? [];
+  const categoryOptions = assetCategoryRows.filter(isParentCategory);
   const subcategoryOptions = (lookups["asset-categories"] ?? []).filter((row) => {
-    if (!row.parent_category_id) return false;
+    if (!isSubcategory(row)) return false;
     if (!categoryFilterId) return true;
     return String(row.parent_category_id) === categoryFilterId;
   });
@@ -625,10 +629,41 @@ export default function MasterDataPage() {
     return `${primary} - ${label}`;
   };
 
+  const categoryIdForSubcategory = (subcategoryId: string) => {
+    const subcategory = assetCategoryRows.find((row) => String(row.id) === subcategoryId && isSubcategory(row));
+    return subcategory?.parent_category_id ? String(subcategory.parent_category_id) : "";
+  };
+
+  const createInitialForm = () => {
+    const next = initialFormFor(definition.fields);
+
+    if (activeResource === "asset-subcategories" && categoryFilterId) {
+      next.parent_category_id = categoryFilterId;
+    }
+
+    if (activeResource === "asset-attribute-definitions") {
+      next.applies_to = "item";
+
+      if (categoryFilterId) {
+        next.category_id = categoryFilterId;
+      }
+
+      if (subcategoryFilterId) {
+        next.subcategory_id = subcategoryFilterId;
+        next.category_id = categoryFilterId || categoryIdForSubcategory(subcategoryFilterId);
+      }
+    }
+
+    return next;
+  };
+
   const setFieldValue = (key: string, value: string) => {
     setForm((current) => ({
       ...current,
       [key]: value,
+      ...(activeResource === "asset-attribute-definitions" && key === "category_id"
+        ? { subcategory_id: "" }
+        : {}),
     }));
   };
 
@@ -697,11 +732,11 @@ export default function MasterDataPage() {
         setMessage("Record created successfully");
       }
 
-    const response = await api.get(`/master-data/${definition.endpoint}`, {
-      params: {
-        search: search.trim() || undefined,
-        status: statusFilter || undefined,
-      },
+      const response = await api.get(`/master-data/${definition.endpoint}`, {
+        params: {
+          search: search.trim() || undefined,
+          status: statusFilter || undefined,
+        },
       });
 
       const nextRows = response.data?.data;
@@ -756,7 +791,7 @@ export default function MasterDataPage() {
 
   const openCreateDialog = () => {
     setEditingId(null);
-    setForm(initialFormFor(definition.fields));
+    setForm(createInitialForm());
     setError("");
     setMessage("");
     setDialogOpen(true);
@@ -803,9 +838,28 @@ export default function MasterDataPage() {
         if (field.options) return field.options;
         if (!field.source) return [];
 
-        const list = field.key === "parent_category_id"
-          ? (lookups[field.source] ?? []).filter((row) => !row.parent_category_id)
-          : lookups[field.source] ?? [];
+        const list = (() => {
+          if (field.source !== "asset-categories") {
+            return lookups[field.source] ?? [];
+          }
+
+          if (field.key === "parent_category_id" || field.key === "category_id") {
+            return assetCategoryRows.filter(isParentCategory);
+          }
+
+          if (field.key === "subcategory_id") {
+            const selectedCategoryId = String(form.category_id || categoryFilterId || "");
+
+            return assetCategoryRows.filter((row) => {
+              if (!isSubcategory(row)) return false;
+              if (!selectedCategoryId) return true;
+              return String(row.parent_category_id) === selectedCategoryId;
+            });
+          }
+
+          return assetCategoryRows;
+        })();
+
         return list.map((row) => ({
           value: String(row.id),
           label: `${row.code ?? row.campus_map_code ?? row.project_code ?? row.room_no ?? row.id} - ${row.name ?? row.title ?? ""}`,
@@ -817,7 +871,10 @@ export default function MasterDataPage() {
           className="form-select form-select-sm"
           value={String(value)}
           onChange={(event) => setFieldValue(field.key, event.target.value)}
-          disabled={activeResource === "asset-attribute-definitions" && field.key === "applies_to"}
+          disabled={
+            (activeResource === "asset-attribute-definitions" && field.key === "applies_to") ||
+            (field.key === "subcategory_id" && Boolean(form.category_id || categoryFilterId) && options.length === 0)
+          }
         >
           <option value="">Select</option>
           {options.map((option) => (
@@ -840,17 +897,17 @@ export default function MasterDataPage() {
       );
     }
 
-      return (
-        <input
-          className="form-control form-control-sm"
-          type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-          value={String(value)}
-          placeholder={getFieldPlaceholder(field)}
-          onChange={(event) =>
-            field.type === "number"
-              ? setNumericOrBlank(field.key, event.target.value)
-              : setFieldValue(field.key, event.target.value)
-          }
+    return (
+      <input
+        className="form-control form-control-sm"
+        type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+        value={String(value)}
+        placeholder={getFieldPlaceholder(field)}
+        onChange={(event) =>
+          field.type === "number"
+            ? setNumericOrBlank(field.key, event.target.value)
+            : setFieldValue(field.key, event.target.value)
+        }
       />
     );
   };
