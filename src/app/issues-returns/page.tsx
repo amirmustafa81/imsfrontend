@@ -4,6 +4,7 @@ import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { TransactionAssetSelect } from "@/components/ims/TransactionAssetSelect";
 import { useAuth } from "@/lib/auth";
 import { printTransactionDocument } from "@/lib/transaction-print";
 import {
@@ -141,6 +142,7 @@ type TransactionItem = {
   qty_per_issue_unit?: number | null;
   item_label?: string | null;
   asset_label?: string | null;
+  serial_number?: string | null;
   printable_tag_id?: string | null;
 };
 
@@ -1146,7 +1148,7 @@ function IssuesReturnsContent() {
             ? {
                 ...row,
                 item_id: value,
-                asset_id: transactionItemRequiresAssetId(value) ? row.asset_id : "",
+                asset_id: "",
                 issue_uom_id: baseUomId,
                 qty_per_issue_unit: "1",
               }
@@ -2109,6 +2111,7 @@ function IssuesReturnsContent() {
           { header: "Sr.#", render: (_item, index) => index + 1 },
           { header: "Item", render: (item) => item.item_label ?? lookupLabel("items", item.item_id) },
           { header: "Asset", render: (item) => item.asset_label ?? (item.asset_id ? `#${item.asset_id}` : "-") },
+          { header: "Serial Number", render: (item) => item.serial_number ?? "-" },
           { header: "Quantity", render: (item) => transactionQuantityPrintLabel(transaction, item, sourceRowsByItemId) },
           { header: "Remarks", render: (item) => item.remarks },
         ],
@@ -2565,6 +2568,7 @@ function IssuesReturnsContent() {
   const expandedItemColumns = [
     { key: "item", header: "Item", render: (item: TransactionItem) => item.item_label ?? lookupLabel("items", item.item_id) },
     { key: "asset", header: "Asset", render: (item: TransactionItem) => item.asset_label ?? item.asset_id ?? "-" },
+    { key: "serial", header: "Serial Number", render: (item: TransactionItem) => item.serial_number ?? "-" },
     {
       key: "qty",
       header: "Qty",
@@ -2984,7 +2988,7 @@ function IssuesReturnsContent() {
                               <tr>
                                 <th className="text-center voucher-row-number">#</th>
                                 <th className="voucher-item-col">Item</th>
-                                {showAssetColumn ? <th className="voucher-asset-col">Asset ID</th> : null}
+                                {showAssetColumn ? <th className="voucher-asset-col">Asset / Serial Number</th> : null}
                                 <th className="voucher-qty-col">Qty</th>
                                 <th className="voucher-uom-col">UOM</th>
                                 <th className="voucher-stock-col">Stock Balance</th>
@@ -3013,12 +3017,12 @@ function IssuesReturnsContent() {
                                     {showAssetColumn ? (
                                       <td className="voucher-asset-col">
                                         {transactionItemRequiresAssetId(item.item_id) || item.asset_id ? (
-                                          <input
-                                            className="form-control form-control-sm"
-                                            value={item.asset_id}
-                                            onChange={(event) => setItemValue(index, "asset_id", event.target.value)}
-                                            placeholder="Optional"
-                                          />
+                                          <TransactionAssetSelect id={`voucher-asset-${index}`} itemId={item.item_id} value={item.asset_id}
+                                            transactionType={form.transaction_type} departmentId={form.from_department_id} storeId={form.from_store_id}
+                                            employeeId={form.recipient_user_id} projectId={form.project_id} fundingSourceId={form.funding_source_id}
+                                            onChange={(value) => setItems((current) => current.map((row, rowIndex) => rowIndex === index
+                                              ? { ...row, asset_id: value, quantity: value ? "1" : row.quantity, qty_per_issue_unit: "1", issue_uom_id: String(lookupRow("items", row.item_id)?.unit_id ?? "") }
+                                              : row))} />
                                         ) : (
                                           <div className="form-control form-control-sm bg-light text-secondary">-</div>
                                         )}

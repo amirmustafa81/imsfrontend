@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 export type AttributeDefinition = {
   id: number;
   category_id: number | string;
@@ -48,7 +50,7 @@ export const matchingAttributeDefinitions = (
       if (definition.status && definition.status !== "active") return false;
       if (String(definition.category_id) !== String(categoryId ?? "")) return false;
       if (definition.subcategory_id && String(definition.subcategory_id) !== String(subcategoryId ?? "")) return false;
-      return definition.applies_to === appliesTo;
+      return definition.applies_to === appliesTo || definition.applies_to === "both";
     })
     .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0) || a.label.localeCompare(b.label));
 
@@ -60,6 +62,7 @@ export function AttributeFields({
   values,
   onChange,
   title = "Specifications",
+  enforceRequired = true,
 }: {
   definitions: AttributeDefinition[];
   categoryId: string | number | null | undefined;
@@ -68,7 +71,9 @@ export function AttributeFields({
   values: AttributeValues;
   onChange: (code: string, value: string | boolean) => void;
   title?: string;
+  enforceRequired?: boolean;
 }) {
+  const idPrefix = useId();
   const fields = matchingAttributeDefinitions(definitions, categoryId, subcategoryId, appliesTo);
 
   if (!categoryId || fields.length === 0) {
@@ -82,20 +87,20 @@ export function AttributeFields({
         <div className="row g-3">
           {fields.map((field) => {
             const value = values[field.code] ?? "";
-            const required = toBoolean(field.is_required);
+            const required = toBoolean(field.is_required) && !(appliesTo === "item" && field.applies_to === "both");
 
             if (field.field_type === "boolean") {
               return (
                 <div className="col-12 col-md-4 d-flex align-items-end" key={field.id}>
                   <div className="form-check">
                     <input
-                      id={`attribute-${appliesTo}-${field.code}`}
+                      id={`${idPrefix}-${field.code}`}
                       className="form-check-input"
                       type="checkbox"
                       checked={toBoolean(value)}
                       onChange={(event) => onChange(field.code, event.target.checked)}
                     />
-                    <label className="form-check-label small" htmlFor={`attribute-${appliesTo}-${field.code}`}>
+                    <label className="form-check-label small" htmlFor={`${idPrefix}-${field.code}`}>
                       {field.label} {required ? <span className="text-danger">*</span> : null}
                     </label>
                   </div>
@@ -106,14 +111,15 @@ export function AttributeFields({
             if (field.field_type === "select") {
               return (
                 <div className="col-12 col-md-4" key={field.id}>
-                  <label className="form-label small">
+                  <label className="form-label small" htmlFor={`${idPrefix}-${field.code}`}>
                     {field.label} {required ? <span className="text-danger">*</span> : null}
                   </label>
                   <select
+                    id={`${idPrefix}-${field.code}`}
                     className="form-select form-select-sm"
                     value={String(value)}
                     onChange={(event) => onChange(field.code, event.target.value)}
-                    required={required}
+                    required={enforceRequired && required}
                   >
                     <option value="">Choose {field.label.toLowerCase()}</option>
                     {optionList(field.options).map((option) => (
@@ -128,15 +134,16 @@ export function AttributeFields({
 
             return (
               <div className="col-12 col-md-4" key={field.id}>
-                <label className="form-label small">
+                <label className="form-label small" htmlFor={`${idPrefix}-${field.code}`}>
                   {field.label} {required ? <span className="text-danger">*</span> : null}
                 </label>
                 <input
+                  id={`${idPrefix}-${field.code}`}
                   className="form-control form-control-sm"
                   type={field.field_type === "number" ? "number" : field.field_type === "date" ? "date" : "text"}
                   value={String(value)}
                   onChange={(event) => onChange(field.code, event.target.value)}
-                  required={required}
+                  required={enforceRequired && required}
                 />
               </div>
             );

@@ -4,7 +4,8 @@ import { ChangeEvent, FormEvent, Fragment, useEffect, useMemo, useState } from "
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { printTransactionDocument } from "@/lib/transaction-print";
-import { AttributeFields, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
+import { AttributeFields, matchingAttributeDefinitions, type AttributeDefinition, type AttributeValues } from "@/components/ims/AttributeFields";
+import { ReceiptAssetUnits, type ReceiptAssetUnit } from "@/components/ims/ReceiptAssetUnits";
 import {
   ApprovalReferenceFields,
   DataTable,
@@ -97,6 +98,7 @@ type ReceiptItem = {
   expiry_date: string | null;
   inspection_status: string;
   inspection_remarks: string | null;
+  asset_units?: ReceiptAssetUnit[] | null;
 };
 
 type ReceiptItemInput = {
@@ -113,6 +115,7 @@ type ReceiptItemInput = {
   expiry_date: string;
   inspection_status: string;
   inspection_remarks: string;
+  asset_units: ReceiptAssetUnit[];
 };
 
 type ReceiptForm = {
@@ -377,6 +380,7 @@ const emptyItem: ReceiptItemInput = {
   expiry_date: "",
   inspection_status: "pending",
   inspection_remarks: "",
+  asset_units: [],
 };
 
 const isReceiptItemEmpty = (item: ReceiptItemInput) =>
@@ -591,6 +595,7 @@ const receiptItemToInput = (item: ReceiptItem): ReceiptItemInput => ({
   expiry_date: toInputDate(item.expiry_date),
   inspection_status: item.inspection_status || "pending",
   inspection_remarks: item.inspection_remarks ?? "",
+  asset_units: item.asset_units ?? [],
 });
 
 const previewYearFromDate = (date: string): string => {
@@ -863,6 +868,26 @@ export default function InventoryReceiptsPage() {
 
   const selectedItemForId = (itemId: string | number | null | undefined): RowData | undefined =>
     lookups.items.find((row) => String(row.id) === String(itemId ?? ""));
+
+  const flagEnabled = (value: unknown) => value === true || value === 1 || value === "1" || value === "true";
+
+  const itemHasAssets = (itemId: string): boolean => {
+    const item = selectedItemForId(itemId);
+    const category = lookups["asset-categories"].find((row) => String(row.id) === String(item?.subcategory_id || item?.category_id));
+    return flagEnabled(item?.requires_serial_tracking) || flagEnabled(category?.requires_qr_tag);
+  };
+
+  const assetDefaultsForItem = (itemId: string): AttributeValues => {
+    const item = selectedItemForId(itemId);
+    const values = (item as unknown as { attributes?: AttributeValues })?.attributes ?? {};
+    const fields = matchingAttributeDefinitions(lookups["asset-attribute-definitions"], item?.category_id, item?.subcategory_id, "asset");
+    return Object.fromEntries(fields.filter((field) => values[field.code] !== undefined).map((field) => [field.code, values[field.code]]));
+  };
+
+  const unitSummary = (line: ReceiptItem) => (line.asset_units ?? []).map((unit, index) => {
+    const specs = Object.entries(unit.attributes).map(([code, value]) => `${lookups["asset-attribute-definitions"].find((definition) => definition.code === code)?.label ?? code}: ${String(value)}`).join(", ");
+    return `${unit.serial_number || `Unit ${index + 1}`}${specs ? ` - ${specs}` : ""}`;
+  });
 
   const unitCodeForId = (unitId: string | number | null | undefined): string => {
     if (!unitId) return "";
@@ -1171,7 +1196,7 @@ export default function InventoryReceiptsPage() {
     }));
   };
 
-  const setItemValue = (index: number, key: keyof ReceiptItemInput, value: string) => {
+  const setItemValue = (index: number, key: Exclude<keyof ReceiptItemInput, "asset_units">, value: string) => {
     setItems((current) =>
       current.map((row, idx) => {
         if (idx !== index) return row;
@@ -1181,6 +1206,7 @@ export default function InventoryReceiptsPage() {
           return {
             ...row,
             item_id: value,
+            asset_units: [],
             receipt_uom_id: baseUnitId,
             qty_per_receipt_unit: "1",
           };
@@ -1703,6 +1729,7 @@ export default function InventoryReceiptsPage() {
   const detailItemColumns = [
     { key: "item", header: "Item", render: (receiptItem: ReceiptItem) => lookupLabel("items", receiptItem.item_id) },
     { key: "description", header: "Description", render: (receiptItem: ReceiptItem) => receiptItem.description || "-" },
+    { key: "units", header: "Serials & Specifications", render: (receiptItem: ReceiptItem) => <div style={{ minWidth: 220 }}>{unitSummary(receiptItem).map((text, index) => <div className="small mb-1" key={index}>{text}</div>)}</div> },
     { key: "package", header: "Package", render: (receiptItem: ReceiptItem) => packageDisplayForItem(receiptItem) },
     { key: "accepted", header: "Accepted", render: (receiptItem: ReceiptItem) => receiptItem.quantity_accepted },
     { key: "stockQty", header: "Stock Qty", render: (receiptItem: ReceiptItem) => stockDisplayForItem(receiptItem) },
@@ -1963,6 +1990,7 @@ export default function InventoryReceiptsPage() {
           expiry_date: toPayloadDate(row.expiry_date),
           inspection_status: row.inspection_status,
           inspection_remarks: row.inspection_remarks.trim() || null,
+          asset_units: row.asset_units,
         };
       }),
     };
@@ -2016,6 +2044,30 @@ export default function InventoryReceiptsPage() {
       return;
     }
 
+    if (form.post_now) {
+      const serials = new Set<string>();
+      for (const row of receiptItems) {
+        const selected = selectedItemForId(row.item_id);
+        const requiresSerial = flagEnabled(selected?.requires_serial_tracking);
+        if (requiresSerial || row.asset_units.length > 0) {
+          const count = Number(row.quantity_accepted || 0) * Number(row.qty_per_receipt_unit || 1);
+          if (!Number.isInteger(count) || row.asset_units.length !== count) {
+            setError(`Enter details for all ${count} accepted units of ${lookupLabel("items", row.item_id)}.`);
+            return;
+          }
+          for (const unit of row.asset_units) {
+            const serial = (unit.serial_number ?? "").trim();
+            const key = `${row.item_id}:${serial.toLowerCase()}`;
+            if ((requiresSerial && !serial) || (serial && serials.has(key))) {
+              setError("Each accepted serial-tracked unit needs its own serial number. Duplicate serial numbers for the same item are not allowed.");
+              return;
+            }
+            if (serial) serials.add(key);
+          }
+        }
+      }
+    }
+
     try {
       setIsPostingReceipt(true);
       const receiptResponse = isEditingReceipt
@@ -2025,6 +2077,12 @@ export default function InventoryReceiptsPage() {
 
       if (!receiptId) {
         throw new Error(isEditingReceipt ? "Could not update receipt." : "Could not create receipt.");
+      }
+
+      // Keep a saved draft addressable if attachment upload or posting fails.
+      if (!isEditingReceipt) {
+        setEditingReceiptId(receiptId);
+        setForm((current) => ({ ...current, receipt_no: receiptResponse.data?.data?.receipt_no ?? current.receipt_no, post_now: false }));
       }
 
       for (const attachment of attachmentFiles) {
@@ -2136,6 +2194,7 @@ export default function InventoryReceiptsPage() {
         columns: [
           { header: "Item", render: (item) => lookupLabel("items", item.item_id) },
           { header: "Description", render: (item) => item.description },
+          { header: "Serials & Specifications", render: (item) => unitSummary(item).join("; ") },
           { header: "Package Received", render: (item) => packageDisplayForItem(item) },
           { header: "Qty Accepted", render: (item) => item.quantity_accepted },
           { header: "Stock Qty", render: (item) => stockDisplayTextForItem(item) },
@@ -3058,6 +3117,20 @@ export default function InventoryReceiptsPage() {
                                   </div>
                                 </td>
                               </tr>
+                              {itemHasAssets(item.item_id) ? (
+                                <tr>
+                                  <td colSpan={12}>
+                                    <ReceiptAssetUnits units={item.asset_units}
+                                      count={Number(item.quantity_accepted || 0) * Number(item.qty_per_receipt_unit || 1)}
+                                      defaults={assetDefaultsForItem(item.item_id)}
+                                      definitions={lookups["asset-attribute-definitions"]}
+                                      categoryId={selectedItemForId(item.item_id)?.category_id}
+                                      subcategoryId={selectedItemForId(item.item_id)?.subcategory_id}
+                                      serialRequired={flagEnabled(selectedItemForId(item.item_id)?.requires_serial_tracking)}
+                                      onChange={(units) => setItems((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, asset_units: units } : row))} />
+                                  </td>
+                                </tr>
+                              ) : null}
                               {itemDetailsIndex === index ? (
                                 <tr className="grn-item-detail-row">
                                   <td />
