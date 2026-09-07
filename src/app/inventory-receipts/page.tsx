@@ -871,16 +871,20 @@ export default function InventoryReceiptsPage() {
 
   const flagEnabled = (value: unknown) => value === true || value === 1 || value === "1" || value === "true";
 
-  const itemHasAssets = (itemId: string): boolean => {
+  const assetDefinitionsForItem = (itemId: string | number | null | undefined): AttributeDefinition[] => {
     const item = selectedItemForId(itemId);
-    const category = lookups["asset-categories"].find((row) => String(row.id) === String(item?.subcategory_id || item?.category_id));
-    return flagEnabled(item?.requires_serial_tracking) || flagEnabled(category?.requires_qr_tag);
+    return matchingAttributeDefinitions(lookups["asset-attribute-definitions"], item?.category_id, item?.subcategory_id, "asset");
+  };
+
+  const itemNeedsManualUnitDetails = (itemId: string | number | null | undefined): boolean => {
+    const item = selectedItemForId(itemId);
+    return flagEnabled(item?.requires_serial_tracking) || assetDefinitionsForItem(itemId).length > 0;
   };
 
   const assetDefaultsForItem = (itemId: string): AttributeValues => {
     const item = selectedItemForId(itemId);
     const values = (item as unknown as { attributes?: AttributeValues })?.attributes ?? {};
-    const fields = matchingAttributeDefinitions(lookups["asset-attribute-definitions"], item?.category_id, item?.subcategory_id, "asset");
+    const fields = assetDefinitionsForItem(itemId);
     return Object.fromEntries(fields.filter((field) => values[field.code] !== undefined).map((field) => [field.code, values[field.code]]));
   };
 
@@ -1991,7 +1995,7 @@ export default function InventoryReceiptsPage() {
           expiry_date: toPayloadDate(row.expiry_date),
           inspection_status: row.inspection_status,
           inspection_remarks: row.inspection_remarks.trim() || null,
-          asset_units: row.asset_units,
+          asset_units: itemNeedsManualUnitDetails(row.item_id) ? row.asset_units : [],
         };
       }),
     };
@@ -2050,7 +2054,8 @@ export default function InventoryReceiptsPage() {
       for (const row of receiptItems) {
         const selected = selectedItemForId(row.item_id);
         const requiresSerial = flagEnabled(selected?.requires_serial_tracking);
-        if (requiresSerial || row.asset_units.length > 0) {
+        const needsManualUnitDetails = itemNeedsManualUnitDetails(row.item_id);
+        if (needsManualUnitDetails && (requiresSerial || row.asset_units.length > 0)) {
           const count = Number(row.quantity_accepted || 0) * Number(row.qty_per_receipt_unit || 1);
           if (!Number.isInteger(count) || row.asset_units.length !== count) {
             setError(`Enter details for all ${count} accepted units of ${lookupLabel("items", row.item_id)}.`);
@@ -3122,7 +3127,7 @@ export default function InventoryReceiptsPage() {
                                   </div>
                                 </td>
                               </tr>
-                              {itemHasAssets(item.item_id) ? (
+                              {itemNeedsManualUnitDetails(item.item_id) ? (
                                 <tr>
                                   <td colSpan={12}>
                                     <ReceiptAssetUnits units={item.asset_units}
