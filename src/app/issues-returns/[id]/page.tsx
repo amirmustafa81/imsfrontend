@@ -56,6 +56,7 @@ type TransactionItem = {
   asset_id: number | null;
   quantity: number;
   unit_cost: number | null;
+  item_description?: string | null;
   remarks: string | null;
   base_uom_id?: number | null;
   base_uom_code?: string | null;
@@ -292,6 +293,7 @@ export default function TransactionDetailPage() {
     () => [
       { key: "sr_no", header: "Sr.#", className: "text-nowrap", render: (row: TransactionItem) => items.indexOf(row) + 1 },
       { key: "item", header: "Item", render: (row: TransactionItem) => lookupLabel("items", row.item_id) },
+      { key: "item_description", header: "Item Description", render: (row: TransactionItem) => row.item_description ?? "-" },
       { key: "quantity", header: "Qty", className: "text-end", render: (row: TransactionItem) => transactionQuantityLabel(row) },
       { key: "remarks", header: "Remarks", render: (row: TransactionItem) => row.remarks ?? "-" },
     ],
@@ -336,6 +338,7 @@ export default function TransactionDetailPage() {
       columns: [
         { header: "Sr.#", render: (_row, index) => index + 1 },
         { header: "Item", render: (row) => lookupLabel("items", row.item_id) },
+        { header: "Item Description", render: (row) => row.item_description ?? "-" },
         { header: "Quantity", render: (row) => transactionQuantityPrintLabel(row) },
         { header: "Remarks", render: (row) => row.remarks },
       ],

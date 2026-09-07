@@ -30,6 +30,7 @@ type AssetRow = {
   old_tag_reference: string | null;
   item_code: string;
   item_name: string;
+  receipt_item_description: string | null;
   category_name: string;
   subcategory_code: string | null;
   department_code: string | null;
@@ -478,6 +479,11 @@ export default function AssetsPage() {
           <small className="text-secondary">{row.item_name}</small>
         </>
       ),
+    },
+    {
+      key: "receipt_item_description",
+      header: "Item Description",
+      render: (row: AssetRow) => <>{row.receipt_item_description ?? "-"}</>,
     },
     {
       key: "category",

@@ -17,6 +17,7 @@ type AssetDetail = {
   old_tag_reference: string | null;
   item_id: number;
   receipt_item_id: number | null;
+  receipt_item_description: string | null;
   category_code: string;
   subcategory_code: string | null;
   serial_no_component: string | null;
@@ -382,6 +383,10 @@ export default function AssetDetailPage() {
                         <div className="fw-medium">
                           {asset.item?.name ? `${asset.item.item_code ?? ""} ${asset.item.item_code ? "-" : ""} ${asset.item.name}`.trim() : "-"}
                         </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="small text-secondary">Item Description</div>
+                        <div className="fw-medium">{asset.receipt_item_description ?? "-"}</div>
                       </div>
                       <div className="col-md-6">
                         <div className="small text-secondary">Serial / Employee</div>

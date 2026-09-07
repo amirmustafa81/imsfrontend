@@ -140,6 +140,7 @@ type TransactionItem = {
   issue_uom_code?: string | null;
   issue_uom_name?: string | null;
   qty_per_issue_unit?: number | null;
+  item_description?: string | null;
   item_label?: string | null;
   asset_label?: string | null;
   serial_number?: string | null;
@@ -2110,6 +2111,7 @@ function IssuesReturnsContent() {
         columns: [
           { header: "Sr.#", render: (_item, index) => index + 1 },
           { header: "Item", render: (item) => item.item_label ?? lookupLabel("items", item.item_id) },
+          { header: "Item Description", render: (item) => item.item_description ?? "-" },
           { header: "Asset", render: (item) => item.asset_label ?? (item.asset_id ? `#${item.asset_id}` : "-") },
           { header: "Serial Number", render: (item) => item.serial_number ?? "-" },
           { header: "Quantity", render: (item) => transactionQuantityPrintLabel(transaction, item, sourceRowsByItemId) },
@@ -2567,6 +2569,7 @@ function IssuesReturnsContent() {
 
   const expandedItemColumns = [
     { key: "item", header: "Item", render: (item: TransactionItem) => item.item_label ?? lookupLabel("items", item.item_id) },
+    { key: "item_description", header: "Item Description", render: (item: TransactionItem) => item.item_description ?? "-" },
     { key: "asset", header: "Asset", render: (item: TransactionItem) => item.asset_label ?? item.asset_id ?? "-" },
     { key: "serial", header: "Serial Number", render: (item: TransactionItem) => item.serial_number ?? "-" },
     {
