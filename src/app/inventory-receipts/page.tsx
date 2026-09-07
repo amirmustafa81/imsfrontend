@@ -888,10 +888,29 @@ export default function InventoryReceiptsPage() {
     return Object.fromEntries(fields.filter((field) => values[field.code] !== undefined).map((field) => [field.code, values[field.code]]));
   };
 
+  const assetUnitsPayloadForItem = (itemId: string | number | null | undefined, units: ReceiptAssetUnit[]): ReceiptAssetUnit[] => {
+    const definitions = assetDefinitionsForItem(itemId);
+    const brandDefinition = definitions.find((definition) => definition.label.trim().toLowerCase() === "brand");
+    const modelDefinition = definitions.find((definition) => {
+      const label = definition.label.trim().toLowerCase();
+      return label.includes("model") || label.includes("variant");
+    });
+    const textValue = (unit: ReceiptAssetUnit, definition: AttributeDefinition | undefined): string | undefined => {
+      if (!definition) return undefined;
+      const value = unit.attributes[definition.code];
+      return typeof value === "string" && value.trim() ? value.trim() : undefined;
+    };
+
+    return units.map((unit) => ({
+      ...unit,
+      brand: (unit.brand ?? "").trim() || textValue(unit, brandDefinition),
+      model: (unit.model ?? "").trim() || textValue(unit, modelDefinition),
+    }));
+  };
+
   const unitSummary = (line: ReceiptItem) => (line.asset_units ?? []).map((unit, index) => {
     const specs = Object.entries(unit.attributes).map(([code, value]) => `${lookups["asset-attribute-definitions"].find((definition) => definition.code === code)?.label ?? code}: ${String(value)}`).join(", ");
-    const identity = [unit.brand, unit.model].filter(Boolean).join(" ");
-    return `${unit.serial_number || `Unit ${index + 1}`}${identity ? ` - ${identity}` : ""}${specs ? ` - ${specs}` : ""}`;
+    return `${unit.serial_number || `Unit ${index + 1}`}${specs ? ` - ${specs}` : ""}`;
   });
 
   const unitCodeForId = (unitId: string | number | null | undefined): string => {
@@ -1995,7 +2014,7 @@ export default function InventoryReceiptsPage() {
           expiry_date: toPayloadDate(row.expiry_date),
           inspection_status: row.inspection_status,
           inspection_remarks: row.inspection_remarks.trim() || null,
-          asset_units: itemNeedsManualUnitDetails(row.item_id) ? row.asset_units : [],
+          asset_units: itemNeedsManualUnitDetails(row.item_id) ? assetUnitsPayloadForItem(row.item_id, row.asset_units) : [],
         };
       }),
     };
@@ -2066,10 +2085,6 @@ export default function InventoryReceiptsPage() {
             const key = `${row.item_id}:${serial.toLowerCase()}`;
             if ((requiresSerial && !serial) || (serial && serials.has(key))) {
               setError("Each accepted serial-tracked unit needs its own serial number. Duplicate serial numbers for the same item are not allowed.");
-              return;
-            }
-            if (requiresSerial && selected?.item_type === "fixed_asset" && (!(unit.brand ?? "").trim() || !(unit.model ?? "").trim())) {
-              setError("Brand and model / variant are required for every serial-tracked fixed asset.");
               return;
             }
             if (serial) serials.add(key);
@@ -3136,8 +3151,6 @@ export default function InventoryReceiptsPage() {
                                   <td colSpan={12}>
                                     <ReceiptAssetUnits units={item.asset_units}
                                       count={Number(item.quantity_accepted || 0) * Number(item.qty_per_receipt_unit || 1)}
-                                      defaultBrand={String(selectedItemForId(item.item_id)?.brand ?? "")}
-                                      defaultModel={String(selectedItemForId(item.item_id)?.model ?? "")}
                                       defaults={assetDefaultsForItem(item.item_id)}
                                       definitions={lookups["asset-attribute-definitions"]}
                                       categoryId={selectedItemForId(item.item_id)?.category_id}
