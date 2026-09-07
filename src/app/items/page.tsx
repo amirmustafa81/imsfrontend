@@ -980,7 +980,7 @@ export default function ItemsPage() {
                         <SearchableSelect id="item-unit" value={form.unit_id} options={unitSelectOptions} onChange={(value) => setFormField("unit_id", value)} placeholder="Search UoM" />
                       </div>
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Brand</label>
+                        <label className="form-label small">Default Brand (optional)</label>
                         <input
                           className="form-control form-control-sm"
                           value={form.brand}
@@ -989,7 +989,7 @@ export default function ItemsPage() {
                         />
                       </div>
                       <div className="col-12 col-md-4">
-                        <label className="form-label small">Specification / Variant</label>
+                        <label className="form-label small">Default Model / Variant (optional)</label>
                         <input
                           className="form-control form-control-sm"
                           value={form.model}

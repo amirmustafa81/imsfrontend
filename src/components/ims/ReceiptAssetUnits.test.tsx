@@ -15,7 +15,7 @@ function Editor({ count = 2, initial = [] }: { count?: number; initial?: Receipt
   const [units, setUnits] = useState(initial);
   return <>
     <ReceiptAssetUnits units={units} count={count} defaults={{ ram: "16GB", storage: "512GB SSD" }} definitions={definitions}
-      categoryId={1} subcategoryId={null} serialRequired onChange={setUnits} />
+      defaultBrand="HP" defaultModel="EliteBook 840 G7" categoryId={1} subcategoryId={null} serialRequired onChange={setUnits} />
     <output data-testid="units">{JSON.stringify(units)}</output>
   </>;
 }
@@ -27,12 +27,13 @@ describe("receipt unit specifications", () => {
     fireEvent.click(screen.getByRole("button", { name: "Prepare 2 unit rows" }));
     fireEvent.change(screen.getByLabelText("Unit 1 serial number *"), { target: { value: "HP001" } });
     fireEvent.change(screen.getByLabelText("Unit 2 serial number *"), { target: { value: "HP002" } });
+    fireEvent.change(screen.getAllByLabelText("Model / Variant *")[0], { target: { value: "EliteBook 850 G8" } });
     fireEvent.change(screen.getAllByLabelText("RAM *")[0], { target: { value: "32GB" } });
-    fireEvent.click(screen.getByRole("button", { name: "Copy unit 1 specifications to all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy unit 1 details to all" }));
     fireEvent.change(screen.getAllByLabelText("Storage")[1], { target: { value: "1TB SSD" } });
     expect(JSON.parse(screen.getByTestId("units").textContent ?? "[]")).toEqual([
-      { serial_number: "HP001", attributes: { ram: "32GB", storage: "512GB SSD" } },
-      { serial_number: "HP002", attributes: { ram: "32GB", storage: "1TB SSD" } },
+      { serial_number: "HP001", brand: "HP", model: "EliteBook 850 G8", attributes: { ram: "32GB", storage: "512GB SSD" } },
+      { serial_number: "HP002", brand: "HP", model: "EliteBook 850 G8", attributes: { ram: "32GB", storage: "1TB SSD" } },
     ]);
   });
 

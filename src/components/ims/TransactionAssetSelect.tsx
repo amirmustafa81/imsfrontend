@@ -9,6 +9,8 @@ type AssetOption = {
   asset_id: string;
   printable_tag_id: string | null;
   serial_number: string | null;
+  brand: string | null;
+  model: string | null;
   status: string;
   attribute_details?: { label: string; value: string | boolean }[];
 };
@@ -61,6 +63,7 @@ export function TransactionAssetSelect({ id, itemId, value, transactionType, dep
   const options = assets.map((asset) => ({ value: String(asset.id), label: [
     asset.printable_tag_id || asset.asset_id,
     asset.serial_number ? `SN: ${asset.serial_number}` : "",
+    [asset.brand, asset.model].filter(Boolean).join(" "),
     ...(asset.attribute_details ?? []).map((field) => `${field.label}: ${String(field.value)}`),
   ].filter(Boolean).join(" | ") }));
 

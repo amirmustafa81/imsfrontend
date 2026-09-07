@@ -28,6 +28,7 @@ type AssetRow = {
   category_code: string | null;
   category_name: string | null;
   subcategory_code: string | null;
+  brand: string | null;
   model: string | null;
   status: string;
   condition_status: string | null;
@@ -391,6 +392,7 @@ export default function ItAssetsPage() {
               ),
             },
             { key: "serial_number", header: "Serial", render: (row: AssetRow) => <>{row.serial_number ?? "-"}</> },
+            { key: "brand", header: "Brand", render: (row: AssetRow) => <>{row.brand ?? "-"}</> },
             {
               key: "item",
               header: "Item",

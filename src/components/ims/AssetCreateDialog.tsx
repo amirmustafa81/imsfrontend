@@ -37,6 +37,7 @@ type AssetFormState = {
   funding_source_id: string;
   employee_code: string;
   serial_number: string;
+  brand: string;
   model: string;
   purchase_cost: string;
   capitalization_date: string;
@@ -77,6 +78,7 @@ const createInitialForm = (defaults?: AssetCreateDefaults): AssetFormState => ({
   funding_source_id: "",
   employee_code: "",
   serial_number: "",
+  brand: "",
   model: "",
   purchase_cost: "0",
   capitalization_date: "",
@@ -127,6 +129,7 @@ const assetFieldInfo = {
   project: "Research or cost-center project linked to the asset, when applicable.",
   funding: "Budget or funding source used for reporting and financial traceability.",
   serial: "Manufacturer serial number used to identify the physical equipment.",
+  brand: "Actual manufacturer of this physical asset. Item Master may provide an optional default.",
   model: "Model, version, or specification printed on the device or purchase record.",
   custodian: "Employee or custodian reference used in the location/responsibility part of the asset tag.",
   cost: "Acquisition cost used for capitalization and depreciation calculations.",
@@ -279,6 +282,7 @@ export function AssetCreateDialog({
         funding_source_id: form.funding_source_id ? Number(form.funding_source_id) : null,
         employee_code: form.employee_code.trim() || null,
         serial_number: form.serial_number.trim() || null,
+        brand: form.brand.trim() || null,
         model: form.model.trim() || null,
         purchase_cost: Number(form.purchase_cost || 0),
         capitalization_date: form.capitalization_date || null,
@@ -341,6 +345,8 @@ export function AssetCreateDialog({
         item?.is_sensitive_controlled === "1" ||
         item?.is_sensitive_controlled === true,
       ),
+      brand: String(item?.brand ?? ""),
+      model: String(item?.model ?? ""),
       attributes: (item?.attributes as AttributeValues | undefined) ?? {},
     }));
   };
@@ -409,15 +415,19 @@ export function AssetCreateDialog({
                   <SearchableSelect id="asset-funding-source" value={form.funding_source_id} options={fundingSelectOptions} onChange={(value) => setFormField("funding_source_id", value)} placeholder="Search funding" />
                 </div>
 
-                <div className="col-12 col-md-4">
+                <div className="col-12 col-md-3">
                   <FieldLabel info={assetFieldInfo.serial}>Serial Number</FieldLabel>
                   <input className="form-control form-control-sm" value={form.serial_number} onChange={(event) => setFormField("serial_number", event.target.value)} placeholder="Manufacturer serial" />
                 </div>
-                <div className="col-12 col-md-4">
-                  <FieldLabel info={assetFieldInfo.model}>Model</FieldLabel>
+                <div className="col-12 col-md-3">
+                  <FieldLabel info={assetFieldInfo.brand}>Brand</FieldLabel>
+                  <input className="form-control form-control-sm" value={form.brand} onChange={(event) => setFormField("brand", event.target.value)} placeholder="e.g. HP, Dell, Lenovo" />
+                </div>
+                <div className="col-12 col-md-3">
+                  <FieldLabel info={assetFieldInfo.model}>Model / Variant</FieldLabel>
                   <input className="form-control form-control-sm" value={form.model} onChange={(event) => setFormField("model", event.target.value)} placeholder="Model / version" />
                 </div>
-                <div className="col-12 col-md-4">
+                <div className="col-12 col-md-3">
                   <FieldLabel info={assetFieldInfo.custodian}>Employee / Custodian Code</FieldLabel>
                   <input className="form-control form-control-sm" value={form.employee_code} onChange={(event) => setFormField("employee_code", event.target.value)} placeholder="Employee ID if applicable" />
                 </div>

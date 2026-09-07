@@ -15,10 +15,10 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("voucher asset selection", () => {
   it("shows serials and specifications and submits the selected asset ID", async () => {
-    get.mockResolvedValue({ data: { data: [{ id: 10, asset_id: "TAG-10", serial_number: "HP001", status: "in_store", attribute_details: [{ label: "RAM", value: "16GB" }, { label: "Storage", value: "1TB SSD" }] }] } });
+    get.mockResolvedValue({ data: { data: [{ id: 10, asset_id: "TAG-10", serial_number: "HP001", brand: "HP", model: "EliteBook 840 G7", status: "in_store", attribute_details: [{ label: "RAM", value: "16GB" }, { label: "Storage", value: "1TB SSD" }] }] } });
     const onChange = vi.fn();
     render(<TransactionAssetSelect {...props} onChange={onChange} />);
-    await screen.findByRole("option", { name: "TAG-10 | SN: HP001 | RAM: 16GB | Storage: 1TB SSD" });
+    await screen.findByRole("option", { name: "TAG-10 | SN: HP001 | HP EliteBook 840 G7 | RAM: 16GB | Storage: 1TB SSD" });
     fireEvent.change(screen.getByLabelText("Asset"), { target: { value: "10" } });
     expect(onChange).toHaveBeenCalledWith("10");
     expect(get).toHaveBeenCalledWith("/assets", expect.objectContaining({ params: expect.objectContaining({ item_id: "1", department_id: "2", store_id: "3", status: "in_store" }) }));

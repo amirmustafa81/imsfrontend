@@ -25,6 +25,7 @@ type AssetDetail = {
   room_code: string | null;
   employee_code: string | null;
   serial_number: string | null;
+  brand: string | null;
   model: string | null;
   purchase_cost: number | null;
   capitalization_date: string | null;
@@ -387,8 +388,8 @@ export default function AssetDetailPage() {
                         <div className="fw-medium">{asset.serial_number ?? asset.employee_code ?? "-"}</div>
                       </div>
                       <div className="col-md-6">
-                        <div className="small text-secondary">Model</div>
-                        <div className="fw-medium">{asset.model ?? "-"}</div>
+                        <div className="small text-secondary">Brand / Model</div>
+                        <div className="fw-medium">{[asset.brand, asset.model].filter(Boolean).join(" ") || "-"}</div>
                       </div>
                       <div className="col-md-6">
                         <div className="small text-secondary">Serial No. Component</div>

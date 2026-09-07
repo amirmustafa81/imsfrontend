@@ -3346,7 +3346,7 @@ function IssuesReturnsContent() {
                           </div>
 
                           <div className="col-12 col-md-4">
-                            <label className="form-label small">Brand</label>
+                            <label className="form-label small">Default Brand (optional)</label>
                             <input
                               className="form-control form-control-sm"
                               value={quickItemForm.brand}
@@ -3356,7 +3356,7 @@ function IssuesReturnsContent() {
                           </div>
 
                           <div className="col-12 col-md-4">
-                            <label className="form-label small">Model</label>
+                            <label className="form-label small">Default Model / Variant (optional)</label>
                             <input
                               className="form-control form-control-sm"
                               value={quickItemForm.model}

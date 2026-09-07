@@ -886,7 +886,8 @@ export default function InventoryReceiptsPage() {
 
   const unitSummary = (line: ReceiptItem) => (line.asset_units ?? []).map((unit, index) => {
     const specs = Object.entries(unit.attributes).map(([code, value]) => `${lookups["asset-attribute-definitions"].find((definition) => definition.code === code)?.label ?? code}: ${String(value)}`).join(", ");
-    return `${unit.serial_number || `Unit ${index + 1}`}${specs ? ` - ${specs}` : ""}`;
+    const identity = [unit.brand, unit.model].filter(Boolean).join(" ");
+    return `${unit.serial_number || `Unit ${index + 1}`}${identity ? ` - ${identity}` : ""}${specs ? ` - ${specs}` : ""}`;
   });
 
   const unitCodeForId = (unitId: string | number | null | undefined): string => {
@@ -2062,6 +2063,10 @@ export default function InventoryReceiptsPage() {
               setError("Each accepted serial-tracked unit needs its own serial number. Duplicate serial numbers for the same item are not allowed.");
               return;
             }
+            if (requiresSerial && selected?.item_type === "fixed_asset" && (!(unit.brand ?? "").trim() || !(unit.model ?? "").trim())) {
+              setError("Brand and model / variant are required for every serial-tracked fixed asset.");
+              return;
+            }
             if (serial) serials.add(key);
           }
         }
@@ -3122,6 +3127,8 @@ export default function InventoryReceiptsPage() {
                                   <td colSpan={12}>
                                     <ReceiptAssetUnits units={item.asset_units}
                                       count={Number(item.quantity_accepted || 0) * Number(item.qty_per_receipt_unit || 1)}
+                                      defaultBrand={String(selectedItemForId(item.item_id)?.brand ?? "")}
+                                      defaultModel={String(selectedItemForId(item.item_id)?.model ?? "")}
                                       defaults={assetDefaultsForItem(item.item_id)}
                                       definitions={lookups["asset-attribute-definitions"]}
                                       categoryId={selectedItemForId(item.item_id)?.category_id}
@@ -3498,7 +3505,7 @@ export default function InventoryReceiptsPage() {
                           </div>
 
                           <div className="col-12 col-md-4">
-                            <label className="form-label small">Brand</label>
+                            <label className="form-label small">Default Brand (optional)</label>
                             <input
                               className="form-control form-control-sm"
                               value={quickItemForm.brand}
@@ -3508,7 +3515,7 @@ export default function InventoryReceiptsPage() {
                           </div>
 
                           <div className="col-12 col-md-4">
-                            <label className="form-label small">Specification / Variant</label>
+                            <label className="form-label small">Default Model / Variant (optional)</label>
                             <input
                               className="form-control form-control-sm"
                               value={quickItemForm.model}
