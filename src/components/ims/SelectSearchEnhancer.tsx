@@ -63,10 +63,24 @@ const enhanceSelect = (select: HTMLSelectElement) => {
 
   const positionMenu = () => {
     const rect = input.getBoundingClientRect();
+    const modalContent = select.closest(".modal-content");
+    const modalFooter = modalContent?.querySelector(".modal-footer");
+    const modalRect = modalContent?.getBoundingClientRect();
+    const footerRect = modalFooter?.getBoundingClientRect();
+    const lowerBoundary = footerRect?.top ?? window.innerHeight;
+    const upperBoundary = modalRect?.top ?? 0;
+    const gutter = 8;
+    const maxMenuHeight = 240;
+    const availableBelow = lowerBoundary - rect.bottom - gutter;
+    const availableAbove = rect.top - upperBoundary - gutter;
+    const shouldOpenUp = availableBelow < 160 && availableAbove > availableBelow;
+    const availableHeight = Math.max(96, Math.min(maxMenuHeight, shouldOpenUp ? availableAbove : availableBelow));
+
     menu.style.left = `${rect.left}px`;
-    menu.style.top = `${rect.bottom + 2}px`;
+    menu.style.top = shouldOpenUp ? `${Math.max(gutter, rect.top - availableHeight - 2)}px` : `${rect.bottom + 2}px`;
     menu.style.width = `${rect.width}px`;
     menu.style.maxWidth = `calc(100vw - ${rect.left + 16}px)`;
+    menu.style.maxHeight = `${availableHeight}px`;
   };
 
   const closeMenu = () => {
@@ -114,8 +128,8 @@ const enhanceSelect = (select: HTMLSelectElement) => {
     input.disabled = select.disabled;
     input.value = selectedLabel(select);
     renderMenu("");
-    positionMenu();
     menu.classList.add("show");
+    positionMenu();
     input.setAttribute("aria-expanded", "true");
   };
 
@@ -134,8 +148,8 @@ const enhanceSelect = (select: HTMLSelectElement) => {
   input.addEventListener("click", openMenu);
   input.addEventListener("input", () => {
     renderMenu(input.value);
-    positionMenu();
     menu.classList.add("show");
+    positionMenu();
     input.setAttribute("aria-expanded", "true");
   });
   input.addEventListener("blur", () => {
