@@ -47,7 +47,7 @@ describe("receipt unit specifications", () => {
     const Wrapper = () => {
       const [units, setUnits] = useState<ReceiptAssetUnit[]>([]);
       return <ReceiptAssetUnits units={units} count={1} defaults={{}} definitions={definitions}
-        defaultBrand="" defaultModel="" categoryId={2} subcategoryId={null} serialRequired onChange={setUnits} />;
+        categoryId={2} subcategoryId={null} serialRequired onChange={setUnits} />;
     };
 
     render(<Wrapper />);
