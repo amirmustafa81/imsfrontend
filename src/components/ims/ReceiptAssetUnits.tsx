@@ -1,6 +1,6 @@
 "use client";
 
-import { AttributeFields, type AttributeDefinition, type AttributeValues } from "./AttributeFields";
+import { AttributeFields, matchingAttributeDefinitions, type AttributeDefinition, type AttributeValues } from "./AttributeFields";
 
 export type ReceiptAssetUnit = {
   serial_number: string | null;
@@ -20,6 +20,18 @@ export function ReceiptAssetUnits({ units, count, defaults, definitions, categor
   onChange: (units: ReceiptAssetUnit[]) => void;
 }) {
   const validCount = Number.isInteger(count) && count >= 0 && count <= 1000;
+  const fields = matchingAttributeDefinitions(definitions, categoryId, subcategoryId, "asset");
+  const brandField = fields.find((field) => field.label.trim().toLowerCase() === "brand");
+  const modelField = fields.find((field) => {
+    const label = field.label.trim().toLowerCase();
+    return label.includes("model") || label.includes("variant");
+  });
+  const normalizedAttributes = (unit: ReceiptAssetUnit): AttributeValues => {
+    const attributes = { ...defaults, ...unit.attributes };
+    if (brandField && unit.brand && !attributes[brandField.code]) attributes[brandField.code] = unit.brand;
+    if (modelField && unit.model && !attributes[modelField.code]) attributes[modelField.code] = unit.model;
+    return attributes;
+  };
   const prepare = () => {
     if (units.length > count && !window.confirm("Reducing the unit count will remove the extra serial numbers and specifications. Continue?")) return;
     onChange(Array.from({ length: count }, (_, index) => units[index] ?? {
@@ -31,7 +43,12 @@ export function ReceiptAssetUnits({ units, count, defaults, definitions, categor
     const firstUnit = units[0];
     if (!firstUnit || units.length <= 1) return;
     if (!window.confirm("Copy unit 1 specifications to all unit rows? Serial numbers will be kept.")) return;
-    onChange(units.map((row, index) => index === 0 ? row : { ...row, attributes: { ...firstUnit.attributes } }));
+    const firstAttributes = normalizedAttributes(firstUnit);
+    const brand = brandField ? String(firstAttributes[brandField.code] ?? "") : firstUnit.brand;
+    const model = modelField ? String(firstAttributes[modelField.code] ?? "") : firstUnit.model;
+    onChange(units.map((row, index) => index === 0
+      ? { ...row, brand, model, attributes: firstAttributes }
+      : { ...row, brand, model, attributes: { ...firstAttributes } }));
   };
 
   return (
