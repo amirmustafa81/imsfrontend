@@ -54,7 +54,7 @@ const enhanceSelect = (select: HTMLSelectElement) => {
   input.disabled = select.disabled;
 
   const menu = document.createElement("div");
-  menu.className = "dropdown-menu w-100 shadow-sm";
+  menu.className = "dropdown-menu shadow-sm";
   menu.style.maxHeight = "240px";
   menu.style.overflowY = "auto";
   menu.style.position = "fixed";
@@ -66,6 +66,7 @@ const enhanceSelect = (select: HTMLSelectElement) => {
     menu.style.left = `${rect.left}px`;
     menu.style.top = `${rect.bottom + 2}px`;
     menu.style.width = `${rect.width}px`;
+    menu.style.maxWidth = `calc(100vw - ${rect.left + 16}px)`;
   };
 
   const closeMenu = () => {
