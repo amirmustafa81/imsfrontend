@@ -482,10 +482,10 @@ export default function AssetDetailPage() {
               </div>
             </div>
 
-            {asset.attribute_details && asset.attribute_details.length > 0 ? (
-              <div className="card border-0 shadow-sm mb-3">
-                <div className="card-header bg-white fw-semibold">Specifications</div>
-                <div className="card-body">
+            <div className="card border-0 shadow-sm mb-3">
+              <div className="card-header bg-white fw-semibold">Attributes</div>
+              <div className="card-body">
+                {asset.attribute_details && asset.attribute_details.length > 0 ? (
                   <div className="row g-3">
                     {asset.attribute_details.map((attribute) => (
                       <div className="col-12 col-md-4 col-xl-3" key={attribute.code}>
@@ -494,9 +494,11 @@ export default function AssetDetailPage() {
                       </div>
                     ))}
                   </div>
-                </div>
+                ) : (
+                  <div className="text-secondary">No attributes recorded for this asset.</div>
+                )}
               </div>
-            ) : null}
+            </div>
 
             <div className="row g-3">
               <div className="col-12">
