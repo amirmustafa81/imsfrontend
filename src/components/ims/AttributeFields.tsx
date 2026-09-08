@@ -19,6 +19,9 @@ export type AttributeDefinition = {
 export type AttributeValues = Record<string, string | boolean>;
 
 const toBoolean = (value: unknown): boolean => value === true || value === 1 || value === "1" || value === "true";
+const compactFieldClass = "col-12 col-md-6 col-xl-4";
+const compactLabelClass = "small fw-medium mb-1 mb-sm-0 flex-shrink-0";
+const compactControlRowClass = "d-sm-flex align-items-center gap-2";
 
 const optionList = (options: AttributeDefinition["options"]): string[] => {
   if (Array.isArray(options)) {
@@ -121,9 +124,35 @@ export function AttributeFields({
             }
 
             if (field.field_type === "select") {
+              if (compact) {
+                return (
+                  <div className={compactFieldClass} key={field.id}>
+                    <div className={compactControlRowClass}>
+                      <label className={compactLabelClass} style={{ minWidth: "8.5rem" }} htmlFor={`${idPrefix}-${field.code}`}>
+                        {field.label} {required ? <span className="text-danger">*</span> : null}
+                      </label>
+                      <select
+                        id={`${idPrefix}-${field.code}`}
+                        className="form-select form-select-sm flex-grow-1"
+                        value={String(value)}
+                        onChange={(event) => onChange(field.code, event.target.value)}
+                        required={enforceRequired && required}
+                      >
+                        <option value="">Choose {field.label.toLowerCase()}</option>
+                        {optionList(field.options).map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
-                <div className={compact ? "col-6 col-lg-3" : "col-12 col-md-4"} key={field.id}>
-                  <label className={`form-label small ${compact ? "mb-1" : ""}`} htmlFor={`${idPrefix}-${field.code}`}>
+                <div className="col-12 col-md-4" key={field.id}>
+                  <label className="form-label small" htmlFor={`${idPrefix}-${field.code}`}>
                     {field.label} {required ? <span className="text-danger">*</span> : null}
                   </label>
                   <select
@@ -144,9 +173,29 @@ export function AttributeFields({
               );
             }
 
+            if (compact) {
+              return (
+                <div className={compactFieldClass} key={field.id}>
+                  <div className={compactControlRowClass}>
+                    <label className={compactLabelClass} style={{ minWidth: "8.5rem" }} htmlFor={`${idPrefix}-${field.code}`}>
+                      {field.label} {required ? <span className="text-danger">*</span> : null}
+                    </label>
+                    <input
+                      id={`${idPrefix}-${field.code}`}
+                      className="form-control form-control-sm flex-grow-1"
+                      type={field.field_type === "number" ? "number" : field.field_type === "date" ? "date" : "text"}
+                      value={String(value)}
+                      onChange={(event) => onChange(field.code, event.target.value)}
+                      required={enforceRequired && required}
+                    />
+                  </div>
+                </div>
+              );
+            }
+
             return (
-              <div className={compact ? "col-6 col-lg-3" : "col-12 col-md-4"} key={field.id}>
-                <label className={`form-label small ${compact ? "mb-1" : ""}`} htmlFor={`${idPrefix}-${field.code}`}>
+              <div className="col-12 col-md-4" key={field.id}>
+                <label className="form-label small" htmlFor={`${idPrefix}-${field.code}`}>
                   {field.label} {required ? <span className="text-danger">*</span> : null}
                 </label>
                 <input
