@@ -669,6 +669,7 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
       { key: "item_code", label: "Item Code" },
       { key: "item_name", label: "Item Name" },
       { key: "item_description", label: "Item Description" },
+      { key: "attribute_summary", label: "Attributes" },
       { key: "category_name", label: "Category" },
       { key: "quantity", label: "Quantity" },
       { key: "from_department_name", label: "From Dept" },
