@@ -64,6 +64,7 @@ export function AttributeFields({
   title = "Specifications",
   enforceRequired = true,
   emptyMessage,
+  compact = false,
 }: {
   definitions: AttributeDefinition[];
   categoryId: string | number | null | undefined;
@@ -74,6 +75,7 @@ export function AttributeFields({
   title?: string;
   enforceRequired?: boolean;
   emptyMessage?: string;
+  compact?: boolean;
 }) {
   const idPrefix = useId();
   const fields = matchingAttributeDefinitions(definitions, categoryId, subcategoryId, appliesTo);
@@ -92,16 +94,16 @@ export function AttributeFields({
 
   return (
     <div className="col-12">
-      <div className="border rounded-2 p-3 bg-light-subtle">
-        <div className="fw-semibold small mb-3">{title}</div>
-        <div className="row g-3">
+      <div className={`border rounded-2 bg-light-subtle ${compact ? "p-2" : "p-3"}`}>
+        <div className={`fw-semibold small ${compact ? "mb-2" : "mb-3"}`}>{title}</div>
+        <div className={`row ${compact ? "g-2" : "g-3"}`}>
           {fields.map((field) => {
             const value = values[field.code] ?? "";
             const required = toBoolean(field.is_required) && !(appliesTo === "item" && field.applies_to === "both");
 
             if (field.field_type === "boolean") {
               return (
-                <div className="col-12 col-md-4 d-flex align-items-end" key={field.id}>
+                <div className={compact ? "col-6 col-md-3 d-flex align-items-end" : "col-12 col-md-4 d-flex align-items-end"} key={field.id}>
                   <div className="form-check">
                     <input
                       id={`${idPrefix}-${field.code}`}
@@ -120,8 +122,8 @@ export function AttributeFields({
 
             if (field.field_type === "select") {
               return (
-                <div className="col-12 col-md-4" key={field.id}>
-                  <label className="form-label small" htmlFor={`${idPrefix}-${field.code}`}>
+                <div className={compact ? "col-6 col-lg-3" : "col-12 col-md-4"} key={field.id}>
+                  <label className={`form-label small ${compact ? "mb-1" : ""}`} htmlFor={`${idPrefix}-${field.code}`}>
                     {field.label} {required ? <span className="text-danger">*</span> : null}
                   </label>
                   <select
@@ -143,8 +145,8 @@ export function AttributeFields({
             }
 
             return (
-              <div className="col-12 col-md-4" key={field.id}>
-                <label className="form-label small" htmlFor={`${idPrefix}-${field.code}`}>
+              <div className={compact ? "col-6 col-lg-3" : "col-12 col-md-4"} key={field.id}>
+                <label className={`form-label small ${compact ? "mb-1" : ""}`} htmlFor={`${idPrefix}-${field.code}`}>
                   {field.label} {required ? <span className="text-danger">*</span> : null}
                 </label>
                 <input
