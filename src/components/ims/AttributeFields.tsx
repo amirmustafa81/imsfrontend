@@ -22,6 +22,7 @@ const toBoolean = (value: unknown): boolean => value === true || value === 1 || 
 const compactFieldClass = "col-12 col-md-6 col-xl-4";
 const compactLabelClass = "small fw-medium mb-1 mb-sm-0 flex-shrink-0";
 const compactControlRowClass = "d-sm-flex align-items-center gap-2";
+const brandSeparators = [" ", "-", ":", "/", "_"];
 
 const optionList = (options: AttributeDefinition["options"]): string[] => {
   if (Array.isArray(options)) {
@@ -57,6 +58,32 @@ export const matchingAttributeDefinitions = (
     })
     .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0) || a.label.localeCompare(b.label));
 
+const normalizedText = (value: unknown): string => String(value ?? "").trim().toLowerCase();
+const isBrandField = (field: AttributeDefinition): boolean => field.code === "brand" || normalizedText(field.label) === "brand";
+const isBrandDependentField = (field: AttributeDefinition): boolean => {
+  const code = normalizedText(field.code);
+  const label = normalizedText(field.label);
+  return ["series", "model", "variant"].some((token) => code.includes(token) || label.includes(token));
+};
+
+const optionMatchesBrand = (option: string, brand: string): boolean => {
+  const optionValue = normalizedText(option);
+  const brandValue = normalizedText(brand);
+  if (!brandValue) return true;
+  return brandSeparators.some((separator) => optionValue.startsWith(`${brandValue}${separator}`));
+};
+
+const filteredOptionsForField = (field: AttributeDefinition, fields: AttributeDefinition[], values: AttributeValues): string[] => {
+  const options = optionList(field.options);
+  const brandField = fields.find(isBrandField);
+  const brandValue = brandField ? String(values[brandField.code] ?? "") : "";
+
+  if (!brandValue || !isBrandDependentField(field)) return options;
+
+  const matchingOptions = options.filter((option) => optionMatchesBrand(option, brandValue));
+  return matchingOptions.length > 0 ? matchingOptions : options;
+};
+
 export function AttributeFields({
   definitions,
   categoryId,
@@ -74,7 +101,7 @@ export function AttributeFields({
   subcategoryId: string | number | null | undefined;
   appliesTo: "item" | "asset";
   values: AttributeValues;
-  onChange: (code: string, value: string | boolean) => void;
+  onChange: (code: string, value: string | boolean, nextValues?: AttributeValues) => void;
   title?: string;
   enforceRequired?: boolean;
   emptyMessage?: string;
@@ -82,6 +109,20 @@ export function AttributeFields({
 }) {
   const idPrefix = useId();
   const fields = matchingAttributeDefinitions(definitions, categoryId, subcategoryId, appliesTo);
+  const handleChange = (field: AttributeDefinition, value: string | boolean) => {
+    const nextValues = { ...values, [field.code]: value };
+
+    if (isBrandField(field)) fields.filter((candidate) => candidate.field_type === "select" && isBrandDependentField(candidate)).forEach((candidate) => {
+      const selectedValue = values[candidate.code];
+      if (!selectedValue) return;
+      const nextOptions = filteredOptionsForField(candidate, fields, nextValues);
+      if (!nextOptions.includes(String(selectedValue))) {
+        nextValues[candidate.code] = "";
+      }
+    });
+
+    onChange(field.code, value, nextValues);
+  };
 
   if (!categoryId || fields.length === 0) {
     if (emptyMessage && categoryId) {
@@ -113,7 +154,7 @@ export function AttributeFields({
                       className="form-check-input"
                       type="checkbox"
                       checked={toBoolean(value)}
-                      onChange={(event) => onChange(field.code, event.target.checked)}
+                      onChange={(event) => handleChange(field, event.target.checked)}
                     />
                     <label className="form-check-label small" htmlFor={`${idPrefix}-${field.code}`}>
                       {field.label} {required ? <span className="text-danger">*</span> : null}
@@ -124,6 +165,8 @@ export function AttributeFields({
             }
 
             if (field.field_type === "select") {
+              const options = filteredOptionsForField(field, fields, values);
+              const selectValue = value && options.length > 0 && !options.includes(String(value)) ? "" : String(value);
               if (compact) {
                 return (
                   <div className={compactFieldClass} key={field.id}>
@@ -134,12 +177,12 @@ export function AttributeFields({
                       <select
                         id={`${idPrefix}-${field.code}`}
                         className="form-select form-select-sm flex-grow-1"
-                        value={String(value)}
-                        onChange={(event) => onChange(field.code, event.target.value)}
+                        value={selectValue}
+                        onChange={(event) => handleChange(field, event.target.value)}
                         required={enforceRequired && required}
                       >
                         <option value="">Choose {field.label.toLowerCase()}</option>
-                        {optionList(field.options).map((option) => (
+                        {options.map((option) => (
                           <option key={option} value={option}>
                             {option}
                           </option>
@@ -158,12 +201,12 @@ export function AttributeFields({
                   <select
                     id={`${idPrefix}-${field.code}`}
                     className="form-select form-select-sm"
-                    value={String(value)}
-                    onChange={(event) => onChange(field.code, event.target.value)}
+                    value={selectValue}
+                    onChange={(event) => handleChange(field, event.target.value)}
                     required={enforceRequired && required}
                   >
                     <option value="">Choose {field.label.toLowerCase()}</option>
-                    {optionList(field.options).map((option) => (
+                    {options.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
@@ -185,7 +228,7 @@ export function AttributeFields({
                       className="form-control form-control-sm flex-grow-1"
                       type={field.field_type === "number" ? "number" : field.field_type === "date" ? "date" : "text"}
                       value={String(value)}
-                      onChange={(event) => onChange(field.code, event.target.value)}
+                      onChange={(event) => handleChange(field, event.target.value)}
                       required={enforceRequired && required}
                     />
                   </div>
@@ -203,7 +246,7 @@ export function AttributeFields({
                   className="form-control form-control-sm"
                   type={field.field_type === "number" ? "number" : field.field_type === "date" ? "date" : "text"}
                   value={String(value)}
-                  onChange={(event) => onChange(field.code, event.target.value)}
+                  onChange={(event) => handleChange(field, event.target.value)}
                   required={enforceRequired && required}
                 />
               </div>

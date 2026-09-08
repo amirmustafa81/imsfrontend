@@ -9,6 +9,11 @@ const definitions: AttributeDefinition[] = [
   { id: 2, category_id: 1, code: "storage", label: "Storage", field_type: "text", applies_to: "both" },
 ];
 
+const dependentDefinitions: AttributeDefinition[] = [
+  { id: 10, category_id: 1, code: "brand", label: "Brand", field_type: "select", options: ["HP", "Dell", "Lenovo"], applies_to: "both" },
+  { id: 11, category_id: 1, code: "series", label: "Series", field_type: "select", options: ["HP EliteBook 840", "HP ProBook 450", "Dell Latitude", "Dell OptiPlex", "Lenovo ThinkPad"], applies_to: "both" },
+];
+
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function Editor({ count = 2, initial = [] }: { count?: number; initial?: ReceiptAssetUnit[] }) {
@@ -70,5 +75,24 @@ describe("receipt unit specifications", () => {
     </>);
     expect(within(screen.getByRole("region", { name: "Item" })).getByLabelText("RAM")).not.toBeRequired();
     expect(within(screen.getByRole("region", { name: "Asset" })).getByLabelText("RAM *")).toBeRequired();
+  });
+
+  it("filters dependent series options by selected brand and clears stale selections", () => {
+    const Wrapper = () => {
+      const [values, setValues] = useState<Record<string, string | boolean>>({ brand: "HP", series: "HP EliteBook 840" });
+      return <>
+        <AttributeFields definitions={dependentDefinitions} categoryId={1} subcategoryId={null} appliesTo="asset" values={values}
+          onChange={(code, value, nextValues) => setValues(nextValues ?? { ...values, [code]: value })} />
+        <output data-testid="attributes">{JSON.stringify(values)}</output>
+      </>;
+    };
+
+    render(<Wrapper />);
+    const series = screen.getByLabelText("Series");
+    expect(within(series).getByRole("option", { name: "HP EliteBook 840" })).toBeInTheDocument();
+    expect(within(series).queryByRole("option", { name: "Dell Latitude" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Brand"), { target: { value: "Dell" } });
+    expect(JSON.parse(screen.getByTestId("attributes").textContent ?? "{}")).toEqual({ brand: "Dell", series: "" });
+    expect(within(screen.getByLabelText("Series")).getByRole("option", { name: "Dell Latitude" })).toBeInTheDocument();
   });
 });

@@ -62,7 +62,7 @@ export function ReceiptAssetUnits({ units, count, defaults, definitions, categor
         <AttributeFields definitions={definitions} categoryId={categoryId} subcategoryId={subcategoryId} appliesTo="asset"
           values={commonUnit.attributes} enforceRequired={false} title="Common specifications" compact
           emptyMessage="No asset specification attributes are configured for this item's category/subcategory. Please check the Item Master category/subcategory and active Attribute Definitions."
-          onChange={(code, value) => onChange([{ ...commonUnit, serial_number: null, attributes: { ...commonUnit.attributes, [code]: value } }])} />
+          onChange={(code, value, nextValues) => onChange([{ ...commonUnit, serial_number: null, attributes: nextValues ?? { ...commonUnit.attributes, [code]: value } }])} />
       </div>
     );
   }
@@ -97,7 +97,7 @@ export function ReceiptAssetUnits({ units, count, defaults, definitions, categor
           <AttributeFields definitions={definitions} categoryId={categoryId} subcategoryId={subcategoryId} appliesTo="asset"
             values={unit.attributes} enforceRequired={false} title={`Unit ${index + 1} specifications`} compact
             emptyMessage="No asset specification attributes are configured for this item's category/subcategory. Please check the Item Master category/subcategory and active Attribute Definitions."
-            onChange={(code, value) => onChange(units.map((row, i) => i === index ? { ...row, attributes: { ...row.attributes, [code]: value } } : row))} />
+            onChange={(code, value, nextValues) => onChange(units.map((row, i) => i === index ? { ...row, attributes: nextValues ?? { ...row.attributes, [code]: value } } : row))} />
         </div>
       ))}
     </div>
