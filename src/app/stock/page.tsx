@@ -13,13 +13,19 @@ type Lookup = {
   project_code?: string;
 };
 
+type StockAttributeDetail = {
+  code?: string;
+  label: string;
+  value: string | boolean | number | null;
+};
+
 type StockRow = {
   id: number;
   item_code: string;
   item_name: string;
   item_description?: string | null;
   attribute_summary?: string | null;
-  attribute_details?: Array<{ code?: string; label: string; value: string | boolean | number | null }>;
+  attribute_details?: StockAttributeDetail[];
   category_name: string;
   department_name: string;
   store_name: string;
@@ -36,7 +42,7 @@ type StockRow = {
   quantity_reserved: number;
   available_quantity: number;
   status: string;
-  [key: string]: string | number | null | undefined;
+  [key: string]: string | number | StockAttributeDetail[] | null | undefined;
 };
 
 type Filters = {
