@@ -18,6 +18,8 @@ type StockRow = {
   item_code: string;
   item_name: string;
   item_description?: string | null;
+  attribute_summary?: string | null;
+  attribute_details?: Array<{ code?: string; label: string; value: string | boolean | number | null }>;
   category_name: string;
   department_name: string;
   store_name: string;
@@ -128,6 +130,18 @@ const stockPackageLabel = (row: StockRow): string => {
   return `1 ${packageCode} = ${formatQuantity(stockPackageSize(row))} ${baseCode}`;
 };
 
+const stockAttributeSummary = (row: StockRow): string => {
+  if (row.attribute_summary) return row.attribute_summary;
+
+  const details = row.attribute_details ?? [];
+  if (details.length === 0) return "-";
+
+  return details
+    .filter((detail) => detail.value !== null && detail.value !== undefined && detail.value !== "")
+    .map((detail) => `${detail.label}: ${String(detail.value)}`)
+    .join(" / ") || "-";
+};
+
 const addToStockSummaryGroup = (groups: Map<string, number>, code: string, quantity: number) => {
   if (!quantity) return;
 
@@ -180,6 +194,7 @@ const reportColumns = [
   { key: "item_code", header: "Item Code" },
   { key: "item_name", header: "Item Name" },
   { key: "item_description", header: "Item Description", render: (row: StockRow) => row.item_description ?? "-" },
+  { key: "attribute_summary", header: "Attributes", render: (row: StockRow) => <small className="text-secondary">{stockAttributeSummary(row)}</small> },
   { key: "package_balance", header: "Package", render: (row: StockRow) => <span className="stock-package-label">{stockPackageLabel(row)}</span> },
   { key: "category_name", header: "Category" },
   { key: "department_name", header: "Department" },
