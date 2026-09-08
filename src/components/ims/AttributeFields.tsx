@@ -63,6 +63,7 @@ export function AttributeFields({
   onChange,
   title = "Specifications",
   enforceRequired = true,
+  emptyMessage,
 }: {
   definitions: AttributeDefinition[];
   categoryId: string | number | null | undefined;
@@ -72,11 +73,20 @@ export function AttributeFields({
   onChange: (code: string, value: string | boolean) => void;
   title?: string;
   enforceRequired?: boolean;
+  emptyMessage?: string;
 }) {
   const idPrefix = useId();
   const fields = matchingAttributeDefinitions(definitions, categoryId, subcategoryId, appliesTo);
 
   if (!categoryId || fields.length === 0) {
+    if (emptyMessage && categoryId) {
+      return (
+        <div className="col-12">
+          <div className="alert alert-warning small mb-0">{emptyMessage}</div>
+        </div>
+      );
+    }
+
     return null;
   }
 

@@ -43,6 +43,18 @@ describe("receipt unit specifications", () => {
     expect(screen.getByLabelText("Unit 2 serial number *")).toHaveValue("HP002");
   });
 
+  it("shows a setup warning when no asset attributes match the selected item scope", () => {
+    const Wrapper = () => {
+      const [units, setUnits] = useState<ReceiptAssetUnit[]>([]);
+      return <ReceiptAssetUnits units={units} count={1} defaults={{}} definitions={definitions}
+        defaultBrand="" defaultModel="" categoryId={2} subcategoryId={null} serialRequired onChange={setUnits} />;
+    };
+
+    render(<Wrapper />);
+    fireEvent.click(screen.getByRole("button", { name: "Prepare 1 unit rows" }));
+    expect(screen.getByText(/No asset specification attributes are configured/)).toBeInTheDocument();
+  });
+
   it("makes shared item defaults optional and asset values required", () => {
     render(<>
       <section aria-label="Item"><AttributeFields definitions={definitions} categoryId={1} subcategoryId={null} appliesTo="item" values={{}} onChange={() => {}} /></section>

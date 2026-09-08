@@ -59,6 +59,7 @@ export function ReceiptAssetUnits({ units, count, defaults, definitions, categor
           </div>
           <AttributeFields definitions={definitions} categoryId={categoryId} subcategoryId={subcategoryId} appliesTo="asset"
             values={unit.attributes} enforceRequired={false} title={`Unit ${index + 1} specifications`}
+            emptyMessage="No asset specification attributes are configured for this item's category/subcategory. Please check the Item Master category/subcategory and active Attribute Definitions."
             onChange={(code, value) => onChange(units.map((row, i) => i === index ? { ...row, attributes: { ...row.attributes, [code]: value } } : row))} />
         </div>
       ))}
