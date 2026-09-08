@@ -28,7 +28,7 @@ describe("receipt unit specifications", () => {
     fireEvent.change(screen.getByLabelText("Unit 1 serial number *"), { target: { value: "HP001" } });
     fireEvent.change(screen.getByLabelText("Unit 2 serial number *"), { target: { value: "HP002" } });
     fireEvent.change(screen.getAllByLabelText("RAM *")[0], { target: { value: "32GB" } });
-    fireEvent.click(screen.getByRole("button", { name: "Copy unit 1 specifications to all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy unit 1 specs to all rows" }));
     fireEvent.change(screen.getAllByLabelText("Storage")[1], { target: { value: "1TB SSD" } });
     expect(JSON.parse(screen.getByTestId("units").textContent ?? "[]")).toEqual([
       { serial_number: "HP001", attributes: { ram: "32GB", storage: "512GB SSD" } },

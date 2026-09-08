@@ -27,14 +27,27 @@ export function ReceiptAssetUnits({ units, count, defaults, definitions, categor
       attributes: { ...defaults },
     }));
   };
+  const copyFirstUnitSpecifications = () => {
+    const firstUnit = units[0];
+    if (!firstUnit || units.length <= 1) return;
+    if (!window.confirm("Copy unit 1 specifications to all unit rows? Serial numbers will be kept.")) return;
+    onChange(units.map((row, index) => index === 0 ? row : { ...row, attributes: { ...firstUnit.attributes } }));
+  };
 
   return (
     <div className="border rounded p-2 my-2">
       <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
         <strong>Serial Numbers & Specifications</strong>
-        <button type="button" className="btn btn-sm btn-outline-primary" onClick={prepare} disabled={!validCount || count === units.length}>
-          Prepare {validCount ? count : ""} unit rows
-        </button>
+        <div className="d-flex flex-wrap gap-2">
+          {units.length > 1 ? (
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={copyFirstUnitSpecifications}>
+              Copy unit 1 specs to all rows
+            </button>
+          ) : null}
+          <button type="button" className="btn btn-sm btn-outline-primary" onClick={prepare} disabled={!validCount || count === units.length}>
+            Prepare {validCount ? count : ""} unit rows
+          </button>
+        </div>
       </div>
       <p className="small text-secondary mb-2">Enter one row per accepted base unit. Item Master specifications are optional defaults; the saved values belong to the individual asset.</p>
       {!validCount ? <div className="alert alert-warning">Accepted base quantity must be a whole number, up to 1,000 units per line.</div> : null}
@@ -47,15 +60,6 @@ export function ReceiptAssetUnits({ units, count, defaults, definitions, categor
               <input className="form-control form-control-sm mt-1" maxLength={150} value={unit.serial_number ?? ""}
                 onChange={(event) => onChange(units.map((row, i) => i === index ? { ...row, serial_number: event.target.value } : row))} />
             </label>
-            {index === 0 && units.length > 1 ? (
-              <div className="col-12">
-                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => {
-                if (window.confirm("Replace specifications on all other units with unit 1 values? Serial numbers will be kept.")) {
-                  onChange(units.map((row) => ({ ...row, attributes: { ...unit.attributes } })));
-                }
-                }}>Copy unit 1 specifications to all</button>
-              </div>
-            ) : null}
           </div>
           <AttributeFields definitions={definitions} categoryId={categoryId} subcategoryId={subcategoryId} appliesTo="asset"
             values={unit.attributes} enforceRequired={false} title={`Unit ${index + 1} specifications`} compact
