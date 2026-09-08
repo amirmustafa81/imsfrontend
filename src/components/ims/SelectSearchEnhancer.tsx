@@ -57,6 +57,16 @@ const enhanceSelect = (select: HTMLSelectElement) => {
   menu.className = "dropdown-menu w-100 shadow-sm";
   menu.style.maxHeight = "240px";
   menu.style.overflowY = "auto";
+  menu.style.position = "fixed";
+  menu.style.zIndex = "2055";
+  menu.style.minWidth = "12rem";
+
+  const positionMenu = () => {
+    const rect = input.getBoundingClientRect();
+    menu.style.left = `${rect.left}px`;
+    menu.style.top = `${rect.bottom + 2}px`;
+    menu.style.width = `${rect.width}px`;
+  };
 
   const closeMenu = () => {
     menu.classList.remove("show");
@@ -103,14 +113,27 @@ const enhanceSelect = (select: HTMLSelectElement) => {
     input.disabled = select.disabled;
     input.value = selectedLabel(select);
     renderMenu("");
+    positionMenu();
     menu.classList.add("show");
     input.setAttribute("aria-expanded", "true");
+  };
+
+  const closeWhenDetached = () => {
+    if (!document.body.contains(input)) {
+      menu.remove();
+      return;
+    }
+
+    if (menu.classList.contains("show")) {
+      positionMenu();
+    }
   };
 
   input.addEventListener("focus", openMenu);
   input.addEventListener("click", openMenu);
   input.addEventListener("input", () => {
     renderMenu(input.value);
+    positionMenu();
     menu.classList.add("show");
     input.setAttribute("aria-expanded", "true");
   });
@@ -124,8 +147,11 @@ const enhanceSelect = (select: HTMLSelectElement) => {
     input.value = selectedLabel(select);
   });
 
-  wrapper.append(input, menu);
+  wrapper.append(input);
   select.insertAdjacentElement("afterend", wrapper);
+  document.body.appendChild(menu);
+  window.addEventListener("resize", closeWhenDetached);
+  document.addEventListener("scroll", closeWhenDetached, true);
 };
 
 const enhanceAllSelects = () => {
