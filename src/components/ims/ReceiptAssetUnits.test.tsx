@@ -43,6 +43,14 @@ describe("receipt unit specifications", () => {
     expect(screen.getByLabelText("Unit 2 serial number *")).toHaveValue("HP002");
   });
 
+  it("captures one common specification set for non-serial items", () => {
+    render(<ReceiptAssetUnits units={[]} count={10} defaults={{}} definitions={definitions}
+      categoryId={1} subcategoryId={null} serialRequired={false} onChange={() => {}} />);
+    expect(screen.queryByLabelText(/serial number/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Prepare/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Common specifications")).toBeInTheDocument();
+  });
+
   it("shows a setup warning when no asset attributes match the selected item scope", () => {
     const Wrapper = () => {
       const [units, setUnits] = useState<ReceiptAssetUnit[]>([]);

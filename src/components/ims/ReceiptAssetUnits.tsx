@@ -21,6 +21,7 @@ export function ReceiptAssetUnits({ units, count, defaults, definitions, categor
 }) {
   const validCount = Number.isInteger(count) && count >= 0 && count <= 1000;
   const fields = matchingAttributeDefinitions(definitions, categoryId, subcategoryId, "asset");
+  const commonUnit = units[0] ?? { serial_number: null, attributes: { ...defaults } };
   const brandField = fields.find((field) => field.label.trim().toLowerCase() === "brand");
   const modelField = fields.find((field) => {
     const label = field.label.trim().toLowerCase();
@@ -50,6 +51,21 @@ export function ReceiptAssetUnits({ units, count, defaults, definitions, categor
       ? { ...row, brand, model, attributes: firstAttributes }
       : { ...row, brand, model, attributes: { ...firstAttributes } }));
   };
+
+  if (!serialRequired) {
+    return (
+      <div className="border rounded p-2 my-2">
+        <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+          <strong>Specifications</strong>
+        </div>
+        <p className="small text-secondary mb-2">Enter shared specifications once. These values will be applied to all accepted units on this receipt line.</p>
+        <AttributeFields definitions={definitions} categoryId={categoryId} subcategoryId={subcategoryId} appliesTo="asset"
+          values={commonUnit.attributes} enforceRequired={false} title="Common specifications" compact
+          emptyMessage="No asset specification attributes are configured for this item's category/subcategory. Please check the Item Master category/subcategory and active Attribute Definitions."
+          onChange={(code, value) => onChange([{ ...commonUnit, serial_number: null, attributes: { ...commonUnit.attributes, [code]: value } }])} />
+      </div>
+    );
+  }
 
   return (
     <div className="border rounded p-2 my-2">

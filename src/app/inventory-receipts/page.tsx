@@ -890,6 +890,8 @@ export default function InventoryReceiptsPage() {
 
   const assetUnitsPayloadForItem = (itemId: string | number | null | undefined, units: ReceiptAssetUnit[]): ReceiptAssetUnit[] => {
     const definitions = assetDefinitionsForItem(itemId);
+    const serialTracked = flagEnabled(selectedItemForId(itemId)?.requires_serial_tracking);
+    const payloadUnits = serialTracked ? units : units.slice(0, 1);
     const brandDefinition = definitions.find((definition) => definition.label.trim().toLowerCase() === "brand");
     const modelDefinition = definitions.find((definition) => {
       const label = definition.label.trim().toLowerCase();
@@ -901,7 +903,7 @@ export default function InventoryReceiptsPage() {
       return typeof value === "string" && value.trim() ? value.trim() : undefined;
     };
 
-    return units.map((unit) => ({
+    return payloadUnits.map((unit) => ({
       ...unit,
       brand: (unit.brand ?? "").trim() || textValue(unit, brandDefinition),
       model: (unit.model ?? "").trim() || textValue(unit, modelDefinition),
@@ -2074,7 +2076,7 @@ export default function InventoryReceiptsPage() {
         const selected = selectedItemForId(row.item_id);
         const requiresSerial = flagEnabled(selected?.requires_serial_tracking);
         const needsManualUnitDetails = itemNeedsManualUnitDetails(row.item_id);
-        if (needsManualUnitDetails && (requiresSerial || row.asset_units.length > 0)) {
+        if (needsManualUnitDetails && requiresSerial) {
           const count = Number(row.quantity_accepted || 0) * Number(row.qty_per_receipt_unit || 1);
           if (!Number.isInteger(count) || row.asset_units.length !== count) {
             setError(`Enter details for all ${count} accepted units of ${lookupLabel("items", row.item_id)}.`);
