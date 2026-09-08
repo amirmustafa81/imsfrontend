@@ -604,6 +604,7 @@ const reportConfigs: Record<ReportType, ReportConfig> = {
     columns: [
       { key: "item_code", label: "Item Code" },
       { key: "item_name", label: "Item Name" },
+      { key: "item_description", label: "Item Description" },
       { key: "category_name", label: "Category" },
       { key: "department_name", label: "Department" },
       { key: "store_name", label: "Store" },

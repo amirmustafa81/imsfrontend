@@ -17,6 +17,7 @@ type StockRow = {
   id: number;
   item_code: string;
   item_name: string;
+  item_description?: string | null;
   category_name: string;
   department_name: string;
   store_name: string;
@@ -178,6 +179,7 @@ const stockSummaryPreviewText = (groups: StockSummaryGroup[]): string => {
 const reportColumns = [
   { key: "item_code", header: "Item Code" },
   { key: "item_name", header: "Item Name" },
+  { key: "item_description", header: "Item Description", render: (row: StockRow) => row.item_description ?? "-" },
   { key: "package_balance", header: "Package", render: (row: StockRow) => <span className="stock-package-label">{stockPackageLabel(row)}</span> },
   { key: "category_name", header: "Category" },
   { key: "department_name", header: "Department" },
@@ -463,7 +465,7 @@ export default function StockPage() {
             reportType === "stock_balance"
                   ? reportColumns
                   : [
-                  ...reportColumns.slice(0, 4),
+                  ...reportColumns.slice(0, 5),
                   { key: "minimum_stock_level", header: "Minimum", className: "text-end", render: (row: StockRow) => stockQuantityLabel(row, "minimum_stock_level") },
                   { key: "available_quantity", header: "Available", className: "text-end", render: (row: StockRow) => stockQuantityLabel(row, "available_quantity") },
                   { key: "status", header: "Status", render: (row: StockRow) => <StatusBadge status={row.status || "Active"} /> },
