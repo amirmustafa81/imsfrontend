@@ -556,6 +556,14 @@ function IssuesReturnsContent() {
     return itemType === "fixed_asset" || isTruthyFlag(item?.is_capitalizable) || isTruthyFlag(item?.requires_serial_tracking);
   };
 
+  const transactionItemRequiresSerialTracking = (itemId: string): boolean =>
+    isTruthyFlag(lookupRow("items", itemId)?.requires_serial_tracking);
+
+  const canIssueAssetsByQuantity = form.transaction_type === "issue" || form.transaction_type === "transfer";
+
+  const invalidTaggedQuantity = (item: TransactionItemInput): boolean =>
+    Boolean(item.asset_id && Math.abs(baseQuantityForTransactionRow(item) - 1) > 0.000001);
+
   const showAssetColumn = items.some((item) => item.asset_id.trim() || transactionItemRequiresAssetId(item.item_id));
 
   const unitCodeById = (unitId: unknown): string => {
@@ -1028,7 +1036,9 @@ function IssuesReturnsContent() {
 
         if (key === "quantity") {
           const typedQuantity = numberOrNull(value);
-          const maxQuantity = maxIssueQuantityForRow(row);
+          const maxQuantity = row.asset_id || transactionItemRequiresSerialTracking(row.item_id)
+            ? Math.min(maxIssueQuantityForRow(row) ?? 1, 1)
+            : maxIssueQuantityForRow(row);
 
           if (typedQuantity !== null && maxQuantity !== null && typedQuantity > maxQuantity) {
             return { ...row, quantity: formatQuantityInput(maxQuantity) };
@@ -1480,11 +1490,13 @@ function IssuesReturnsContent() {
         rowCount: summary.rowCount + (rowIsEmpty ? 0 : 1),
         emptyRowCount: summary.emptyRowCount + (rowIsEmpty ? 1 : 0),
         incompleteRowCount: summary.incompleteRowCount + (!rowIsEmpty && !rowIsComplete ? 1 : 0),
+        invalidTaggedRowCount: summary.invalidTaggedRowCount + (invalidTaggedQuantity(item) ? 1 : 0),
+        missingSerialTagCount: summary.missingSerialTagCount + (!rowIsEmpty && transactionItemRequiresSerialTracking(item.item_id) && !item.asset_id ? 1 : 0),
         exceedsStockCount: summary.exceedsStockCount + (exceedsStock ? 1 : 0),
         totalQty: summary.totalQty + (rowIsComplete ? baseQuantity : 0),
       };
     },
-    { rowCount: 0, emptyRowCount: 0, incompleteRowCount: 0, exceedsStockCount: 0, totalQty: 0 },
+    { rowCount: 0, emptyRowCount: 0, incompleteRowCount: 0, invalidTaggedRowCount: 0, missingSerialTagCount: 0, exceedsStockCount: 0, totalQty: 0 },
   );
 
   const voucherReady = (() => {
@@ -1494,6 +1506,8 @@ function IssuesReturnsContent() {
       itemSummary.rowCount > 0 &&
       itemSummary.emptyRowCount === 0 &&
       itemSummary.incompleteRowCount === 0 &&
+      itemSummary.invalidTaggedRowCount === 0 &&
+      itemSummary.missingSerialTagCount === 0 &&
       itemSummary.exceedsStockCount === 0
     );
   })();
@@ -1957,6 +1971,21 @@ function IssuesReturnsContent() {
       return;
     }
 
+    const invalidTaggedRow = rowsToPost.find(invalidTaggedQuantity);
+    if (invalidTaggedRow) {
+      setVoucherDialogTab("items");
+      setError(canIssueAssetsByQuantity && !transactionItemRequiresSerialTracking(invalidTaggedRow.item_id)
+        ? `A selected tag covers one ${baseUomCodeForItem(invalidTaggedRow.item_id) || "unit"}. Use ${form.transaction_type === "transfer" ? "Transfer" : "Issue"} by quantity to move ${formatQuantityInput(baseQuantityForTransactionRow(invalidTaggedRow))} units, or use one row per tag.`
+        : "A selected tag covers one unit. Use one row per tag.");
+      return;
+    }
+
+    if (form.post_now && rowsToPost.some((row) => transactionItemRequiresSerialTracking(row.item_id) && !row.asset_id)) {
+      setVoucherDialogTab("items");
+      setError("Select one tag for each serial-tracked unit before posting.");
+      return;
+    }
+
     const overStockRow = rowsToPost.find((row) => transactionItemExceedsStock(row));
     if (overStockRow) {
       setVoucherDialogTab("items");
@@ -2146,6 +2175,7 @@ function IssuesReturnsContent() {
       setError("");
       await loadRows();
     } catch (postError: unknown) {
+      setMessage("");
       setError(extractApiMessage(postError, "Post failed. Verify stock and transaction status."));
     }
   };
@@ -3001,7 +3031,9 @@ function IssuesReturnsContent() {
                             </thead>
                             <tbody>
                               {items.map((item, index) => {
-                                const quantityLimit = maxIssueQuantityForRow(item);
+                                const quantityLimit = item.asset_id || transactionItemRequiresSerialTracking(item.item_id)
+                                  ? Math.min(maxIssueQuantityForRow(item) ?? 1, 1)
+                                  : maxIssueQuantityForRow(item);
                                 const exceedsStock = transactionItemExceedsStock(item);
 
                                 return (
@@ -3020,12 +3052,27 @@ function IssuesReturnsContent() {
                                     {showAssetColumn ? (
                                       <td className="voucher-asset-col">
                                         {transactionItemRequiresAssetId(item.item_id) || item.asset_id ? (
-                                          <TransactionAssetSelect id={`voucher-asset-${index}`} itemId={item.item_id} value={item.asset_id}
-                                            transactionType={form.transaction_type} departmentId={form.from_department_id} storeId={form.from_store_id}
-                                            employeeId={form.recipient_user_id} projectId={form.project_id} fundingSourceId={form.funding_source_id}
-                                            onChange={(value) => setItems((current) => current.map((row, rowIndex) => rowIndex === index
-                                              ? { ...row, asset_id: value, quantity: value ? "1" : row.quantity, qty_per_issue_unit: "1", issue_uom_id: String(lookupRow("items", row.item_id)?.unit_id ?? "") }
-                                              : row))} />
+                                          <>
+                                            <TransactionAssetSelect id={`voucher-asset-${index}`} itemId={item.item_id} value={item.asset_id}
+                                              transactionType={form.transaction_type} departmentId={form.from_department_id} storeId={form.from_store_id}
+                                              employeeId={form.recipient_user_id} projectId={form.project_id} fundingSourceId={form.funding_source_id}
+                                              onChange={(value) => setItems((current) => current.map((row, rowIndex) => rowIndex === index
+                                                ? { ...row, asset_id: value, quantity: value ? "1" : row.quantity, qty_per_issue_unit: "1", issue_uom_id: String(lookupRow("items", row.item_id)?.unit_id ?? "") }
+                                                : row))} />
+                                            {item.asset_id && canIssueAssetsByQuantity && !transactionItemRequiresSerialTracking(item.item_id) ? (
+                                              <button className="btn btn-sm btn-link p-0 mt-1 text-decoration-none" type="button"
+                                                onClick={() => setItemValue(index, "asset_id", "")}>
+                                                <i className="bi bi-x-circle me-1" />
+                                                {form.transaction_type === "transfer" ? "Transfer" : "Issue"} by quantity
+                                              </button>
+                                            ) : null}
+                                            {!item.asset_id && canIssueAssetsByQuantity && !transactionItemRequiresSerialTracking(item.item_id) ? (
+                                              <div className="small text-secondary mt-1">Available tags assigned when posted.</div>
+                                            ) : null}
+                                            {invalidTaggedQuantity(item) ? (
+                                              <div className="small text-danger mt-1">One tag covers one unit. {canIssueAssetsByQuantity && !transactionItemRequiresSerialTracking(item.item_id) ? "Use quantity for multiple units." : "Use one row per tag."}</div>
+                                            ) : null}
+                                          </>
                                         ) : (
                                           <div className="form-control form-control-sm bg-light text-secondary">-</div>
                                         )}
