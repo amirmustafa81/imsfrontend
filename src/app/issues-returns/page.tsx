@@ -1160,6 +1160,7 @@ function IssuesReturnsContent() {
                 ...row,
                 item_id: value,
                 asset_id: "",
+                quantity: "",
                 issue_uom_id: baseUomId,
                 qty_per_issue_unit: "1",
               }
