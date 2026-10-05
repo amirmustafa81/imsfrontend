@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { TransactionAssetSelect } from "@/components/ims/TransactionAssetSelect";
+import { AssetLotOption, TransactionAssetLotSelect } from "@/components/ims/TransactionAssetLotSelect";
 import { useAuth } from "@/lib/auth";
 import { printTransactionDocument } from "@/lib/transaction-print";
 import {
@@ -130,6 +131,7 @@ type TransactionItem = {
   transaction_id: number;
   item_id: number;
   asset_id: number | null;
+  source_receipt_item_id?: number | null;
   quantity: number;
   unit_cost: number | null;
   remarks: string | null;
@@ -150,6 +152,8 @@ type TransactionItem = {
 type TransactionItemInput = {
   item_id: string;
   asset_id: string;
+  source_receipt_item_id: string;
+  source_variant_available_quantity: string;
   quantity: string;
   issue_uom_id: string;
   qty_per_issue_unit: string;
@@ -287,6 +291,8 @@ const toTransactionTypeLabel = (type: TransactionType) => {
 const emptyItem: TransactionItemInput = {
   item_id: "",
   asset_id: "",
+  source_receipt_item_id: "",
+  source_variant_available_quantity: "",
   quantity: "",
   issue_uom_id: "",
   qty_per_issue_unit: "1",
@@ -412,6 +418,7 @@ const formatQuantityInput = (value: number) => {
 const isTransactionItemEmpty = (item: TransactionItemInput) =>
   !item.item_id.trim() &&
   !item.asset_id.trim() &&
+  !item.source_receipt_item_id.trim() &&
   !item.quantity.trim() &&
   !item.issue_uom_id.trim() &&
   (!item.qty_per_issue_unit.trim() || item.qty_per_issue_unit.trim() === "1") &&
@@ -650,7 +657,11 @@ function IssuesReturnsContent() {
   const availableBaseQuantityForRow = (item: TransactionItemInput): number => {
     if (!item.item_id || !stockRowsLoadedForItem(item.item_id)) return Number.NaN;
 
-    return Number(matchingStockRowForItem(item.item_id)?.available_quantity ?? 0);
+    const totalAvailable = Number(matchingStockRowForItem(item.item_id)?.available_quantity ?? 0);
+    const variantAvailable = numberOrNull(item.source_variant_available_quantity);
+    return item.source_receipt_item_id && variantAvailable !== null
+      ? Math.min(totalAvailable, variantAvailable)
+      : totalAvailable;
   };
 
   const maxIssueQuantityForRow = (item: TransactionItemInput): number | null => {
@@ -679,6 +690,15 @@ function IssuesReturnsContent() {
 
     return baseQuantityForTransactionRow(item) > availableQty + 0.000001;
   };
+
+  const transactionItemMissingVariant = (item: TransactionItemInput): boolean =>
+    Boolean(
+      canIssueAssetsByQuantity &&
+      transactionItemRequiresAssetId(item.item_id) &&
+      !transactionItemRequiresSerialTracking(item.item_id) &&
+      !item.asset_id &&
+      !item.source_receipt_item_id,
+    );
 
   const issuePackageHintForRow = (item: TransactionItemInput): string => {
     if (!item.item_id) return "";
@@ -1160,6 +1180,8 @@ function IssuesReturnsContent() {
                 ...row,
                 item_id: value,
                 asset_id: "",
+                source_receipt_item_id: "",
+                source_variant_available_quantity: "",
                 quantity: "",
                 issue_uom_id: baseUomId,
                 qty_per_issue_unit: "1",
@@ -1197,6 +1219,8 @@ function IssuesReturnsContent() {
   const toTransactionItemInput = (row: TransactionItem): TransactionItemInput => ({
   item_id: toFormString(row.item_id),
   asset_id: toFormString(row.asset_id),
+  source_receipt_item_id: toFormString(row.source_receipt_item_id),
+  source_variant_available_quantity: "",
   quantity: toFormString(row.quantity),
   issue_uom_id: "",
   qty_per_issue_unit: "1",
@@ -1493,11 +1517,12 @@ function IssuesReturnsContent() {
         incompleteRowCount: summary.incompleteRowCount + (!rowIsEmpty && !rowIsComplete ? 1 : 0),
         invalidTaggedRowCount: summary.invalidTaggedRowCount + (invalidTaggedQuantity(item) ? 1 : 0),
         missingSerialTagCount: summary.missingSerialTagCount + (!rowIsEmpty && transactionItemRequiresSerialTracking(item.item_id) && !item.asset_id ? 1 : 0),
+        missingVariantCount: summary.missingVariantCount + (!rowIsEmpty && transactionItemMissingVariant(item) ? 1 : 0),
         exceedsStockCount: summary.exceedsStockCount + (exceedsStock ? 1 : 0),
         totalQty: summary.totalQty + (rowIsComplete ? baseQuantity : 0),
       };
     },
-    { rowCount: 0, emptyRowCount: 0, incompleteRowCount: 0, invalidTaggedRowCount: 0, missingSerialTagCount: 0, exceedsStockCount: 0, totalQty: 0 },
+    { rowCount: 0, emptyRowCount: 0, incompleteRowCount: 0, invalidTaggedRowCount: 0, missingSerialTagCount: 0, missingVariantCount: 0, exceedsStockCount: 0, totalQty: 0 },
   );
 
   const voucherReady = (() => {
@@ -1509,6 +1534,7 @@ function IssuesReturnsContent() {
       itemSummary.incompleteRowCount === 0 &&
       itemSummary.invalidTaggedRowCount === 0 &&
       itemSummary.missingSerialTagCount === 0 &&
+      (!form.post_now || itemSummary.missingVariantCount === 0) &&
       itemSummary.exceedsStockCount === 0
     );
   })();
@@ -1987,6 +2013,12 @@ function IssuesReturnsContent() {
       return;
     }
 
+    if (form.post_now && rowsToPost.some(transactionItemMissingVariant)) {
+      setVoucherDialogTab("items");
+      setError("Select a stock variant / GRN for every fixed asset issued by quantity.");
+      return;
+    }
+
     const overStockRow = rowsToPost.find((row) => transactionItemExceedsStock(row));
     if (overStockRow) {
       setVoucherDialogTab("items");
@@ -2020,6 +2052,7 @@ function IssuesReturnsContent() {
       items: rowsToPost.map((row) => ({
         item_id: Number(row.item_id),
         asset_id: numberOrNull(row.asset_id),
+        source_receipt_item_id: numberOrNull(row.source_receipt_item_id),
         quantity: baseQuantityForTransactionRow(row),
         unit_cost: null,
         remarks: row.remarks.trim() || null,
@@ -3022,7 +3055,7 @@ function IssuesReturnsContent() {
                               <tr>
                                 <th className="text-center voucher-row-number">#</th>
                                 <th className="voucher-item-col">Item</th>
-                                {showAssetColumn ? <th className="voucher-asset-col">Asset / Serial Number</th> : null}
+                                {showAssetColumn ? <th className="voucher-asset-col">Asset / Stock Variant</th> : null}
                                 <th className="voucher-qty-col">Qty</th>
                                 <th className="voucher-uom-col">UOM</th>
                                 <th className="voucher-stock-col">Stock Balance</th>
@@ -3058,7 +3091,7 @@ function IssuesReturnsContent() {
                                               transactionType={form.transaction_type} departmentId={form.from_department_id} storeId={form.from_store_id}
                                               employeeId={form.recipient_user_id} projectId={form.project_id} fundingSourceId={form.funding_source_id}
                                               onChange={(value) => setItems((current) => current.map((row, rowIndex) => rowIndex === index
-                                                ? { ...row, asset_id: value, quantity: value ? "1" : row.quantity, qty_per_issue_unit: "1", issue_uom_id: String(lookupRow("items", row.item_id)?.unit_id ?? "") }
+                                                ? { ...row, asset_id: value, source_receipt_item_id: value ? "" : row.source_receipt_item_id, source_variant_available_quantity: value ? "" : row.source_variant_available_quantity, quantity: value ? "1" : row.quantity, qty_per_issue_unit: "1", issue_uom_id: String(lookupRow("items", row.item_id)?.unit_id ?? "") }
                                                 : row))} />
                                             {item.asset_id && canIssueAssetsByQuantity && !transactionItemRequiresSerialTracking(item.item_id) ? (
                                               <button className="btn btn-sm btn-link p-0 mt-1 text-decoration-none" type="button"
@@ -3068,7 +3101,29 @@ function IssuesReturnsContent() {
                                               </button>
                                             ) : null}
                                             {!item.asset_id && canIssueAssetsByQuantity && !transactionItemRequiresSerialTracking(item.item_id) ? (
-                                              <div className="small text-secondary mt-1">Available tags assigned when posted.</div>
+                                              <TransactionAssetLotSelect
+                                                id={`voucher-asset-lot-${index}`}
+                                                itemId={item.item_id}
+                                                value={item.source_receipt_item_id}
+                                                departmentId={form.from_department_id}
+                                                storeId={form.from_store_id}
+                                                projectId={form.project_id}
+                                                fundingSourceId={form.funding_source_id}
+                                                onChange={(value, lot?: AssetLotOption) => setItems((current) => current.map((row, rowIndex) => {
+                                                  if (rowIndex !== index) return row;
+                                                  const nextRow = {
+                                                    ...row,
+                                                    asset_id: "",
+                                                    source_receipt_item_id: value,
+                                                    source_variant_available_quantity: lot ? String(lot.available_quantity) : "",
+                                                  };
+                                                  const maxQuantity = maxIssueQuantityForRow(nextRow);
+                                                  const quantity = numberOrNull(nextRow.quantity);
+                                                  return quantity !== null && maxQuantity !== null && quantity > maxQuantity
+                                                    ? { ...nextRow, quantity: formatQuantityInput(maxQuantity) }
+                                                    : nextRow;
+                                                }))}
+                                              />
                                             ) : null}
                                             {invalidTaggedQuantity(item) ? (
                                               <div className="small text-danger mt-1">One tag covers one unit. {canIssueAssetsByQuantity && !transactionItemRequiresSerialTracking(item.item_id) ? "Use quantity for multiple units." : "Use one row per tag."}</div>
