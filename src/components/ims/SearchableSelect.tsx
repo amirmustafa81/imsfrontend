@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 export type SearchableSelectOption = {
   value: string;
   label: string;
+  displayLabel?: string;
   keywords?: string;
 };
 
@@ -28,7 +29,7 @@ export function SearchableSelect({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const selected = options.find((option) => option.value === value);
-  const selectedLabel = selected?.label ?? "";
+  const selectedLabel = selected?.displayLabel ?? selected?.label ?? "";
   const [query, setQuery] = useState(selectedLabel);
   const [hasTypedQuery, setHasTypedQuery] = useState(false);
   const [open, setOpen] = useState(false);
