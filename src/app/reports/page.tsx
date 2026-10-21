@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { printLabelHtml } from "@/lib/tag-print-frame";
+import { openLabelPrintWindow, printLabelHtml } from "@/lib/tag-print-frame";
 import {
   DataTable,
   ExportButtons,
@@ -1316,6 +1316,12 @@ export default function ReportsPage() {
   const printTagPreviews = useCallback(async (previews: TagPrintPreview[]) => {
     if (typeof window === "undefined" || previews.length === 0) return;
 
+    const printWindow = openLabelPrintWindow("IMS report tag print");
+    if (!printWindow) {
+      setError("Allow pop-ups for this site, then try printing the tag again.");
+      return;
+    }
+
     setPrintingTags(true);
     setError("");
 
@@ -1328,6 +1334,7 @@ export default function ReportsPage() {
         })),
       );
     } catch {
+      printWindow.close();
       setPrintingTags(false);
       setError("Unable to generate one or more tag QR codes.");
       return;
@@ -1335,8 +1342,12 @@ export default function ReportsPage() {
 
     printLabelHtml(buildPrintableTagHtml(printableTags), {
       title: "IMS report tag print",
+      printWindow,
       onComplete: () => setPrintingTags(false),
-      onError: () => setError("Unable to prepare tag print preview."),
+      onError: () => {
+        setPrintingTags(false);
+        setError("Unable to prepare tag print preview.");
+      },
     });
   }, []);
 

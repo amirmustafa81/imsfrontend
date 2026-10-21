@@ -1,9 +1,8 @@
-const LABEL_WIDTH_PX = 144;
-const LABEL_HEIGHT_PX = 96;
-const PRINT_FRAME_TTL_MS = 5 * 60 * 1000;
+const PRINT_WINDOW_TTL_MS = 5 * 60 * 1000;
 
 type PrintHtmlOptions = {
   title: string;
+  printWindow?: Window | null;
   onComplete?: () => void;
   onError?: () => void;
 };
@@ -27,25 +26,27 @@ const waitForFrameContent = async (frameDocument: Document) => {
   await frameDocument.fonts?.ready;
 };
 
-export const printLabelHtml = (html: string, options: PrintHtmlOptions) => {
-  const frame = document.createElement("iframe");
-  frame.setAttribute("title", options.title);
-  frame.setAttribute("aria-hidden", "true");
-  frame.style.position = "fixed";
-  frame.style.left = "-10000px";
-  frame.style.top = "0";
-  frame.style.width = `${LABEL_WIDTH_PX}px`;
-  frame.style.height = `${LABEL_HEIGHT_PX}px`;
-  frame.style.border = "0";
-  frame.style.background = "#fff";
-  document.body.appendChild(frame);
+export const openLabelPrintWindow = (title: string) => {
+  const printWindow = window.open(
+    "",
+    `ims-label-print-${Date.now()}`,
+    "popup=yes,width=480,height=320,left=100,top=100",
+  );
 
-  const frameWindow = frame.contentWindow;
-  const frameDocument = frameWindow?.document;
-  if (!frameWindow || !frameDocument) {
-    frame.remove();
+  if (!printWindow) return null;
+
+  printWindow.document.open();
+  printWindow.document.write("<!doctype html><html><head><title>IMS label print</title></head><body>Preparing label...</body></html>");
+  printWindow.document.close();
+  printWindow.document.title = title;
+  return printWindow;
+};
+
+export const printLabelHtml = (html: string, options: PrintHtmlOptions) => {
+  const printWindow = options.printWindow ?? openLabelPrintWindow(options.title);
+  if (!printWindow || printWindow.closed) {
     options.onError?.();
-    return;
+    return false;
   }
 
   let cleanedUp = false;
@@ -54,27 +55,30 @@ export const printLabelHtml = (html: string, options: PrintHtmlOptions) => {
     if (cleanedUp) return;
     cleanedUp = true;
     window.clearTimeout(fallbackTimer);
-    frame.remove();
+    if (!printWindow.closed) printWindow.close();
     options.onComplete?.();
   };
 
-  frameWindow.onafterprint = cleanup;
-  fallbackTimer = window.setTimeout(cleanup, PRINT_FRAME_TTL_MS);
+  printWindow.onafterprint = cleanup;
+  fallbackTimer = window.setTimeout(cleanup, PRINT_WINDOW_TTL_MS);
 
-  frameDocument.open();
-  frameDocument.write(html);
-  frameDocument.close();
+  const printDocument = printWindow.document;
+  printDocument.open();
+  printDocument.write(html);
+  printDocument.close();
 
-  void waitForFrameContent(frameDocument)
+  void waitForFrameContent(printDocument)
     .then(() => new Promise<void>((resolve) => {
-      frameWindow.requestAnimationFrame(() => frameWindow.requestAnimationFrame(() => resolve()));
+      printWindow.requestAnimationFrame(() => printWindow.requestAnimationFrame(() => resolve()));
     }))
     .then(() => {
-      frameWindow.focus();
-      frameWindow.print();
+      printWindow.focus();
+      printWindow.print();
     })
     .catch(() => {
       cleanup();
       options.onError?.();
     });
+
+  return true;
 };
