@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { printLabelHtml } from "@/lib/tag-print-frame";
 import {
   DataTable,
   ExportButtons,
@@ -211,7 +212,7 @@ const buildPrintableTagHtml = (tags: Array<TagPrintPreview & { qrDataUrl: string
       <head>
         <title>IMS tag print</title>
         <style>
-          @page { size: 38.1mm 25.4mm; margin: 0; }
+          @page { size: 1.5in 1in; margin: 0; }
           * { box-sizing: border-box; }
           html, body {
             margin: 0;
@@ -219,13 +220,15 @@ const buildPrintableTagHtml = (tags: Array<TagPrintPreview & { qrDataUrl: string
             color: #20242a;
             font-family: Arial, Helvetica, sans-serif;
             overflow: hidden;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
           }
           .sheet {
             margin: 0;
           }
           .label {
-            width: 38.1mm;
-            height: 25.4mm;
+            width: 1.5in;
+            height: 1in;
             padding: 1.6mm;
             display: flex;
             align-items: center;
@@ -1330,41 +1333,11 @@ export default function ReportsPage() {
       return;
     }
 
-    const frame = document.createElement("iframe");
-    frame.setAttribute("title", "IMS report tag print");
-    frame.style.position = "fixed";
-    frame.style.right = "0";
-    frame.style.bottom = "0";
-    frame.style.width = "0";
-    frame.style.height = "0";
-    frame.style.border = "0";
-    document.body.appendChild(frame);
-
-    const frameWindow = frame.contentWindow;
-    const frameDocument = frameWindow?.document;
-    if (!frameWindow || !frameDocument) {
-      frame.remove();
-      setPrintingTags(false);
-      setError("Unable to prepare tag print preview.");
-      return;
-    }
-
-    frameDocument.open();
-    frameDocument.write(buildPrintableTagHtml(printableTags));
-    frameDocument.close();
-
-    frameWindow.onafterprint = () => {
-      frame.remove();
-      setPrintingTags(false);
-    };
-    window.setTimeout(() => {
-      frameWindow.focus();
-      frameWindow.print();
-      window.setTimeout(() => {
-        frame.remove();
-        setPrintingTags(false);
-      }, 1000);
-    }, 100);
+    printLabelHtml(buildPrintableTagHtml(printableTags), {
+      title: "IMS report tag print",
+      onComplete: () => setPrintingTags(false),
+      onError: () => setError("Unable to prepare tag print preview."),
+    });
   }, []);
 
   const printTagPreview = useCallback(() => {

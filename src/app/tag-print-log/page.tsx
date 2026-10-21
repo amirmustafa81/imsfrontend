@@ -6,6 +6,7 @@ import QRCode from "qrcode";
 import { api } from "@/lib/api";
 import { createCode128SvgMarkup } from "@/lib/barcode";
 import { useAuth } from "@/lib/auth";
+import { printLabelHtml } from "@/lib/tag-print-frame";
 import { DataTable, FieldLabel, FilterBar, PageHeader, StatusBadge } from "@/components/ims";
 
 type AssetOption = {
@@ -536,45 +537,28 @@ function TagPrintLogContent() {
       : selectedPrintFormat === "COMBINED"
         ? `<div class="combined"><div class="qr">${qrImageMarkup}</div><div class="barcode">${barcodeMarkup}</div></div>`
         : `<div class="qr">${qrImageMarkup}</div>`;
-    const frame = document.createElement("iframe");
-    frame.setAttribute("title", "IMS tag print");
-    frame.style.position = "fixed";
-    frame.style.right = "0";
-    frame.style.bottom = "0";
-    frame.style.width = "0";
-    frame.style.height = "0";
-    frame.style.border = "0";
-    document.body.appendChild(frame);
-
-    const frameWindow = frame.contentWindow;
-    const frameDocument = frameWindow?.document;
-    if (!frameWindow || !frameDocument) {
-      frame.remove();
-      setError("Unable to prepare tag print preview.");
-      return;
-    }
-
-    frameDocument.open();
-    frameDocument.write(`
+    printLabelHtml(`
       <!doctype html>
       <html>
         <head>
           <title>${escapeHtml(tagId)}</title>
           <style>
-            @page { size: 38.1mm 25.4mm; margin: 0; }
+            @page { size: 1.5in 1in; margin: 0; }
             * { box-sizing: border-box; }
             html, body {
-              width: 38.1mm;
-              height: 25.4mm;
+              width: 1.5in;
+              height: 1in;
               margin: 0;
               background: #fff;
               color: #20242a;
               font-family: Arial, Helvetica, sans-serif;
               overflow: hidden;
+              print-color-adjust: exact;
+              -webkit-print-color-adjust: exact;
             }
             .label {
-              width: 38.1mm;
-              height: 25.4mm;
+              width: 1.5in;
+              height: 1in;
               padding: 1.6mm;
               display: flex;
               align-items: center;
@@ -672,15 +656,10 @@ function TagPrintLogContent() {
           </div>
         </body>
       </html>
-    `);
-    frameDocument.close();
-
-    frameWindow.onafterprint = () => frame.remove();
-    window.setTimeout(() => {
-      frameWindow.focus();
-      frameWindow.print();
-      window.setTimeout(() => frame.remove(), 1000);
-    }, 100);
+    `, {
+      title: "IMS tag print",
+      onError: () => setError("Unable to prepare tag print preview."),
+    });
   }, [barcodeSvgMarkup, form.printable_tag_id, qrDataUrl, selectedAsset, selectedPrintFormat]);
 
   const selectLogForPrinting = useCallback((row: TagPrintLog) => {
