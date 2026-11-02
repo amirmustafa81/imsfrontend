@@ -887,7 +887,7 @@ export default function InventoryReceiptsPage() {
   };
 
   const itemNeedsManualUnitDetails = (itemId: string | number | null | undefined): boolean => {
-    return itemRequiresAssetTag(itemId) && (itemRequiresSerialTracking(itemId) || assetDefinitionsForItem(itemId).length > 0);
+    return itemRequiresAssetTag(itemId) || assetDefinitionsForItem(itemId).length > 0;
   };
 
   const assetDefaultsForItem = (itemId: string): AttributeValues => {
