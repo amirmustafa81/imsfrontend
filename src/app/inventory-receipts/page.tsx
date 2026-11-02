@@ -899,6 +899,7 @@ export default function InventoryReceiptsPage() {
 
   const assetUnitsPayloadForItem = (itemId: string | number | null | undefined, units: ReceiptAssetUnit[]): ReceiptAssetUnit[] => {
     const definitions = assetDefinitionsForItem(itemId);
+    const allowedCodes = new Set(definitions.map((definition) => definition.code));
     const serialTracked = itemRequiresSerialTracking(itemId);
     const payloadUnits = serialTracked ? units : units.slice(0, 1);
     const brandDefinition = definitions.find((definition) => definition.label.trim().toLowerCase() === "brand");
@@ -912,11 +913,18 @@ export default function InventoryReceiptsPage() {
       return typeof value === "string" && value.trim() ? value.trim() : undefined;
     };
 
-    return payloadUnits.map((unit) => ({
-      ...unit,
-      brand: (unit.brand ?? "").trim() || textValue(unit, brandDefinition),
-      model: (unit.model ?? "").trim() || textValue(unit, modelDefinition),
-    }));
+    return payloadUnits.map((unit) => {
+      const attributes = Object.fromEntries(
+        Object.entries(unit.attributes ?? {}).filter(([code]) => allowedCodes.has(code)),
+      );
+      const sanitizedUnit = { ...unit, attributes };
+
+      return {
+        ...sanitizedUnit,
+        brand: (unit.brand ?? "").trim() || textValue(sanitizedUnit, brandDefinition),
+        model: (unit.model ?? "").trim() || textValue(sanitizedUnit, modelDefinition),
+      };
+    });
   };
 
   const unitSummary = (line: ReceiptItem) => (line.asset_units ?? []).map((unit, index) => {
