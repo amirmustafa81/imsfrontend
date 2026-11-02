@@ -772,7 +772,7 @@ export default function MasterDataPage() {
       }
 
       if (typeof value === "boolean") {
-        next[field.key] = value;
+        next[field.key] = field.type === "select" ? (value ? "1" : "0") : value;
         continue;
       }
 

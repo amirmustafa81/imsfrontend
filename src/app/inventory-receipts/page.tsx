@@ -871,14 +871,23 @@ export default function InventoryReceiptsPage() {
 
   const flagEnabled = (value: unknown) => value === true || value === 1 || value === "1" || value === "true";
 
+  const itemRequiresSerialTracking = (itemId: string | number | null | undefined): boolean => {
+    const item = selectedItemForId(itemId);
+    return flagEnabled(item?.effective_requires_serial_tracking ?? item?.requires_serial_tracking);
+  };
+
+  const itemRequiresAssetTag = (itemId: string | number | null | undefined): boolean => {
+    const item = selectedItemForId(itemId);
+    return itemRequiresSerialTracking(itemId) || flagEnabled(item?.effective_requires_qr_tag);
+  };
+
   const assetDefinitionsForItem = (itemId: string | number | null | undefined): AttributeDefinition[] => {
     const item = selectedItemForId(itemId);
     return matchingAttributeDefinitions(lookups["asset-attribute-definitions"], item?.category_id, item?.subcategory_id, "asset");
   };
 
   const itemNeedsManualUnitDetails = (itemId: string | number | null | undefined): boolean => {
-    const item = selectedItemForId(itemId);
-    return flagEnabled(item?.requires_serial_tracking) || assetDefinitionsForItem(itemId).length > 0;
+    return itemRequiresAssetTag(itemId) && (itemRequiresSerialTracking(itemId) || assetDefinitionsForItem(itemId).length > 0);
   };
 
   const assetDefaultsForItem = (itemId: string): AttributeValues => {
@@ -890,7 +899,7 @@ export default function InventoryReceiptsPage() {
 
   const assetUnitsPayloadForItem = (itemId: string | number | null | undefined, units: ReceiptAssetUnit[]): ReceiptAssetUnit[] => {
     const definitions = assetDefinitionsForItem(itemId);
-    const serialTracked = flagEnabled(selectedItemForId(itemId)?.requires_serial_tracking);
+    const serialTracked = itemRequiresSerialTracking(itemId);
     const payloadUnits = serialTracked ? units : units.slice(0, 1);
     const brandDefinition = definitions.find((definition) => definition.label.trim().toLowerCase() === "brand");
     const modelDefinition = definitions.find((definition) => {
@@ -2073,8 +2082,7 @@ export default function InventoryReceiptsPage() {
     if (form.post_now) {
       const serials = new Set<string>();
       for (const row of receiptItems) {
-        const selected = selectedItemForId(row.item_id);
-        const requiresSerial = flagEnabled(selected?.requires_serial_tracking);
+        const requiresSerial = itemRequiresSerialTracking(row.item_id);
         const needsManualUnitDetails = itemNeedsManualUnitDetails(row.item_id);
         if (needsManualUnitDetails && requiresSerial) {
           const count = Number(row.quantity_accepted || 0) * Number(row.qty_per_receipt_unit || 1);
@@ -3157,7 +3165,7 @@ export default function InventoryReceiptsPage() {
                                       definitions={lookups["asset-attribute-definitions"]}
                                       categoryId={selectedItemForId(item.item_id)?.category_id}
                                       subcategoryId={selectedItemForId(item.item_id)?.subcategory_id}
-                                      serialRequired={flagEnabled(selectedItemForId(item.item_id)?.requires_serial_tracking)}
+                                      serialRequired={itemRequiresSerialTracking(item.item_id)}
                                       onChange={(units) => setItems((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, asset_units: units } : row))} />
                                   </td>
                                 </tr>
